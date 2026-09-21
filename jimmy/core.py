@@ -120,26 +120,30 @@ class Jimmy:
                 {"role": "user", "content": question}]
 
     # --- asking -------------------------------------------------------------
-    def ask(self, question: str, session: str = "default",
-            stream: bool = False) -> str | Iterator[str]:
-        """Answer a question. This is the entry point for chat AND for the
-        ambient layer (Stage 2 acceptance): it never needs a client of its own."""
+    def ask(self, question: str, session: str = "default") -> str:
+        """Answer a question, whole. This is the entry point for the ambient
+        layer (Stage 2 acceptance): it never needs a client of its own."""
+        msgs = self.messages(question, session)
+        self.memory.add_turn(session, "user", question)
+        answer = self.llm.chat(msgs) if self.llm.configured else self._offline_answer()
+        self.memory.add_turn(session, "assistant", answer)
+        return answer
+
+    def ask_stream(self, question: str, session: str = "default") -> Iterator[str]:
+        """Answer a question token by token, for chat. Retrieval and the key check
+        happen now, not on first iteration; the answer is saved once it ends."""
         msgs = self.messages(question, session)
         self.memory.add_turn(session, "user", question)
         if not self.llm.configured:
             answer = self._offline_answer()
             self.memory.add_turn(session, "assistant", answer)
-            return iter([answer]) if stream else answer
-        if not stream:
-            answer = self.llm.chat(msgs)
-            self.memory.add_turn(session, "assistant", answer)
-            return answer
-        return self._stream_and_save(msgs, session)
+            return iter([answer])
+        return self._save_as_it_streams(self.llm.chat_stream(msgs), session)
 
-    def _stream_and_save(self, msgs: list[dict], session: str) -> Iterator[str]:
+    def _save_as_it_streams(self, pieces: Iterator[str], session: str) -> Iterator[str]:
         parts: list[str] = []
         try:
-            for piece in self.llm.chat(msgs, stream=True):
+            for piece in pieces:
                 parts.append(piece)
                 yield piece
         finally:

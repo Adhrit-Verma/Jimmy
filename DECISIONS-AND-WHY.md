@@ -355,6 +355,12 @@ local-AI tooling, which D15 leans on.
   tuning retrieval.
 - **Retry once, never mid-stream.** One retry on 429/5xx or a dropped connection,
   but not after any text has been shown. A retry then would repeat the answer.
+- **Two methods, not a `stream=` flag.** `ask`/`chat` return `str`;
+  `ask_stream`/`chat_stream` return `Iterator[str]`. The first version returned
+  `str | Iterator[str]` depending on a flag, so every caller got a type it had to
+  guess at (Pylance caught it). The stream variants are plain functions that
+  return a generator, so a missing key or failed retrieval raises at the call,
+  not on first iteration.
 - **The key is read from `HKCU\Environment` too.** `setx` only reaches new
   processes; reading the registry means a key set a minute ago works without
   restarting the app. The key's value is never printed.

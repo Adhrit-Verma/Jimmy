@@ -161,7 +161,8 @@ question ─► Jimmy.ask
                                       memory → keyword hits → activity → speech
   4. messages = system rules + <context>…</context>
               + last 6 chat turns + the question
-  5. llm.chat(stream) ─► NVIDIA ─► <think> stripped ─► shown token by token
+  5. llm.chat_stream (chat)  ─► NVIDIA ─► <think> stripped ─► shown token by token
+     llm.chat (Jimmy.ask)    ─► the same, returned whole
   6. both turns saved to jimmy.db
 ```
 

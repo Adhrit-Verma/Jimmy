@@ -88,7 +88,7 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `jimmy/config.py` | core tunables: endpoint, model, context budget. |
 | `jimmy/llm.py` | **the only LLM client in the repo.** Streaming, one warm connection, `<think>` stripping. |
 | `jimmy/memory.py` | Jimmy's memory (`data/jimmy.db`): remembered facts, chat turns, and the safe `fts_query`. |
-| `jimmy/core.py` | `Jimmy.ask`: gather from memory + plugins → bounded context → LLM. The prompt lives here. |
+| `jimmy/core.py` | `Jimmy.ask` (whole answer: `str`) and `Jimmy.ask_stream` (`Iterator[str]`): gather from memory + plugins → bounded context → LLM. The prompt lives here. |
 | `jimmy/__main__.py` | CLI: `chat`, `ask`, `remember`, `doctor`. |
 | `tests/test_stage1.py` | stage 1 check. Assert-based, no pytest. |
 | `tests/test_stage2.py` | stage 2 check. The real client runs against `httpx.MockTransport`. |

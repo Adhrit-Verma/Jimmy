@@ -53,7 +53,7 @@ def test_llm_request_and_answer():
 
 def test_llm_stream_hides_split_think_tags():
     body = _sse("<thi", "nk>plan the", " answer</th", "ink>Tues", "day, 3pm", " in Chrome.")
-    out = "".join(_llm(lambda r: httpx.Response(200, content=body)).chat([], stream=True))
+    out = "".join(_llm(lambda r: httpx.Response(200, content=body)).chat_stream([]))
     assert out == "Tuesday, 3pm in Chrome.", repr(out)
     print("ok  llm stream + split think tags")
 
@@ -129,6 +129,7 @@ def test_time_window():
 def test_memory_recall_and_turns():
     m = Memory(":memory:")
     mid = m.remember("My manager is Priya and standup is at 10:30")
+    assert mid is not None and m.remember("   ") is None, "blank text is not a memory"
     assert m.recall("when is standup?")[0]["id"] == mid
     assert m.recall("unrelated banana") == []
     for i in range(5):
@@ -169,13 +170,16 @@ def test_ask_end_to_end_is_the_stage2_acceptance():
     sent = {}
 
     def handler(req):
-        sent["messages"] = json.loads(req.content)["messages"]
+        body = json.loads(req.content)
+        sent["messages"] = body["messages"]
+        if not body["stream"]:
+            return httpx.Response(200, json={"choices": [{"message": {"content": "Around 3pm."}}]})
         return httpx.Response(200, content=_sse("You were reading the ", "SQLite FTS5 docs."))
 
     jim = Jimmy(Memory(":memory:"), _llm(handler), [plugin])
     jim.remember("I am evaluating SQLite for the recall timeline")
 
-    answer = "".join(jim.ask("what was I reading about sqlite earlier?", session="t", stream=True))
+    answer = "".join(jim.ask_stream("what was I reading about sqlite earlier?", session="t"))
     assert answer == "You were reading the SQLite FTS5 docs."
 
     system = sent["messages"][0]["content"]
@@ -188,6 +192,11 @@ def test_ask_end_to_end_is_the_stage2_acceptance():
 
     turns = jim.memory.recent_turns("t", 10)
     assert [t["role"] for t in turns] == ["user", "assistant"] and turns[1]["text"] == answer
+
+    # The whole-answer path, which is what the ambient layer will call.
+    assert jim.ask("and when was that?", session="t") == "Around 3pm."
+    assert [m["role"] for m in sent["messages"][1:3]] == ["user", "assistant"], \
+        "the follow-up must carry the earlier turn"
 
     try:
         jim.tools["web_search"]("anything")

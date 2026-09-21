@@ -108,13 +108,22 @@ class LLM:
                 404: " (model id wrong? JIMMY_MODEL)", 429: " (rate limited)"}.get(resp.status_code, "")
         return LLMError(f"LLM HTTP {resp.status_code}{hint}: {detail}")
 
-    def chat(self, messages: list[dict], *, stream: bool = False,
-             max_tokens: int = config.MAX_TOKENS,
-             temperature: float = config.TEMPERATURE) -> str | Iterator[str]:
+    def _require_key(self) -> None:
         if not self.configured:
             raise LLMError(f"no API key: set {config.API_KEY_ENV}")
-        body = self._body(messages, stream, max_tokens, temperature)
-        return self._stream(body) if stream else self._once(body)
+
+    def chat(self, messages: list[dict], *, max_tokens: int = config.MAX_TOKENS,
+             temperature: float = config.TEMPERATURE) -> str:
+        """The whole answer at once."""
+        self._require_key()
+        return self._once(self._body(messages, False, max_tokens, temperature))
+
+    def chat_stream(self, messages: list[dict], *, max_tokens: int = config.MAX_TOKENS,
+                    temperature: float = config.TEMPERATURE) -> Iterator[str]:
+        """The answer token by token. A plain function, not a generator, so a
+        missing key raises here rather than on first iteration."""
+        self._require_key()
+        return self._stream(self._body(messages, True, max_tokens, temperature))
 
     def _once(self, body: dict) -> str:
         for attempt in (0, 1):

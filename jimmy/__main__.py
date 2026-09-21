@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+from typing import Iterable
 
 from . import config
 
@@ -12,7 +13,7 @@ HELP = """commands:  /remember <fact>   keep something for later
            /quit              leave (or ctrl-c)"""
 
 
-def _print_stream(pieces) -> None:
+def _print_stream(pieces: Iterable[str]) -> None:
     for piece in pieces:
         print(piece, end="", flush=True)
     print()
@@ -48,7 +49,7 @@ def _chat(session: str) -> int:
             print("jimmy> ", end="", flush=True)
             started = time.perf_counter()
             try:
-                _print_stream(jim.ask(line, session=session, stream=True))
+                _print_stream(jim.ask_stream(line, session=session))
             except LLMError as exc:
                 print(f"\n[error] {exc}")
                 continue
@@ -125,7 +126,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.cmd == "remember":
             print("kept." if jim.remember(args.fact) else "nothing to keep.")
             return 0
-        _print_stream(jim.ask(args.question, session=args.session, stream=True))
+        _print_stream(jim.ask_stream(args.question, session=args.session))
         return 0
     except LLMError as exc:
         print(f"[error] {exc}")
