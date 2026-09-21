@@ -116,7 +116,7 @@ password managers, private windows) were never captured, so they can't be sent.
 
 ```powershell
 .\.venv\Scripts\python.exe tests\test_stage1.py    # 13 checks, no framework
-.\.venv\Scripts\python.exe tests\test_stage2.py    # 12 checks, mocked network
+.\.venv\Scripts\python.exe tests\test_stage2.py    # 13 checks, mocked network
 ```
 
 OpenCV prints `net_impl_backend ... Targets are not supported` on import. Harmless.

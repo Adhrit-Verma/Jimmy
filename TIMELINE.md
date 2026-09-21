@@ -7,7 +7,7 @@ result whenever either changes.
  [x] 0  Pre-flight              resolved 2026-09-21
  [x] 1  Context bus             built 2026-09-21, acceptance met
  [ ] 1b Face stage              built; threshold untuned against real footage
- [~] 2  Jimmy core + hookup     built 2026-09-21; live check waits on an NVIDIA key
+ [x] 2  Jimmy core + hookup     built 2026-09-21, live acceptance met 2026-09-22
  [ ] 3  Trigger gate + cards    not started — this is the product
  [ ] 4  Overlay                 not started — gated on stage 3 GO
  [ ] 5  Recall timeline         not started — mostly free once 1 exists
@@ -53,7 +53,7 @@ detector on the saved artifact, including after the JPEG round-trip: 2 faces in,
 60 s. Nothing in the design should prevent it, but it is unproven, and the
 retention policy it will need does not exist yet. That is the honest status.
 
-**Verification:** 12/12 checks pass in `tests\test_stage1.py`. `doctor` reports
+**Verification:** 13/13 checks pass in `tests\test_stage1.py`. `doctor` reports
 every component green except OCR.
 
 **Measured:** DXGI ~8 ms/frame · UIA 317 nodes / 4.8k chars / ~230 ms · Whisper
@@ -84,7 +84,7 @@ tunable it says changes behaviour — is now **one window per app, expiring afte
 
 ---
 
-## Stage 2 — Jimmy core + hookup · **built; live acceptance waits on a key**
+## Stage 2 — Jimmy core + hookup · **done, acceptance met live**
 
 > **Acceptance:** the sidecar gets a useful answer from Jimmy without
 > instantiating its own LLM client.
@@ -97,18 +97,24 @@ Stage 4, because with both halves in Python nothing crosses a process yet.
 **"Without its own LLM client": met, and enforced.** `test_only_one_llm_client`
 fails if anything in `ambient/` imports an HTTP library or builds an `LLM`.
 
-**"A useful answer": met against a mocked network, not yet live.**
-`test_ask_end_to_end_is_the_stage2_acceptance` runs the real client through
-`httpx.MockTransport`. It checks that captured screen text and memory reach the
-prompt inside `<context>`, below the untrusted-data rule, and that the streamed
-answer comes back and is saved. Run against the real `data/ambient.db` in offline
-mode, keyword questions, time questions ("today") and remembered facts all
-retrieved correctly.
+**"A useful answer": met live on 2026-09-22.** With a real key and the real
+capture DB, three questions were answered correctly: what happened yesterday
+(the right apps at the right times), screen text about "the sidebar", and a fact
+from memory. Each named when and where, and nothing was invented. Offline, and
+through `httpx.MockTransport` in
+`test_ask_end_to_end_is_the_stage2_acceptance`, the same path is checked on every
+test run.
 
-**Still owed:** one live round trip with a real key, and a judgement on whether
-the answers are *useful*. `jimmy doctor` does the round trip and times it.
+**Caveat:** the data was a single one-minute capture. This proves the path, not
+recall quality over a real working day, which is still owed (item 3 below).
 
-**Verification:** 12/12 in `tests\test_stage2.py`; Stage 1 still 13/13.
+**It took a model change to get here.** The first default leaked its reasoning
+and took 19 s to 159 s. The benchmarked replacement, `nemotron-3-super-120b` with
+thinking off, answers in **~1 s to first word** (D17). `jimmy doctor` now fails a
+reply that isn't the word it asked for, and flags slow latency.
+
+**Verification:** 13/13 in `tests\test_stage2.py`; Stage 1 still 13/13; `jimmy
+doctor` all green, 0.81 s to first word.
 
 ---
 
@@ -160,8 +166,7 @@ embeddings for semantic hits and a scrub UI.
 4. Install Tesseract to close the canvas/video gap.
 5. Tune the face threshold against real footage.
 6. ~~Stage 2: Jimmy core + hookup~~ Built 2026-09-21.
-7. **Human: get an NVIDIA key** and set `NVIDIA_API_KEY`. Then `jimmy doctor`
-   and a real chat close Stage 2, and measure the default model (D16).
+7. ~~Human: get an NVIDIA key~~ Set; Stage 2 closed live, model measured (D17).
 8. Benchmark a local 3B LLM on the 4050 (D15), then Stage 3, and spend the time there.
 
 Ideas beyond this list live in `SCOPE.md` → Possible future changes.

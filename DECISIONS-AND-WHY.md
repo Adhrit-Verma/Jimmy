@@ -370,3 +370,54 @@ characters of retrieved context to NVIDIA. That can include window titles and sc
 text from any non-excluded app (a Discord server name showed up in the first real
 test). Exclusions still keep banking, password managers and private windows out
 entirely. `/context` in chat shows exactly what was sent.
+
+---
+
+### D17 — Default model: nemotron-3-super-120b, thinking off
+**Stage 2 · measured 2026-09-22 · supersedes D16's unmeasured model pick**
+
+D16 picked `nemotron-3.5-lightning-30b-a3b` from the model list, for its name and
+its ~3B active parameters. It was the wrong pick. The first live `jimmy doctor`
+took **19.4 s** to "reply with one word", and the reply was the model's
+reasoning as plain text ("Here's a thinking process: …"), not in `<think>` tags,
+so nothing stripped it.
+
+Benchmarked on a realistic Jimmy prompt (a small `<context>` plus a recall
+question), streamed, one sample each unless noted:
+
+| Model | First word | Outcome |
+|---|---|---|
+| nemotron-3.5-lightning (the D16 pick) | 159 s | reasoning leaked into the answer |
+| nemotron-3.5-lightning, thinking off | — | no token within 60 s |
+| **nemotron-3-super-120b, thinking off** | **0.86–1.15 s** (5 runs) | **clean, correct; 1 run returned empty** |
+| nemotron-3-super-120b, thinking on | 2.34–2.57 s (2 runs) | clean (reasoning goes to a separate field) |
+| gpt-oss-20b, effort low | 35.8 s | correct, too slow |
+| gemma-4-31b, mistral-nemotron, glm-5.3-flash | — | no token within 60 s |
+| nemotron-nano-3, gemma-3-12b, mistral-nemo-12b | — | 404 "not found for account" |
+
+**Chosen:** `nvidia/nemotron-3-super-120b-a12b` with thinking off
+(`chat_template_kwargs`). `jimmy doctor` afterwards: 0.81 s to first word. With
+thinking on, answers to recall questions were the same, just 2.5× slower. So
+`config.THINKING` stays off for chat, and is the switch to flip for heavy
+syntheses later.
+
+**Three lessons, now in code:**
+- **The public model list says what exists, not what your account can use.**
+  Three listed models returned 404 for this key, and several never answered.
+  `doctor`'s round trip is the real availability check, not the listing.
+- **A 200 can be empty.** One run in five came back with no text. `LLM` retries
+  an empty answer once (safe, since nothing was shown yet) and then raises
+  instead of letting Jimmy go silent.
+- **`doctor` must judge the answer, not just receive one.** The old check marked
+  a 19 s, reasoning-filled reply "ok". It now requires the exact word back and
+  grades latency: < 1.5 s "feels instant", < 3 s "usable", otherwise it fails.
+
+**Live acceptance, same day:** three real questions against the real capture DB
+were answered correctly: activity yesterday, screen text about "the sidebar", and
+a fact from memory. Each named the time and app, with nothing invented. The data
+was a single one-minute capture, so this proves the path, not recall quality over
+a real day.
+
+The free tier's behaviour (timeouts, per-account availability) can change
+without notice. Re-run the scratch benchmark before trusting these numbers months
+from now.

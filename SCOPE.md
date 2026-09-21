@@ -135,8 +135,14 @@ human call before it moves into a stage. When one is adopted, log it in
   UI boilerplate ("Minimize Maximize Restore Close", "Back Forward") eating the
   context budget. Drop button-only strings, or common chrome words, before
   they're stored or sent.
-- **Pick the default model by measurement** once a key exists: latency to first
-  token, and answer quality on real questions (D16).
+- **Thinking on, per call, for heavy jobs.** Chat runs with thinking off (~1 s
+  vs ~2.5 s, D17). Syntheses like "summarise my week" or `ACTION` planning may
+  earn the extra 1.5 s. Measure on real questions first.
+- **A fallback model** for when the default times out or 404s on the free tier.
+  The benchmark saw several listed models do both. Try the next measured model
+  rather than failing the question.
+- **Keep the model benchmark in the repo**, not just the scratchpad, so D17's
+  numbers can be re-measured when the free tier changes.
 - **Web search provider** for `TIP` cards, when Stage 3 shows the search volume.
 - **Prefetch retrieval** when the gate first suspects a card, so context is
   ready before the cloud call.

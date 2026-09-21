@@ -15,8 +15,8 @@ and what not to build*. Everything else, including this file, is downstream of i
 **Thesis:** continuous capture is commodity. The product is the gate that decides
 to stay quiet. Build for six good interruptions an evening, not for throughput.
 
-**Current state: Stages 1 and 2 are built and passing.** Stage 2's live check waits on
-an NVIDIA key; everything else is tested against a mocked network. The Jimmy core
+**Current state: Stages 1 and 2 are built and passing, and Stage 2's live acceptance
+is met** (real key, real captures, 2026-09-22). The Jimmy core
 (the one LLM client, memory, the plugin seam) lives in `jimmy/`, and the ambient
 layer is its first plugin (D14, D16). Stages 3–5 are not started. See `TIMELINE.md`.
 
@@ -59,7 +59,7 @@ cd C:\Code\Jimmy
 .\.venv\Scripts\python.exe -m jimmy chat             # talk to Jimmy (/context, /remember)
 .\.venv\Scripts\python.exe -m jimmy ask "what was I reading yesterday?"
 .\.venv\Scripts\python.exe -m jimmy remember "standup is at 10:30"
-.\.venv\Scripts\python.exe tests\test_stage2.py       # 12 checks, mocked network
+.\.venv\Scripts\python.exe tests\test_stage2.py       # 13 checks, mocked network
 ```
 
 Without `NVIDIA_API_KEY`, Jimmy runs **offline**: every answer shows what retrieval
@@ -150,9 +150,15 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
 - **Dedup gate earns its keep:** a typical minute skips ~65 % of ticks as
   perceptually unchanged.
 - **NVIDIA endpoint** `https://integrate.api.nvidia.com/v1` lists its models
-  **without a key** (81 on 2026-09-21), so `jimmy doctor` can verify the model ID
-  before any key exists. Default model `nvidia/nemotron-3.5-lightning-30b-a3b` is
-  listed, but its **latency and quality are unmeasured** until a key is set.
+  **without a key**, but **listed ≠ usable by this account**: several listed
+  models return 404 "not found for account" or never answer. Only a round trip
+  proves a model works.
+- **Default model `nvidia/nemotron-3-super-120b-a12b`, thinking off (D17):**
+  **~0.8–1.1 s to first word, ~1.4 s full answer**, clean output. Thinking on:
+  ~2.5 s, same answers. `nemotron-3.5-lightning` (the first pick) took **159 s**
+  and leaked its reasoning as plain text. Don't switch models without measuring.
+- **The hosted model sometimes returns 200 with an empty answer** (1 in 5 in the
+  benchmark). `LLM` retries once, then raises.
 
 ---
 
