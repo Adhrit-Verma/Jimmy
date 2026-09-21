@@ -148,31 +148,46 @@ class Store:
         )
 
     # --- reads -----------------------------------------------------------
-    def search(self, query: str, limit: int = 30) -> list[dict]:
-        """Unified FTS across screen text and speech, best match first."""
-        sql = """
+    def search(self, query: str, limit: int = 30, since_ms: int = 0,
+               until_ms: int = 1 << 62, snippet_tokens: int = 12) -> list[dict]:
+        """Unified FTS across screen text and speech, best match first.
+
+        `snippet_tokens` is small for the CLI; Jimmy asks for more so the model
+        gets a sentence of context rather than a keyword.
+        """
+        n = max(1, min(64, int(snippet_tokens)))
+        sql = f"""
         SELECT 'screen' AS kind, f.ts AS ts, f.app AS app, f.title AS title,
-               t.source AS source, snippet(text_fts, 0, '[', ']', '...', 12) AS snippet,
+               t.source AS source, snippet(text_fts, 0, '[', ']', '...', {n}) AS snippet,
                bm25(text_fts) AS rank, f.thumb_path AS thumb_path
           FROM text_fts JOIN text_blocks t ON t.id = text_fts.rowid
                         JOIN frames f ON f.id = t.frame_id
-         WHERE text_fts MATCH ?
+         WHERE text_fts MATCH ? AND f.ts BETWEEN ? AND ?
         UNION ALL
         SELECT 'audio', a.ts_start, NULL, NULL, a.source,
-               snippet(audio_fts, 0, '[', ']', '...', 12), bm25(audio_fts), NULL
+               snippet(audio_fts, 0, '[', ']', '...', {n}), bm25(audio_fts), NULL
           FROM audio_fts JOIN audio_segments a ON a.id = audio_fts.rowid
-         WHERE audio_fts MATCH ?
+         WHERE audio_fts MATCH ? AND a.ts_start BETWEEN ? AND ?
          ORDER BY rank LIMIT ?
         """
+        args = (query, since_ms, until_ms, query, since_ms, until_ms, limit)
         with self._lock:
-            return [dict(r) for r in self.conn.execute(sql, (query, query, limit))]
+            return [dict(r) for r in self.conn.execute(sql, args)]
 
-    def recent_text(self, since_ms: int, limit: int = 200) -> list[dict]:
-        sql = """SELECT f.ts, f.app, f.title, t.source, t.text
-                   FROM text_blocks t JOIN frames f ON f.id = t.frame_id
-                  WHERE f.ts >= ? ORDER BY f.ts DESC LIMIT ?"""
+    def activity(self, since_ms: int, until_ms: int, limit: int = 15) -> list[dict]:
+        """Which app/title was on screen, when, and for how many captured frames."""
+        sql = """SELECT app, title, MIN(ts) AS first_ts, MAX(ts) AS last_ts, COUNT(*) AS frames
+                   FROM frames WHERE ts BETWEEN ? AND ?
+                  GROUP BY app, title ORDER BY last_ts DESC LIMIT ?"""
         with self._lock:
-            return [dict(r) for r in self.conn.execute(sql, (since_ms, limit))]
+            return [dict(r) for r in self.conn.execute(sql, (since_ms, until_ms, limit))]
+
+    def speech(self, since_ms: int, until_ms: int, limit: int = 10) -> list[dict]:
+        """Transcribed speech in a window, most recent first."""
+        sql = """SELECT ts_start, source, text FROM audio_segments
+                  WHERE ts_start BETWEEN ? AND ? ORDER BY ts_start DESC LIMIT ?"""
+        with self._lock:
+            return [dict(r) for r in self.conn.execute(sql, (since_ms, until_ms, limit))]
 
     def stats(self) -> dict:
         tables = ("capture_windows", "frames", "text_blocks", "audio_segments", "cards")
