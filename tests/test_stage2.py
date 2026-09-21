@@ -111,12 +111,17 @@ def test_time_window():
     now = int(datetime(2026, 9, 17, 15, 30).timestamp() * 1000)   # a Thursday afternoon
     day = lambda d, h=0: int(datetime(2026, 9, d, h).timestamp() * 1000)  # noqa: E731
 
-    assert time_window("what did I read yesterday", now)[:2] == (day(16), day(17))
-    assert time_window("that thing on Tuesday", now)[:2] == (day(15), day(16))
-    assert time_window("anything on thursday", now)[:2] == (day(17), now), "today's weekday = today"
-    assert time_window("this morning", now)[:2] == (day(17), day(17, 12))
-    assert time_window("in the last 20 minutes", now)[:2] == (now - 20 * 60_000, now)
-    assert time_window("what was I doing earlier", now)[0] < now
+    def span(question: str) -> tuple[int, int]:
+        w = time_window(question, now)
+        assert w is not None, f"{question!r} should name a time"
+        return w[0], w[1]
+
+    assert span("what did I read yesterday") == (day(16), day(17))
+    assert span("that thing on Tuesday") == (day(15), day(16))
+    assert span("anything on thursday") == (day(17), now), "today's weekday = today"
+    assert span("this morning") == (day(17), day(17, 12))
+    assert span("in the last 20 minutes") == (now - 20 * 60_000, now)
+    assert span("what was I doing earlier")[0] < now
     assert time_window("what is sqlite", now) is None
     print("ok  time window phrases")
 
