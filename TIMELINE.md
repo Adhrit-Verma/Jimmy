@@ -7,7 +7,7 @@ result whenever either changes.
  [x] 0  Pre-flight              resolved 2026-09-21
  [x] 1  Context bus             built 2026-09-21, acceptance met
  [ ] 1b Face stage              built; threshold untuned against real footage
- [ ] 2  Jimmy core + hookup     not started — unblocked 2026-09-21 (D14)
+ [~] 2  Jimmy core + hookup     built 2026-09-21; live check waits on an NVIDIA key
  [ ] 3  Trigger gate + cards    not started — this is the product
  [ ] 4  Overlay                 not started — gated on stage 3 GO
  [ ] 5  Recall timeline         not started — mostly free once 1 exists
@@ -84,20 +84,31 @@ tunable it says changes behaviour — is now **one window per app, expiring afte
 
 ---
 
-## Stage 2 — Jimmy core + hookup · **not started, unblocked**
+## Stage 2 — Jimmy core + hookup · **built; live acceptance waits on a key**
 
 > **Acceptance:** the sidecar gets a useful answer from Jimmy without
 > instantiating its own LLM client.
 
-Stage 0 found no Jimmy tree. The human decided it's built here (D14), so this
-stage now has two halves:
+Stage 0 found no Jimmy tree, so the core was built here (D14) in Python (D16):
+the one LLM client, memory in `data/jimmy.db`, and the plugin seam. The ambient
+layer is loaded as Jimmy's first plugin. The spec's FastAPI bridge moved to
+Stage 4, because with both halves in Python nothing crosses a process yet.
 
-1. **The Jimmy core:** the NVIDIA LLM client, a memory/RAG store and the plugin
-   seam. These are the one and only instances in the repo.
-2. **The hookup:** FastAPI on `127.0.0.1`, with the ambient layer loaded as a plugin.
+**"Without its own LLM client": met, and enforced.** `test_only_one_llm_client`
+fails if anything in `ambient/` imports an HTTP library or builds an `LLM`.
 
-The seam is ready: nothing in Stage 1 instantiates an LLM client, and FastAPI is
-deliberately not a dependency yet. The human is creating the repo.
+**"A useful answer": met against a mocked network, not yet live.**
+`test_ask_end_to_end_is_the_stage2_acceptance` runs the real client through
+`httpx.MockTransport`. It checks that captured screen text and memory reach the
+prompt inside `<context>`, below the untrusted-data rule, and that the streamed
+answer comes back and is saved. Run against the real `data/ambient.db` in offline
+mode, keyword questions, time questions ("today") and remembered facts all
+retrieved correctly.
+
+**Still owed:** one live round trip with a real key, and a judgement on whether
+the answers are *useful*. `jimmy doctor` does the round trip and times it.
+
+**Verification:** 12/12 in `tests\test_stage2.py`; Stage 1 still 13/13.
 
 ---
 
@@ -148,4 +159,9 @@ embeddings for semantic hits and a scrub UI.
 3. Run Stage 1 for a genuine working day; size a retention policy from the result.
 4. Install Tesseract to close the canvas/video gap.
 5. Tune the face threshold against real footage.
-6. Then Stage 3 — and spend the time there.
+6. ~~Stage 2: Jimmy core + hookup~~ Built 2026-09-21.
+7. **Human: get an NVIDIA key** and set `NVIDIA_API_KEY`. Then `jimmy doctor`
+   and a real chat close Stage 2, and measure the default model (D16).
+8. Benchmark a local 3B LLM on the 4050 (D15), then Stage 3, and spend the time there.
+
+Ideas beyond this list live in `SCOPE.md` → Possible future changes.

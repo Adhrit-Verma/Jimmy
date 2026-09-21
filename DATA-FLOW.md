@@ -146,6 +146,49 @@ perceptually unchanged, and that ratio is what keeps the number this small.
 
 ---
 
+## Asking Jimmy (Stage 2)
+
+```
+question ─► Jimmy.ask
+  1. memory.recall(question)          fts_query → memories_fts, top 5
+  2. AmbientPlugin.context(question)
+       time_window(question)          "yesterday" / "on Tuesday" / "last 20 min" / none
+       search_captures ─► Store.search(fts_query, since, until, 48-token snippets)
+       if a time was named OR nothing matched:
+         Store.activity(window)       which app/title, when, how many captures
+         Store.speech(window)         what was said
+  3. render_context                   dedupe, ≤ 6000 chars, priority order:
+                                      memory → keyword hits → activity → speech
+  4. messages = system rules + <context>…</context>
+              + last 6 chat turns + the question
+  5. llm.chat(stream) ─► NVIDIA ─► <think> stripped ─► shown token by token
+  6. both turns saved to jimmy.db
+```
+
+**Only step 5 leaves the laptop**, and only when a key is set. What it carries is
+exactly `render_context`'s output, which `/context` in chat prints verbatim.
+Without a key, step 5 is skipped and the answer is that same context, marked
+offline.
+
+**Why `fts_query` quotes every word.** Questions are free text, and FTS5 treats
+`NOT`, `OR`, `NEAR(`, `*` and stray quotes as syntax. Unquoted, "C++ is NOT
+working" is a query error, or a different query. Quoted and OR-joined, any
+question is a valid search, and filler words ("what", "earlier", weekday names)
+are dropped first. A question with no topic words skips keyword search and gets
+the activity timeline instead.
+
+### Jimmy's memory schema (`data/jimmy.db`)
+
+```sql
+memories(id INT PK, ts INT, source TEXT, text TEXT)   -- + memories_fts (external content)
+turns(id INT PK, ts INT, session TEXT, role TEXT /* 'user' | 'assistant' */, text TEXT)
+```
+
+A separate file from `ambient.db` on purpose: captures will be pruned by a
+retention policy one day, and memory must not be.
+
+---
+
 ## Ephemerality, concretely
 
 A face embedding is a biometric template under India's DPDP Act whether or not it

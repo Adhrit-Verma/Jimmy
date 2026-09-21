@@ -1,6 +1,6 @@
 # Architecture
 
-Stage 1 only. Stages 2–5 are sketched at the end as boundaries to design toward,
+Stages 1 and 2. Stages 3–5 are sketched at the end as boundaries to design toward,
 not as things that exist. Spec: `AMBIENT_LAYER.md`.
 
 ---
@@ -21,9 +21,42 @@ not as things that exist. Spec: `AMBIENT_LAYER.md`.
                           (before any write)
 ```
 
-Stage 1 stops at the store. There is no gate, no card engine, no overlay and no
-LLM anywhere in this codebase yet — deliberately, because the gate is the product
-and it deserves to be built against real captured data rather than guesses.
+Stage 1 stops at the store. Stage 2 puts Jimmy on top of it:
+
+```
+                you ──► python -m jimmy chat / ask
+                                  │
+                                  ▼
+        ┌──────────────────── Jimmy.ask ─────────────────────┐
+        │  memory.recall  ◄── data/jimmy.db (facts, turns)   │
+        │  plugins ──► AmbientPlugin ◄── data/ambient.db     │  read-only
+        │                 time phrase → bounded FTS           │
+        │                 no topic → activity + speech        │
+        │  render_context (≤ 6000 chars, inside <context>)    │
+        │  llm.chat ──► NVIDIA API (the ONE client) ──► text  │
+        └─────────────────────────────────────────────────────┘
+```
+
+There is still no gate, no card engine and no overlay, deliberately: the gate is
+the product and deserves to be built against real captured data.
+
+## Jimmy core (Stage 2)
+
+| Module | Responsibility | Notable choice |
+|---|---|---|
+| `jimmy/llm.py` | the only LLM client | one reused httpx client (warm connection); streams; strips `<think>`; retries once, never mid-stream |
+| `jimmy/memory.py` | remembered facts + chat turns | its own SQLite file so capture retention can never prune memory; `fts_query` quotes every term |
+| `jimmy/core.py` | `Jimmy.ask`, prompt, plugin seam | a plugin is just `name` + `context()` + `tools`; no discovery, since there is one |
+| `ambient/plugin.py` | captures → snippets | turns "yesterday", "on Tuesday", "last 20 min" into a time window; never creates the capture DB |
+
+**Direction of dependency:** the ambient layer depends on the core (the plugin
+imports `jimmy`), never the reverse at load time. `Jimmy.default()` is the one
+place that imports the plugin.
+
+**Two processes, one database file each, no server.** `ambient run` writes
+`ambient.db`; `jimmy chat` reads it concurrently. SQLite WAL mode allows exactly
+that. The spec's FastAPI bridge existed to join a Node Jimmy to a Python sidecar;
+with both in Python it had no job, so it moved to Stage 4 (D16).
 
 ---
 
@@ -134,14 +167,12 @@ convincing and the detector still found the face in the saved JPEG. See D7.
 
 ## Boundaries for later stages
 
-- **Stage 2 (Jimmy core + hookup)** builds the Jimmy core in this repo (D14):
-  the NVIDIA LLM client, memory/RAG and the plugin seam. It then adds FastAPI on
-  `127.0.0.1` and loads this layer as a plugin. There is exactly **one** LLM
-  client and **one** memory store, and both belong to the core. Nothing in
-  Stage 1 instantiates a model that would tempt you to add a second.
-- **Stage 3 (trigger gate)** reads from the store and writes `cards`. The table
-  already exists and is unused — that is the seam.
-- **Stage 4 (overlay)** is Electron and talks to the sidecar over the same
-  local API. It must not open until the Stage 3 GO gate passes.
+- **Stage 3 (trigger gate)** runs inside the ambient process, reads the store,
+  asks `Jimmy.ask` (or a leaner sibling) for a card, and writes `cards`. The
+  table already exists and is unused; that is the seam. Actions go through an
+  approval step, never straight from model output.
+- **Stage 4 (overlay)** is Electron, the first caller in another process. This
+  is where the local API on `127.0.0.1` finally gets built (D16). It must not
+  open until the Stage 3 GO gate passes.
 - **Stage 5 (recall timeline)** is mostly free: FTS5 is already in place, the
   thumbnails are already blurred and already on a timeline.

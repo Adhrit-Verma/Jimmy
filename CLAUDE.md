@@ -15,9 +15,10 @@ and what not to build*. Everything else, including this file, is downstream of i
 **Thesis:** continuous capture is commodity. The product is the gate that decides
 to stay quiet. Build for six good interruptions an evening, not for throughput.
 
-**Current state: Stage 1 (context bus) is built and passing.** Stages 2–5 are not
-started. The Jimmy core (LLM client, memory/RAG, plugins) did not exist and is
-built **in this repo** as part of Stage 2 (D14). See `TIMELINE.md`.
+**Current state: Stages 1 and 2 are built and passing.** Stage 2's live check waits on
+an NVIDIA key; everything else is tested against a mocked network. The Jimmy core
+(the one LLM client, memory, the plugin seam) lives in `jimmy/`, and the ambient
+layer is its first plugin (D14, D16). Stages 3–5 are not started. See `TIMELINE.md`.
 
 ---
 
@@ -53,7 +54,18 @@ cd C:\Code\Jimmy
 .\.venv\Scripts\python.exe -m ambient search "what was that thing"
 .\.venv\Scripts\python.exe -m ambient stats
 .\.venv\Scripts\python.exe tests\test_stage1.py       # 13 checks, no framework
+
+.\.venv\Scripts\python.exe -m jimmy doctor           # key, model, endpoint, data
+.\.venv\Scripts\python.exe -m jimmy chat             # talk to Jimmy (/context, /remember)
+.\.venv\Scripts\python.exe -m jimmy ask "what was I reading yesterday?"
+.\.venv\Scripts\python.exe -m jimmy remember "standup is at 10:30"
+.\.venv\Scripts\python.exe tests\test_stage2.py       # 12 checks, mocked network
 ```
+
+Without `NVIDIA_API_KEY`, Jimmy runs **offline**: every answer shows what retrieval
+found instead of a model reply. That is intended, not a bug. The key is read from
+the process environment *or* `HKCU\Environment`, so a fresh `setx` works without
+restarting anything. Never read, print or ask for the key's value.
 
 `cv2` prints `net_impl_backend ... Targets are not supported` on import. It is
 harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
@@ -72,7 +84,14 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `ambient/audio.py` | WASAPI capture, VAD chunking, Whisper + hallucination filtering. |
 | `ambient/bus.py` | the one loop. Capture-window lifecycle lives here. |
 | `ambient/__main__.py` | CLI: `run`, `search`, `stats`, `doctor`. |
-| `tests/test_stage1.py` | the runnable check. Assert-based, no pytest. |
+| `ambient/plugin.py` | the ambient layer as a Jimmy plugin: time phrases → bounded search + activity. |
+| `jimmy/config.py` | core tunables: endpoint, model, context budget. |
+| `jimmy/llm.py` | **the only LLM client in the repo.** Streaming, one warm connection, `<think>` stripping. |
+| `jimmy/memory.py` | Jimmy's memory (`data/jimmy.db`): remembered facts, chat turns, and the safe `fts_query`. |
+| `jimmy/core.py` | `Jimmy.ask`: gather from memory + plugins → bounded context → LLM. The prompt lives here. |
+| `jimmy/__main__.py` | CLI: `chat`, `ask`, `remember`, `doctor`. |
+| `tests/test_stage1.py` | stage 1 check. Assert-based, no pytest. |
+| `tests/test_stage2.py` | stage 2 check. The real client runs against `httpx.MockTransport`. |
 | `models/` | YuNet + SFace ONNX. Committed deliberately; small and pinned. |
 | `data/` | the capture DB and blurred thumbnails. Never commit. |
 
@@ -95,6 +114,12 @@ setting that defaults to off.
    for redaction, counting, diarization assist and shoulder-surf warning only.
 6. **The exclusion list ships before first run.** It already does. Adding capture
    surfaces without checking them against `Exclusions` is a regression.
+7. **One LLM client: `jimmy/llm.py`.** Nothing in `ambient/` may import an HTTP
+   library or construct an `LLM`. `test_only_one_llm_client` scans the source.
+8. **Captured text is untrusted data.** It reaches the model only inside
+   `<context>`, below a rule telling it to ignore instructions found there. A web
+   page saying "ignore previous instructions" is exactly what gets captured. This
+   matters most once Stage 3 gives Jimmy actions.
 
 ---
 
@@ -124,6 +149,10 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   The text DB is negligible beside it.
 - **Dedup gate earns its keep:** a typical minute skips ~65 % of ticks as
   perceptually unchanged.
+- **NVIDIA endpoint** `https://integrate.api.nvidia.com/v1` lists its models
+  **without a key** (81 on 2026-09-21), so `jimmy doctor` can verify the model ID
+  before any key exists. Default model `nvidia/nemotron-3.5-lightning-30b-a3b` is
+  listed, but its **latency and quality are unmeasured** until a key is set.
 
 ---
 

@@ -278,3 +278,89 @@ client, a memory/RAG store and the plugin seam) *and* hooks the ambient layer
 into it. The spec's rule still holds, just inverted: there is exactly **one** LLM
 client and **one** memory store, and they belong to the core, not to the ambient
 layer.
+
+---
+
+### D15 — Local decides, cloud speaks
+**Stages 2–4 · direction agreed 2026-09-21 · the local-LLM part is PROPOSED, pending a benchmark**
+
+The human asked how much can run on the laptop so it feels instant, with APIs used
+only where local would be impossible or slow. The split:
+
+**Local:** all capture (built), redaction (built), the Tier 1 gate (rules,
+embeddings, topic-change and question-asked detection), memory writes, RAG
+retrieval (FTS5 plus a local vector index), and a small local LLM (~3B, 4-bit)
+for "is this worth saying", classification and short `RECALL`/`FOCUS` drafts.
+
+**Cloud (NVIDIA API):** the final card when it needs real reasoning; `TIP`, which
+needs the live web; `ACTION` planning; and long syntheses.
+
+**Why:** proactive cards aren't latency-critical, because nobody is waiting on
+them, so a card 1–2 s after the moment feels right. "Instant" only matters when
+the human asks something. And most ticks never reaching the API is the spec's
+token-budget point.
+
+**VRAM budget (estimated):** Whisper 0.35 GB (measured), embeddings ~0.1–0.3 GB,
+3B LLM at 4-bit ~2–2.5 GB, desktop/browsers/Electron ~1 GB. That comes to ~4 GB of
+6 GB. A 7–8B model does not fit beside Whisper.
+
+**Not yet proven:** the local LLM's speed and quality on the 4050 are estimates.
+Benchmark before Stage 3 adopts it as the spec's Tier 1 "small model". See
+`SCOPE.md` → Possible future changes.
+
+---
+
+### D16 — Stage 2 shape: Python core, in-process, no FastAPI yet
+**Stage 2 · settled 2026-09-21 (language, chat and web search by the human; the rest by me)**
+
+The human answered four questions, one at a time:
+
+| Question | Answer | Over |
+|---|---|---|
+| Core language | **Python** | Node/TypeScript as the spec wrote it |
+| NVIDIA key | none yet; **build against a stand-in** | — |
+| Talking to Jimmy | **terminal chat** | internal-only; a local web page |
+| Web search | **empty tool slot now, provider at Stage 3** | DuckDuckGo scraping; a keyed API now |
+
+The spec said Node only because it assumed a Node Jimmy already existed (see D14).
+Building fresh, Python means one runtime, one database engine, and the strongest
+local-AI tooling, which D15 leans on.
+
+**Calls that followed from that, made while building:**
+
+- **No FastAPI in Stage 2.** The spec's `127.0.0.1` API was the bridge between a
+  Node Jimmy and a Python sidecar. With both in Python, the ambient layer and
+  Jimmy call each other directly, and that satisfies the acceptance ("the sidecar
+  gets a useful answer without its own LLM client"). The first real out-of-process
+  caller is the Electron overlay, so the local API moves to **Stage 4**.
+- **No embeddings in Stage 2.** The spec lists "embeddings for semantic hits"
+  under Stage 5. Keyword FTS plus time windows answered every test question here.
+  Revisit if real questions miss for lack of synonyms.
+- **Memory is its own SQLite file** (`data/jimmy.db`), not new tables in
+  `ambient.db`. Captures will one day be pruned by a retention policy; memory must
+  not be. Same engine, so it's not "a second kind of store".
+- **The ambient layer is a plugin of Jimmy, not the reverse.** `ambient/plugin.py`
+  imports from `jimmy`; `jimmy` imports the plugin only inside `Jimmy.default()`.
+  So the core has no load-time dependency on capture.
+- **Default model `nvidia/nemotron-3.5-lightning-30b-a3b`.** Picked from the live
+  model list for speed (MoE, ~3B active). **Unmeasured**: re-decide with real
+  numbers once a key exists. It's one env var (`JIMMY_MODEL`) to change.
+- **Captured text is untrusted.** It enters the prompt only inside `<context>`,
+  after a rule to ignore instructions found there. The test fixture plants an
+  "IGNORE ALL PREVIOUS INSTRUCTIONS" in captured text. A prompt rule reduces this
+  risk; it does not eliminate it. The hard guarantee has to come from Stage 3's
+  approval gate on every action.
+- **Offline mode instead of a stub model.** Without a key, `ask` returns what
+  retrieval found. That's honest, and it's the most useful thing to look at while
+  tuning retrieval.
+- **Retry once, never mid-stream.** One retry on 429/5xx or a dropped connection,
+  but not after any text has been shown. A retry then would repeat the answer.
+- **The key is read from `HKCU\Environment` too.** `setx` only reaches new
+  processes; reading the registry means a key set a minute ago works without
+  restarting the app. The key's value is never printed.
+
+**What leaves the laptop:** once a key is set, each question sends up to 6,000
+characters of retrieved context to NVIDIA. That can include window titles and screen
+text from any non-excluded app (a Discord server name showed up in the first real
+test). Exclusions still keep banking, password managers and private windows out
+entirely. `/context` in chat shows exactly what was sent.

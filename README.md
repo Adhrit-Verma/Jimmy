@@ -5,9 +5,10 @@ An always-on desktop assistant for Windows 11, built as a subsystem of Jimmy.
 > Continuous capture is commodity. The product is the gate that decides to stay
 > quiet.
 
-**Status: Stage 1 (context bus) works.** It captures your screen and speech,
-turns them into searchable text, and stores nothing it shouldn't. There is no UI
-and no LLM yet — both are deliberate, and both come later.
+**Status: Stages 1 and 2 work.** It captures your screen and speech, turns them
+into searchable text, and stores nothing it shouldn't. And you can ask Jimmy about
+it in the terminal: "what was I reading yesterday?" There's no overlay yet, and
+Jimmy doesn't interrupt you yet; that's Stage 3, the part that matters most.
 
 | Doc | What's in it |
 |---|---|
@@ -38,6 +39,18 @@ on first run (~40 s once, then cached).
 **Optional — OCR.** Without the Tesseract binary, OCR is inert and canvas-rendered
 apps and video contribute no text. Normal apps are unaffected. Install it and put
 it on PATH to close that gap; no code change needed.
+
+**For Jimmy's answers — an NVIDIA API key.** Free at build.nvidia.com: sign in,
+open any model, click **Get API Key** (it starts with `nvapi-`), then in your own
+terminal:
+
+```bash
+setx NVIDIA_API_KEY "nvapi-your-key-here"
+```
+
+Without it, Jimmy still runs, in offline mode. Every answer shows what it
+*found* in your captures and memory, which is useful on its own and is exactly
+what would have been sent to the model.
 
 ---
 
@@ -81,8 +94,29 @@ Mon 21 Sep 01:41  [audio/mic]   mic
 Tunables all live in [`ambient/config.py`](ambient/config.py), each with its
 reasoning next to it. Change knobs there, not in code.
 
+### Talking to Jimmy
+
+```powershell
+.\.venv\Scripts\python.exe -m jimmy chat
+.\.venv\Scripts\python.exe -m jimmy ask "what was I reading about sqlite yesterday?"
+.\.venv\Scripts\python.exe -m jimmy remember "standup is at 10:30 on weekdays"
+.\.venv\Scripts\python.exe -m jimmy doctor
+```
+
+Jimmy understands times like *today*, *yesterday*, *this morning*, *on Tuesday*
+and *last 20 minutes*. A question with a time but no topic ("what was I doing
+this morning?") gets a timeline of the apps you had open and what was said.
+
+In chat, `/remember <fact>` keeps something, and **`/context` shows exactly what
+was sent to the model** for your last question. Only that text leaves the laptop,
+at most 6,000 characters, and only when a key is set. Excluded surfaces (banking,
+password managers, private windows) were never captured, so they can't be sent.
+
+### Checks
+
 ```powershell
 .\.venv\Scripts\python.exe tests\test_stage1.py    # 13 checks, no framework
+.\.venv\Scripts\python.exe tests\test_stage2.py    # 12 checks, mocked network
 ```
 
 OpenCV prints `net_impl_backend ... Targets are not supported` on import. Harmless.
@@ -140,8 +174,8 @@ meeting isn't lost.
 
 ## What's next
 
-Stage 2 builds the Jimmy core in this repo (LLM client, memory, RAG and plugins)
-and hooks this layer into it. Stage 3 builds the trigger gate, which is the
+Stage 2 is built; its last check is one live answer once an NVIDIA key is set.
+Stage 3 builds the trigger gate, which is the
 actual product, and it can't ship until a replayed hour produces ten cards or
 fewer, every one defensible.
 
