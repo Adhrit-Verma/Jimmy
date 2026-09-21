@@ -20,6 +20,9 @@ class LLMError(RuntimeError):
     pass
 
 
+EMPTY = "the model returned an empty answer twice; try again"
+
+
 def api_key() -> str | None:
     """The key from the environment, or from the user's registry environment.
 
@@ -95,8 +98,11 @@ class LLM:
         return self._client
 
     def _body(self, messages, stream, max_tokens, temperature) -> dict:
+        # Both spellings of the switch: NVIDIA's chat templates differ by model family.
         return {"model": self.model, "messages": messages, "stream": stream,
-                "max_tokens": max_tokens, "temperature": temperature}
+                "max_tokens": max_tokens, "temperature": temperature,
+                "chat_template_kwargs": {"enable_thinking": config.THINKING,
+                                         "thinking": config.THINKING}}
 
     @staticmethod
     def _fail(resp: httpx.Response) -> LLMError:
@@ -141,7 +147,12 @@ class LLM:
                 raise self._fail(resp)
             msg = resp.json()["choices"][0]["message"]
             f = ThinkFilter()
-            return (f.feed(msg.get("content") or "") + f.flush()).strip()
+            answer = (f.feed(msg.get("content") or "") + f.flush()).strip()
+            if answer:
+                return answer
+            if attempt:
+                raise LLMError(EMPTY)
+            # Measured: ~1 in 5 calls to the hosted model came back 200 and empty.
         raise LLMError("LLM retry exhausted")
 
     def _stream(self, body: dict) -> Iterator[str]:
@@ -172,8 +183,13 @@ class LLM:
                             yield text
                     tail = f.flush()
                     if tail:
+                        sent = True
                         yield tail
-                    return
+                    if sent:
+                        return
+                    if attempt:
+                        raise LLMError(EMPTY)
+                    # An empty answer: nothing reached the screen, so retrying is safe.
             except httpx.HTTPError as exc:
                 if attempt or sent:
                     raise LLMError(f"LLM stream broke: {type(exc).__name__}: {exc}") from exc

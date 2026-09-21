@@ -48,7 +48,41 @@ def test_llm_request_and_answer():
     assert seen["auth"] == "Bearer test-key"
     assert seen["path"] == "/v1/chat/completions"
     assert seen["body"]["model"] == "test/model" and seen["body"]["stream"] is False
+    assert seen["body"]["chat_template_kwargs"]["enable_thinking"] is False, \
+        "thinking off by default: ~1 s vs ~2.5 s to first word (D17)"
     print("ok  llm request + reasoning stripped")
+
+
+def test_empty_answer_is_retried_then_reported():
+    """Measured: the hosted model sometimes returns 200 with no text at all."""
+    import jimmy.config as jc
+    wait, jc.RETRY_WAIT_S = jc.RETRY_WAIT_S, 0
+    try:
+        for stream in (False, True):
+            calls = {"n": 0}
+
+            def once_empty(req, stream=stream):
+                calls["n"] += 1
+                if stream:
+                    return httpx.Response(200, content=_sse() if calls["n"] == 1 else _sse("hi"))
+                text = "" if calls["n"] == 1 else "hi"
+                return httpx.Response(200, json={"choices": [{"message": {"content": text}}]})
+
+            llm = _llm(once_empty)
+            out = "".join(llm.chat_stream([])) if stream else llm.chat([])
+            assert out == "hi" and calls["n"] == 2, f"stream={stream}: one retry on empty"
+
+            always_empty = _llm(lambda r, stream=stream: httpx.Response(200, content=_sse()) if stream
+                                else httpx.Response(200, json={"choices": [{"message": {"content": ""}}]}))
+            try:
+                "".join(always_empty.chat_stream([])) if stream else always_empty.chat([])
+            except LLMError as exc:
+                assert "empty" in str(exc)
+            else:
+                raise AssertionError(f"stream={stream}: a twice-empty answer must raise, not go silent")
+    finally:
+        jc.RETRY_WAIT_S = wait
+    print("ok  empty answer retried, then reported")
 
 
 def test_llm_stream_hides_split_think_tags():

@@ -76,6 +76,7 @@ def _doctor() -> int:
     try:
         r = httpx.get(f"{config.BASE_URL}/models", timeout=10)
         ids = {m["id"] for m in r.json().get("data", [])}
+        # Listed is not the same as usable by this account: the round trip decides.
         row(config.MODEL in ids, "model", f"{config.MODEL} "
             f"{'is listed' if config.MODEL in ids else 'is NOT in the endpoint model list'}")
     except Exception as exc:
@@ -84,9 +85,22 @@ def _doctor() -> int:
         llm = LLM(key)
         try:
             t = time.perf_counter()
-            out = llm.chat([{"role": "user", "content": "Reply with the single word: ready"}],
-                           max_tokens=20)
-            row(True, "round trip", f"{(time.perf_counter() - t) * 1000:.0f} ms -> {out[:40]!r}")
+            first, parts = None, []
+            for piece in llm.chat_stream(
+                    [{"role": "user", "content": "Reply with exactly one word: ready"}],
+                    max_tokens=20):
+                if first is None and piece.strip():
+                    first = time.perf_counter() - t
+                parts.append(piece)
+            total, out = time.perf_counter() - t, "".join(parts).strip()
+            # A model that rambles or thinks out loud must fail here, not pass as "ok".
+            ok = out.lower().strip(" .!\"'") == "ready"
+            timing = f"first word {first:.2f}s, total {total:.2f}s" if first else f"total {total:.2f}s"
+            row(ok, "round trip", f"{timing} -> {out[:60]!r}"
+                + ("" if ok else "  (expected just 'ready')"))
+            row(first is not None and first < 3, "latency",
+                "feels instant" if first and first < 1.5 else
+                "usable" if first and first < 3 else "too slow for chat: consider JIMMY_MODEL")
         except Exception as exc:
             row(False, "round trip", str(exc)[:160])
         finally:
