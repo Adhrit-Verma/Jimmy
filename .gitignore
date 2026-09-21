@@ -1,0 +1,10 @@
+# Captured data never leaves this machine.
+data/
+*.db
+*.db-wal
+*.db-shm
+
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
