@@ -81,18 +81,44 @@ def test_exclusions():
     print("ok  exclusions")
 
 
-def test_dhash_change_gate():
-    rng = np.random.default_rng(0)
-    a = rng.integers(0, 255, (240, 320, 3), dtype=np.uint8)
-    assert screen.hamming(screen.dhash(a), screen.dhash(a.copy())) == 0
+def _chat_screen(offset: int = 0):
+    """A dark-theme chat at screen size: the case the old dhash gate missed."""
+    import cv2
+    img = np.full((1080, 1920, 3), 38, np.uint8)
+    img[:, :300] = 30                                   # sidebar
+    for i in range(40):
+        y = 140 + i * 60 - offset
+        if 120 < y < 1000:
+            cv2.putText(img, f"user{i % 3}: message number {i} about the gate and the replay",
+                        (340, y), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (220, 220, 220), 2)
+    return img
 
-    b = a.copy()
-    b[0:2, 0:2] = 255  # a cursor-sized change
-    assert screen.hamming(screen.dhash(a), screen.dhash(b)) <= 6, "tiny change must read as unchanged"
 
-    c = rng.integers(0, 255, (240, 320, 3), dtype=np.uint8)
-    assert screen.hamming(screen.dhash(a), screen.dhash(c)) > 6, "a new screen must read as changed"
-    print("ok  dhash change gate")
+def test_change_gate():
+    from ambient import config
+    a = _chat_screen()
+    sig = screen.signature(a)
+    assert screen.changed_pct(sig, screen.signature(a.copy())) == 0
+
+    scrolled = screen.changed_pct(sig, screen.signature(_chat_screen(offset=60)))
+    assert scrolled >= config.GATE_CHANGED_PCT, \
+        f"one chat message of scroll must count as a change ({scrolled:.2f}%)"
+
+    cur = a.copy()
+    cur[600:622, 900:902] = 255                        # a text cursor blinking
+    blink = screen.changed_pct(sig, screen.signature(cur))
+    assert blink < config.GATE_CHANGED_PCT, f"a cursor blink must not ({blink:.2f}%)"
+    print(f"ok  change gate (scroll {scrolled:.1f}%, cursor {blink:.2f}%)")
+
+
+def test_only_new_lines_are_stored():
+    from ambient.bus import new_lines
+    seen: set[str] = set()
+    assert new_lines("Inbox\nhello there\nhow are you", seen) == "Inbox\nhello there\nhow are you"
+    assert new_lines("Inbox\nhello there\nhow are you", seen) == "", "an unchanged screen stores nothing"
+    assert new_lines("Inbox\nhow are you\nsee you at 3", seen) == "see you at 3", "only the new line"
+    assert new_lines("  \n\n", set()) == ""
+    print("ok  only new lines stored")
 
 
 def test_face_stage_is_ephemeral():
@@ -311,7 +337,7 @@ def test_mic_pauses_on_sensitive_surface_unless_call():
     try:
         assert b.tick() == "excluded" and b._audio.paused.is_set(), "bank page must pause the mic"
 
-        b._open["chrome.exe"].last_hash = None
+        b._open["chrome.exe"].last_sig = None
         assert b.tick() == "excluded" and b._audio.paused.is_set(), \
             "the same page must stay excluded without re-walking it"
 
@@ -333,6 +359,18 @@ def test_mic_pauses_on_sensitive_surface_unless_call():
     assert ch.flush() == [], "reset must drop the half-finished utterance"
     assert isinstance(audio.other_app_using_mic(), bool), "the registry probe must not raise"
     print("ok  mic pauses on sensitive surfaces unless a call is on")
+
+
+def test_silence_watch():
+    from ambient.audio import SilenceWatch
+    w = SilenceWatch(after_s=60, floor=120)
+    assert w.feed(3, 0) is None and w.feed(3, 59) is None, "quiet, but not for long yet"
+    note = w.feed(3, 61)
+    assert note and "min" in note, "a long quiet stretch must be said out loud"
+    assert w.feed(3, 500) is None, "only once per quiet stretch"
+    assert w.feed(2000, 501) == "sound is back"
+    assert w.feed(2000, 502) is None
+    print("ok  silence watch")
 
 
 def test_audio_conversion():

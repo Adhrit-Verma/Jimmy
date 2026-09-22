@@ -11,6 +11,8 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import numpy as np
+
 from . import config, screen
 from .db import Store, now_ms
 from .redact import Exclusions, FaceStage
@@ -18,12 +20,31 @@ from .redact import Exclusions, FaceStage
 
 @dataclass
 class _Window:
-    """A live capture window. `last_hash` is per-app so that returning to an
-    untouched app does not write the same screen twice."""
+    """A live capture window. `last_sig` is per-app so that returning to an
+    untouched app does not write the same screen twice; `seen_lines` is every
+    text line already stored for this window, so only new lines get stored."""
     id: str
     opened: float
     last_seen: float
-    last_hash: int | None = None
+    last_sig: np.ndarray | None = None
+    seen_lines: set[str] = field(default_factory=set)
+
+
+def new_lines(text: str, seen: set[str]) -> str:
+    """The lines of `text` not stored before in this window, in screen order.
+
+    In the first real hour 52 % of captures re-stored near-identical text. Now
+    the first capture of a window stores the screen, and later ones only what's
+    new. ponytail: `seen` lives as long as the capture window (<= 15 min), so a
+    line that reappears after the window rolls is stored again. That's intended.
+    """
+    out = []
+    for line in text.split("\n"):
+        line = line.strip()
+        if line and line not in seen:
+            seen.add(line)
+            out.append(line)
+    return "\n".join(out)
 
 
 @dataclass
@@ -146,8 +167,8 @@ class ContextBus:
         w = self._window_for(aw.app, ts)
         self.window_id = w.id
 
-        h = screen.dhash(frame)
-        if w.last_hash is not None and screen.hamming(h, w.last_hash) <= config.DHASH_MAX_DISTANCE:
+        sig = screen.signature(frame)
+        if w.last_sig is not None and screen.changed_pct(sig, w.last_sig) < config.GATE_CHANGED_PCT:
             c.skipped_unchanged += 1
             return "unchanged"
 
@@ -159,7 +180,7 @@ class ContextBus:
         if reason:
             c.skipped_excluded += 1
             c.excluded_reasons[reason] = c.excluded_reasons.get(reason, 0) + 1
-            w.last_hash = h
+            w.last_sig = sig
             self._sensitive_key, self._sensitive_reason = (aw.hwnd, aw.title), reason
             return "excluded"
 
@@ -170,15 +191,16 @@ class ContextBus:
         thumb = screen.save_thumb(blurred, ts) if self.want_thumbs else None
         frame_id = self.store.add_frame(w.id, aw.app, aw.title, thumb, face_count, ts)
 
-        if wt.text and self.store.add_text(frame_id, "uia", wt.text):
+        # The frame row is always written (it's the timeline); text only if new.
+        if self.store.add_text(frame_id, "uia", new_lines(wt.text, w.seen_lines)):
             c.text_blocks += 1
         if len(wt.text) < config.UIA_MIN_CHARS:
             text = screen.ocr(blurred)  # blurred, so OCR can never read a face
-            if text and self.store.add_text(frame_id, "ocr", text):
+            if self.store.add_text(frame_id, "ocr", new_lines(text, w.seen_lines)):
                 c.ocr_blocks += 1
 
         c.frames += 1
-        w.last_hash = h
+        w.last_sig = sig
         return "captured"
 
     # --- audio -----------------------------------------------------------

@@ -18,8 +18,16 @@ EXCLUSIONS_FILE = DATA_DIR / "exclusions.txt"  # optional user additions, one pa
 
 # --- screen ---------------------------------------------------------------
 FRAME_INTERVAL_S = 2.0
-DHASH_SIZE = 8               # 8 -> 64-bit hash
-DHASH_MAX_DISTANCE = 6       # <= this many differing bits counts as unchanged; skip the frame
+# Change gate (D18). A 64-bit dhash was blind to text: scrolling a chat by one
+# message read as "unchanged" in 7 of 8 real screens. Now: grey 160x90, count
+# pixels that moved by more than GATE_PIXEL_DELTA. Measured on real screens:
+# one-message scroll 2-15 % of pixels, cursor blink 0.01 %.
+GATE_GRID = (160, 90)
+GATE_PIXEL_DELTA = 12        # grey levels; below this is compression shimmer
+# >= this % of pixels changed -> capture. 0.5 left a synthetic thin-text dark
+# chat scroll at 0.6 %, too close to call; 0.25 is 25x a cursor blink (0.01 %)
+# and >10x a taskbar clock tick (~0.02 %).
+GATE_CHANGED_PCT = 0.25
 THUMB_WIDTH = 640
 THUMB_JPEG_QUALITY = 70
 
@@ -57,6 +65,10 @@ WINDOW_MAX_S = 15 * 60       # hard ceiling even if the app never loses focus
 # --- audio ----------------------------------------------------------------
 SAMPLE_RATE = 16000          # what both WebRTC VAD and Whisper want
 CAPTURE_MIC = True
+# None = the Windows default input. Otherwise a case-insensitive part of the
+# device name, e.g. "Microphone Array" for the laptop mic when no headset is on.
+MIC_DEVICE: str | None = None
+SILENCE_WARN_S = 600         # say so once if the mic hears nothing speech-loud for this long
 CAPTURE_LOOPBACK = False     # default off: recording the far end of a call is a consent problem
 VAD_AGGRESSIVENESS = 2       # 0..3, higher = more aggressively calls things non-speech
 VAD_FRAME_MS = 30            # WebRTC VAD accepts 10, 20 or 30 only

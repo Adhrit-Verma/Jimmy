@@ -56,12 +56,28 @@ def _doctor() -> int:
         return n > 0, f"cuda devices={n} compute={sorted(ctranslate2.get_supported_compute_types('cuda')) if n else 'cpu'}"
 
     def _audio():
+        import numpy as np
         import pyaudiowpatch as pa
+        from .audio import input_devices, pick_mic, to_mono16k
         with pa.PyAudio() as p:
-            info = p.get_host_api_info_by_type(pa.paWASAPI)
-            mic = p.get_device_info_by_index(info["defaultInputDevice"])
-            n = len(list(p.get_loopback_device_info_generator()))
-        return True, f"mic={mic['name']} loopbacks={n} (capture_loopback={config.CAPTURE_LOOPBACK})"
+            mic = pick_mic(p)
+            others = [d["name"] for d in input_devices(p) if d["index"] != mic["index"]]
+            rate, ch = int(mic["defaultSampleRate"]), min(2, int(mic["maxInputChannels"]))
+            print(f"  ....  mic test        speak now for 3 s into {mic['name']!r} ...", flush=True)
+            s = p.open(format=pa.paInt16, channels=ch, rate=rate, input=True,
+                       frames_per_buffer=1024, input_device_index=mic["index"])
+            raw = b"".join(s.read(1024, exception_on_overflow=False)
+                           for _ in range(int(rate * 3 / 1024)))
+            s.stop_stream(); s.close()
+        peak = float(np.abs(to_mono16k(raw, rate, ch)).max())
+        # Near-silence is not proof of a broken mic: noise suppression gates a quiet
+        # room to (almost) zero. Only hearing speech-level sound proves it works.
+        heard = peak >= config.MIN_SEGMENT_RMS
+        detail = (f"{mic['name']}: peak {peak:.0f}, "
+                  + ("hears speech-level sound" if heard else
+                     "near-silent. If you spoke, set MIC_DEVICE in ambient/config.py")
+                  + (f" | other inputs: {', '.join(others)}" if others and not heard else ""))
+        return heard, detail
 
     def _db():
         from .db import Store

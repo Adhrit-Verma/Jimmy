@@ -247,6 +247,53 @@ class Transcriber:
         return text
 
 
+def input_devices(p) -> list[dict]:
+    """WASAPI capture devices, loopbacks excluded."""
+    import pyaudiowpatch as pa
+    host = p.get_host_api_info_by_type(pa.paWASAPI)["index"]
+    return [d for d in (p.get_device_info_by_index(i) for i in range(p.get_device_count()))
+            if d["hostApi"] == host and d["maxInputChannels"] > 0 and not d.get("isLoopbackDevice")]
+
+
+def pick_mic(p, want: str | None = config.MIC_DEVICE) -> dict:
+    """`MIC_DEVICE` by name if set (e.g. "Microphone Array"), else the Windows default."""
+    import pyaudiowpatch as pa
+    if want:
+        for d in input_devices(p):
+            if want.lower() in d["name"].lower():
+                return d
+        raise RuntimeError(f"no input device matching MIC_DEVICE={want!r}")
+    return p.get_device_info_by_index(p.get_host_api_info_by_type(pa.paWASAPI)["defaultInputDevice"])
+
+
+class SilenceWatch:
+    """Say so, once, when a source has heard nothing speech-loud for a long time.
+
+    The first real hour recorded 66 minutes of a mic that delivered silence and
+    nobody knew. Near-silence is normal (noise suppression gates a quiet room), so
+    this can't call the mic broken; it only makes a long quiet stretch visible.
+    """
+
+    def __init__(self, after_s: float = config.SILENCE_WARN_S,
+                 floor: float = config.MIN_SEGMENT_RMS):
+        self.after_s, self.floor = after_s, floor
+        self.quiet_since: float | None = None
+        self.warned = False
+
+    def feed(self, peak: float, now: float) -> str | None:
+        if peak >= self.floor:
+            back = self.warned
+            self.quiet_since, self.warned = None, False
+            return "sound is back" if back else None
+        if self.quiet_since is None:
+            self.quiet_since = now
+        if not self.warned and now - self.quiet_since >= self.after_s:
+            self.warned = True
+            return (f"nothing speech-loud for {int(self.after_s // 60)} min. If you've been "
+                    f"talking, check the input device (MIC_DEVICE in ambient/config.py)")
+        return None
+
+
 class _CaptureThread(threading.Thread):
     def __init__(self, pa, device: dict, source: str, sink: queue.Queue, stop: threading.Event,
                  paused: threading.Event):
@@ -260,6 +307,7 @@ class _CaptureThread(threading.Thread):
         ch = min(2, int(self.device["maxInputChannels"]))
         block = int(rate * config.VAD_FRAME_MS / 1000) * 4
         chunker = VadChunker(self.source)
+        watch = SilenceWatch()
         try:
             stream = self.pa.open(format=self.pa.get_format_from_width(2),  # int16
                                   channels=ch, rate=rate, input=True,
@@ -267,7 +315,9 @@ class _CaptureThread(threading.Thread):
                                   input_device_index=int(self.device["index"]))
         except Exception as exc:
             self.error = f"{type(exc).__name__}: {exc}"
+            print(f"[audio] {self.source}: could not open {self.device['name']!r}: {self.error}")
             return
+        print(f"[audio] {self.source}: listening on {self.device['name']!r}")
         try:
             while not self.stop.is_set():
                 try:
@@ -281,7 +331,11 @@ class _CaptureThread(threading.Thread):
                     chunker.reset()
                     continue
                 ts = int(time.time() * 1000) - (block * 1000 // rate)
-                for seg in chunker.push(to_mono16k(raw, rate, ch), ts):
+                pcm = to_mono16k(raw, rate, ch)
+                note = watch.feed(float(np.abs(pcm).max()) if pcm.size else 0.0, time.monotonic())
+                if note:
+                    print(f"[audio] {self.source}: {note}")
+                for seg in chunker.push(pcm, ts):
                     self.sink.put(seg)
             for seg in chunker.flush():
                 self.sink.put(seg)
@@ -318,7 +372,7 @@ class AudioPipeline:
         info = self._pa.get_host_api_info_by_type(pa.paWASAPI)
         if self.want_mic:
             try:
-                out.append((self._pa.get_device_info_by_index(info["defaultInputDevice"]), "mic"))
+                out.append((pick_mic(self._pa), "mic"))
             except Exception as exc:
                 self.errors.append(f"mic: {exc}")
         if self.want_loopback:

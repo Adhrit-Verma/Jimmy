@@ -65,10 +65,13 @@ def active_window() -> ActiveWindow:
 
 # --- UI Automation text ---------------------------------------------------
 
+# Buttons and menu items are left out: in the first real hour they were the bulk
+# of the boilerplate (Minimize, Maximize, Close, Back, Forward, Filter ... in
+# nearly every capture, 44 % of all text). Their children are still walked.
 TEXT_TYPES = {
-    "TextControl", "EditControl", "DocumentControl", "ButtonControl", "ListItemControl",
+    "TextControl", "EditControl", "DocumentControl", "ListItemControl",
     "TreeItemControl", "TabItemControl", "HyperlinkControl", "DataItemControl",
-    "CheckBoxControl", "RadioButtonControl", "MenuItemControl", "HeaderItemControl",
+    "CheckBoxControl", "RadioButtonControl", "HeaderItemControl",
     "GroupControl", "StatusBarControl",
 }
 _URL_HINTS = ("address and search bar", "address field", "search or enter",
@@ -222,15 +225,17 @@ def ocr(bgr: np.ndarray) -> str:
 
 # --- frames ---------------------------------------------------------------
 
-def dhash(bgr: np.ndarray, size: int = config.DHASH_SIZE) -> int:
+def signature(bgr: np.ndarray) -> np.ndarray:
+    """A small grey copy of the frame: all the change gate compares (~14 KB)."""
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
-    small = cv2.resize(gray, (size + 1, size), interpolation=cv2.INTER_AREA)
-    diff = small[:, 1:] > small[:, :-1]
-    return int.from_bytes(np.packbits(diff).tobytes(), "big")
+    return cv2.resize(gray, config.GATE_GRID, interpolation=cv2.INTER_AREA)
 
 
-def hamming(a: int, b: int) -> int:
-    return (a ^ b).bit_count()
+def changed_pct(a: np.ndarray, b: np.ndarray) -> float:
+    """Percent of signature pixels that moved by more than GATE_PIXEL_DELTA."""
+    if a.shape != b.shape:
+        return 100.0
+    return 100.0 * np.count_nonzero(cv2.absdiff(a, b) > config.GATE_PIXEL_DELTA) / a.size
 
 
 class ScreenSource:
