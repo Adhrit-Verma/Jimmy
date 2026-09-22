@@ -109,7 +109,10 @@ are why the flag is off, not merely a nice-to-have alongside it.
   the gate and replay. Do not proceed.
 
 **Before this runs unattended for a full day:**
-- A retention policy. At ~130 MB/day of thumbnails, disk grows ~4 GB/month.
+- A retention policy. The first hour measured 2.0 MB/h under the old gate (~0.5
+  GB/month at 8 h/day); the finer D18 gate will capture more. Size it from the
+  next run. The human plans a 500 GB external SSD, so capacity comes first and
+  optimisation after.
 - A global pause. Stage 4 specifies a hotkey and a "pause for 2 hours" control;
   today the only pause is Ctrl-C.
 
@@ -131,10 +134,6 @@ human call before it moves into a stage. When one is adopted, log it in
 - **Local embedding model + vector index** for RAG (e.g. `sqlite-vec` in the same
   SQLite, so there's no second database). Stage 2 shipped without it (D16); the
   spec puts it in Stage 5. Pull it forward only if keyword recall misses.
-- **Strip window chrome from captured text.** The first real `jimmy ask` showed
-  UI boilerplate ("Minimize Maximize Restore Close", "Back Forward") eating the
-  context budget. Drop button-only strings, or common chrome words, before
-  they're stored or sent.
 - **Thinking on, per call, for heavy jobs.** Chat runs with thinking off (~1 s
   vs ~2.5 s, D17). Syntheses like "summarise my week" or `ACTION` planning may
   earn the extra 1.5 s. Measure on real questions first.
@@ -164,6 +163,16 @@ human call before it moves into a stage. When one is adopted, log it in
 - **Speaker diarization** and the spec's face→voice "speaker in tile 2" assist.
 - **Call detection** as a capture-window boundary (D6's remaining open piece).
   It could reuse the mic-in-use signal from D13.
+- **Thumbnail diet** (the human's question on storage): WebP instead of JPEG
+  (~30–50 %), at most one thumbnail per ~30 s per window while text keeps flowing
+  (~3–10×), smaller previews, and tiers (full 7 days → thinned → text only).
+  Decide from real MB/h with the D18 gate.
+- **Graceful external drive.** If the data folder's drive is unplugged, pause
+  capture and resume when it's back, instead of erroring.
+- **Tune the change gate from replay.** 0.25 % is set by a synthetic scroll and a
+  cursor blink (D18). Check a real hour for video/animation that captures every tick.
+- **Chrome filtering beyond buttons.** Tabs, toolbars and sidebars still repeat
+  across captures; "only new lines" now hides most of it. Measure what's left.
 
 **Privacy and ops:**
 - **Tighten the audio-pause lag** (D13): poll exclusion state faster than the
@@ -185,8 +194,9 @@ human call before it moves into a stage. When one is adopted, log it in
   there is room — but a vision-language model does not fit and is not the plan.
   Screen becomes text early; only text travels onward.
 - **Token budget.** A naive 2 s snapshot is ~1,800 LLM calls/hour. The trigger
-  gate is a cost control as much as a taste control. Stage 1's dedup gate already
-  skips ~65 % of ticks before anything downstream sees them.
+  gate is a cost control as much as a taste control. Stage 1's change gate skipped
+  96 % of ticks in the first real hour (old gate; the D18 gate will skip somewhat
+  fewer) before anything downstream saw them.
 - **Jimmy is the brain.** No second LLM client, no second memory store. The one
   client is `jimmy/llm.py`, enforced by `test_only_one_llm_client`.
 - **Captured text leaves the laptop when you ask a question.** Up to 6,000 chars

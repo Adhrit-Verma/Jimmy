@@ -49,16 +49,18 @@ blurred frame to `save_thumb`. `test_blur_defeats_redetection` re-runs the
 detector on the saved artifact, including after the JPEG round-trip: 2 faces in,
 0 findable out.
 
-*"A full working day"* has not been run end to end — the longest run so far is
-60 s. Nothing in the design should prevent it, but it is unproven, and the
-retention policy it will need does not exist yet. That is the honest status.
+*"A full working day"* has not been run end to end yet. The longest run is the
+first real hour (66 min, 2026-09-22), which ran clean. It also exposed six
+problems, fixed in D18: a change gate blind to text, chrome boilerplate,
+re-stored text, clock times, over-inference and a silent mic nobody noticed.
+The data was wiped afterwards for a fresh start under the fixed pipeline.
 
-**Verification:** 13/13 checks pass in `tests\test_stage1.py`. `doctor` reports
-every component green except OCR.
+**Verification:** 15/15 checks pass in `tests\test_stage1.py`. `doctor` reports
+every component green except OCR, and its mic test heard speech (peak 9,678).
 
 **Measured:** DXGI ~8 ms/frame · UIA 317 nodes / 4.8k chars / ~230 ms · Whisper
-347 MiB VRAM, ~60× realtime · ~27 KB/thumbnail, ~130 MB/8-hour day · ~65 % of
-ticks skipped as perceptually unchanged.
+347 MiB VRAM, ~60× realtime · first real hour: 2.0 MB/h, 96 % of ticks skipped
+under the old gate (a floor: the D18 gate captures more).
 
 **Two bugs found and fixed during the build**, both of which looked fine until
 measured — worth remembering as the pattern:
@@ -162,7 +164,9 @@ embeddings for semantic hits and a scrub UI.
 
 1. ~~Human call: where is Jimmy?~~ Built here (D14).
 2. ~~Human call: audio during excluded surfaces~~ Pause unless a call (D13, built).
-3. Run Stage 1 for a genuine working day; size a retention policy from the result.
+3. **Now:** run capture for a few hours on the fixed pipeline (D18), speaking now
+   and then. Re-measure MB/h, replay, and re-ask recall questions. That session
+   is also the replay data Stage 3's GO gate is tuned against.
 4. Install Tesseract to close the canvas/video gap.
 5. Tune the face threshold against real footage.
 6. ~~Stage 2: Jimmy core + hookup~~ Built 2026-09-21.

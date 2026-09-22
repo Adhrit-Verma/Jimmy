@@ -14,13 +14,16 @@ step can write it.
  3. ScreenSource.grab()          DXGI pull. None => desktop unchanged. ───┤
  4. _window_for(app)             live capture window for this app;        │
                                  expires idle/aged windows + their faces  │
- 5. dhash vs window.last_hash ─── unchanged (<=6 bits)? ─► STOP ──────────┤
+ 5. signature vs window.last_sig  grey 160x90; < 0.25 % of pixels moved  │
+                                 by > 12 levels? ─► STOP (unchanged) ─────┤
  6. window_text(hwnd)            wake_accessibility once, then a bounded  │
-                                 BFS: <=1200 nodes, depth 30, 0.6 s       │
+                                 BFS: <=1200 nodes, depth 30, 0.6 s;      │
+                                 button and menu-item names skipped       │
  7. Exclusions.check(url) ─────── excluded? ─► STOP, discard step 6 ──────┤
  8. FaceStage.process()          detect, embed, BLUR -> `blurred`         │
  9. save_thumb(blurred)          the ONLY frame that touches disk         │
-10. add_frame / add_text         SQLite; FTS triggers index the text      │
+10. add_frame                    always: the frame row is the timeline    │
+    add_text(new_lines(...))     only lines this window hasn't stored yet │
 11. ocr(blurred) if text < 40ch  inert today: no tesseract binary         │
                                                                           ▼
                                                               counters, console
@@ -35,6 +38,11 @@ Three things to notice:
   is gathered and must discard it.
 - **Step 8 precedes step 9.** `bus.tick` passes only `blurred` to `save_thumb`.
   The clean frame is a local variable that dies with the tick.
+- **Step 5 is where "worth capturing" is decided, and it has to see text.** The
+  first gate, a 64-bit dhash, missed a one-message chat scroll 7 times in 8 (D18).
+- **Step 10 stores what's new, not what's visible.** A text block is the lines
+  that appeared since the window's earlier captures. To reconstruct "the whole
+  screen at 11:00", read that window's blocks up to 11:00, not just the 11:00 one.
 
 `FaceStage.process` returns a copy and leaves the source frame untouched, so the
 unblurred frame stays available in memory for consumers that legitimately need it
@@ -140,9 +148,11 @@ Mon 21 Sep 01:41  [audio/mic]   mic
 | Face **count** per frame | Face identity, names, or cross-window links |
 | Capture window open/close times | Any link between a person today and tomorrow |
 
-**Footprint:** ~27 KB per thumbnail, ~16 MB/hour, ~130 MB per 8-hour day. The
-text DB is negligible beside the images. The dedup gate skips ~65 % of ticks as
-perceptually unchanged, and that ratio is what keeps the number this small.
+**Footprint:** the first real hour, under the old gate, was **2.0 MB/h** (~26 KB
+per thumbnail, 96 % of ticks skipped), i.e. ~0.5 GB for 8 h/day for 30 days. The
+finer D18 gate captures more, because it stops missing scrolls and new messages,
+so that is a floor. Re-measure from the next run. The text DB is negligible
+beside the images, and smaller still now that only new lines are stored.
 
 ---
 
@@ -152,19 +162,26 @@ perceptually unchanged, and that ratio is what keeps the number this small.
 question ─► Jimmy.ask
   1. memory.recall(question)          fts_query → memories_fts, top 5
   2. AmbientPlugin.context(question)
-       time_window(question)          "yesterday" / "on Tuesday" / "last 20 min" / none
+       time_window(question)          day ("yesterday", "on Tuesday") and/or clock
+                                      ("between 10:40 and 11:10", "at 3pm", "after 11")
        search_captures ─► Store.search(fts_query, since, until, 48-token snippets)
        if a time was named OR nothing matched:
-         Store.activity(window)       which app/title, when, how many captures
+         coverage(frame_times)        FIRST: "N captures; nothing captured 10:47–10:59 …"
+         Store.activity(window)       app/title, first + last seen, how many captures
          Store.speech(window)         what was said
   3. render_context                   dedupe, ≤ 6000 chars, priority order:
-                                      memory → keyword hits → activity → speech
+                                      memory → coverage → keyword hits → activity → speech
   4. messages = system rules + <context>…</context>
               + last 6 chat turns + the question
   5. llm.chat_stream (chat)  ─► NVIDIA ─► <think> stripped ─► shown token by token
      llm.chat (Jimmy.ask)    ─► the same, returned whole
   6. both turns saved to jimmy.db
 ```
+
+**Why a coverage line.** Captures are samples, not a recording. Without being told
+where the holes are, the model filled a 15-minute uncaptured stretch with "an
+active conversation" (D18). Coverage names every gap of 5+ minutes as unknown, and
+it goes ahead of everything else so the context budget can't cut it off.
 
 **Only step 5 leaves the laptop**, and only when a key is set. What it carries is
 exactly `render_context`'s output, which `/context` in chat prints verbatim.

@@ -33,7 +33,8 @@ We want a frame every 2 s. The push API would deliver ~120 frames in that window
 and we would throw away 119. Pull asks for exactly what we need.
 
 Measured: 1920×1080 BGRA in ~7–14 ms per `acquire_frame`. Returning `None` when
-the desktop has not changed is a free first-level change gate, on top of dhash.
+the desktop has not changed is a free first-level change gate, on top of dhash
+(dhash itself was replaced in D18: it was blind to text changes).
 
 Note for future readers: the method is `acquire_frame(timeout_ms)`. There is no
 `capture()`, despite what the class name suggests.
@@ -421,3 +422,75 @@ a real day.
 The free tier's behaviour (timeouts, per-account availability) can change
 without notice. Re-run the scratch benchmark before trusting these numbers months
 from now.
+
+---
+
+### D18 — Fixes from the first real hour
+**Stages 1–2 · 2026-09-22 · supersedes the dhash gate (D2's "on top of dhash") and parts of D16's prompt**
+
+The first real session (66 min, 10:17–11:23) was replayed, measured and put to
+four recall questions. That showed six problems, all fixed:
+
+**1. The change gate was blind to text.** A 64-bit dhash compares a 9×8
+thumbnail of the whole screen. Tested on the hour's own Discord, Teams, VS Code
+and Claude screens, scrolling a chat by one message read as "unchanged" in
+**7 of 8 cases**. That likely explains most of a 35-minute near-empty stretch
+(10:37–11:12) during which the human says they were scrolling and messaging.
+**Now:** grey 160×90, and a capture when ≥ 0.25 % of pixels move by more than 12
+grey levels. Measured: a one-message scroll moves 2–15 % on real screens (0.6 % on
+a thin-text synthetic worst case), a cursor blink 0.01 %, a taskbar clock ~0.02 %.
+The first threshold tried, 0.5 %, left the synthetic case too close, so 0.25 %.
+**Expect more captures and more storage than the first hour's 2.0 MB/h**, which
+was partly low *because* changes were missed. Re-measure.
+
+**2. 44 % of captured text was window chrome** (Minimize, Maximize, Close, Back,
+Forward, Filter…, in nearly every capture). **Now:** `ButtonControl` and
+`MenuItemControl` names aren't collected; their children still are.
+
+**3. 52 % of captures re-stored near-identical text.** **Now:** each capture
+window remembers the lines it has stored, and later captures store only new lines.
+The frame row is always written, since it is the timeline. The first capture of a
+window still stores the full screen.
+
+**4. Clock times weren't understood.** "Between 10:40 and 11:10" fell back to the
+whole morning, and the model confidently described it. **Now:** ranges ("between
+X and Y", "10:40–11:10"), points ("at 3pm", "around 10:45" = ±15 min) and bounds
+("after 11", "before noon"), combined with a named day. A bare hour from 1 to 7
+means afternoon. A time later than now, with no day named, means yesterday.
+
+**5. The model invented and overstated.** It turned an extension's error into
+"you were building Discord integration", called a 15-minute uncaptured stretch
+"an active conversation", and read first-to-last sightings as continuous use.
+**Now:**
+- a **coverage** line, first in the context, lists every gap of 5+ minutes as unknown;
+- activity lines read "first seen … last seen … N captures";
+- prompt rules: state only what the context shows, don't guess intent, an
+  on-screen error is something seen not done, never fill a gap, plain text only.
+
+Found while fixing this: **chat history leaked into time-scoped answers.** An
+earlier VS Code answer made a later "10:40 to 11:10" answer list VS Code, which
+wasn't captured then. Confirmed by asking the same question in a fresh session.
+A rule now says facts come only from the current question's context.
+**Re-test result:** all four questions answered correctly on the real hour, in
+plain text, with gaps named.
+
+**6. A silent mic went unnoticed for 66 minutes.** The default input produced
+near-silence the whole hour. Diagnosed: Windows privacy allows access, every
+input device read near-zero, and with the human speaking during `ambient doctor`
+the headset mic peaked at **9,678**. So the mic works; the hour was simply quiet,
+with noise suppression gating the room. Near-silence can't be told apart from a
+dead mic, so nothing claims it's broken. **Now:**
+- `ambient doctor` runs a 3-second "speak now" test on the mic capture will actually use;
+- capture prints once after 10 minutes with nothing speech-loud, and again when sound returns;
+- `MIC_DEVICE` in `ambient/config.py` picks an input by name, e.g. the laptop's
+  "Microphone Array" when no headset is worn;
+- a mic that fails to *open* is now printed. It used to be stored in a field
+  nobody read.
+
+**Measured in the hour (old gate):** 82 frames from ~1,981 ticks, 2.0 MB/h
+(26 KB thumbnails), 200k chars of text, 0 faces, 0 speech, 23 capture windows
+(median 3.2 min). Ask latency 3–7 s per question including Python start-up; the
+model's first word ~0.8 s.
+
+**Not fixed, noted:** answers from `jimmy ask` pay ~2 s of Python start-up per
+question. Chat keeps one process, so it doesn't. Relevant again at Stage 4.

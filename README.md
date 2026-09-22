@@ -69,7 +69,8 @@ what should:
   ok    face models     models present
   FAIL  ocr             no tesseract binary; UIA-only (canvas/video lost)
   ok    whisper/cuda    cuda devices=1 compute=['int8', 'float16', ...]
-  ok    audio (wasapi)  mic=Headset Microphone loopbacks=4 (capture_loopback=False)
+  ....  mic test        speak now for 3 s into 'Headset Microphone (Realtek(R) Audio)' ...
+  ok    audio (wasapi)  Headset Microphone (Realtek(R) Audio): peak 9678, hears speech-level sound
   ok    store           C:\Code\Jimmy\data\ambient.db frames=0 text=0
 ```
 
@@ -103,9 +104,12 @@ reasoning next to it. Change knobs there, not in code.
 .\.venv\Scripts\python.exe -m jimmy doctor
 ```
 
-Jimmy understands times like *today*, *yesterday*, *this morning*, *on Tuesday*
-and *last 20 minutes*. A question with a time but no topic ("what was I doing
-this morning?") gets a timeline of the apps you had open and what was said.
+Jimmy understands days (*today*, *yesterday*, *this morning*, *on Tuesday*,
+*last 20 minutes*) and clock times (*between 10:40 and 11:10*, *at 3pm
+yesterday*, *after 11*, *before noon*). A question with a time but no topic
+("what was I doing this morning?") gets a timeline of the apps you had open and
+what was said. Captures are samples, not a recording, so when there's a gap
+Jimmy says nothing is known about it rather than guessing.
 
 In chat, `/remember <fact>` keeps something, and **`/context` shows exactly what
 was sent to the model** for your last question. Only that text leaves the laptop,
@@ -115,8 +119,8 @@ password managers, private windows) were never captured, so they can't be sent.
 ### Checks
 
 ```powershell
-.\.venv\Scripts\python.exe tests\test_stage1.py    # 13 checks, no framework
-.\.venv\Scripts\python.exe tests\test_stage2.py    # 13 checks, mocked network
+.\.venv\Scripts\python.exe tests\test_stage1.py    # 15 checks, no framework
+.\.venv\Scripts\python.exe tests\test_stage2.py    # 14 checks, mocked network
 ```
 
 OpenCV prints `net_impl_backend ... Targets are not supported` on import. Harmless.
@@ -129,12 +133,21 @@ OpenCV prints `net_impl_backend ... Targets are not supported` on import. Harmle
 |---|---|
 | Window app and title | Any raw, unblurred frame |
 | Exact UI text, OCR text | Face embeddings or any biometric template |
-| Blurred thumbnails (~27 KB) | Anything from an excluded surface |
+| Blurred thumbnails (~26 KB) | Anything from an excluded surface |
 | Transcribed speech | Raw audio — only the transcript survives |
 | Face **count** per frame | Face identity, names, cross-day links |
 
-Roughly **130 MB per 8-hour day**, most of it thumbnails. There is no retention
-policy yet — see `SCOPE.md`.
+The first real hour used **2.0 MB**, almost all of it thumbnails. That's about
+0.5 GB a month at 8 hours a day. The change detector has since been made more
+sensitive, so expect somewhat more. It's all on your own disk, and there's no
+retention policy yet (see `SCOPE.md`).
+
+**Which microphone.** Capture uses the Windows default input. `ambient doctor`
+asks you to speak for 3 seconds and tells you whether it heard you. To use a
+different mic, for example the laptop's own when no headset is on, set
+`MIC_DEVICE` in `ambient/config.py` to part of its name, such as
+`"Microphone Array"`. If the mic hears nothing speech-loud for 10 minutes while
+capturing, it says so once.
 
 **Excluded surfaces are never captured at all:** password managers, banking and
 payment domains, and private/incognito windows. Add your own in
@@ -174,9 +187,9 @@ meeting isn't lost.
 
 ## What's next
 
-Stage 2 is built; its last check is one live answer once an NVIDIA key is set.
-Stage 3 builds the trigger gate, which is the
-actual product, and it can't ship until a replayed hour produces ten cards or
-fewer, every one defensible.
+Stages 1 and 2 are done and checked live. Stage 3 builds the trigger gate, which
+is the actual product, and it can't ship until a replayed hour produces ten cards
+or fewer, every one defensible. That replay needs a few real hours captured on the
+current pipeline first.
 
 Full status in [`TIMELINE.md`](TIMELINE.md).
