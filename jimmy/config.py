@@ -34,3 +34,4 @@ SEARCH_HITS = 12
 SNIPPET_TOKENS = 48
 MEMORY_HITS = 5
 DEFAULT_LOOKBACK_H = 2       # "what was I doing" with no time words -> the last 2 hours
+COVERAGE_GAP_MIN = 5         # capture gaps at least this long are named in the context as unknown

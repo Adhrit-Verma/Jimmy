@@ -182,6 +182,12 @@ class Store:
         with self._lock:
             return [dict(r) for r in self.conn.execute(sql, (since_ms, until_ms, limit))]
 
+    def frame_times(self, since_ms: int, until_ms: int) -> list[int]:
+        """Timestamps of every captured frame in a window, oldest first."""
+        with self._lock:
+            return [r[0] for r in self.conn.execute(
+                "SELECT ts FROM frames WHERE ts BETWEEN ? AND ? ORDER BY ts", (since_ms, until_ms))]
+
     def speech(self, since_ms: int, until_ms: int, limit: int = 10) -> list[dict]:
         """Transcribed speech in a window, most recent first."""
         sql = """SELECT ts_start, source, text FROM audio_segments

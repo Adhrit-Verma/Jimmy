@@ -157,7 +157,32 @@ def test_time_window():
     assert span("in the last 20 minutes") == (now - 20 * 60_000, now)
     assert span("what was I doing earlier")[0] < now
     assert time_window("what is sqlite", now) is None
-    print("ok  time window phrases")
+
+    at = lambda d, h, m=0: int(datetime(2026, 9, d, h, m).timestamp() * 1000)  # noqa: E731
+    # Clock times: the live test's "between 10:40 and 11:10" fell back to the whole morning.
+    assert span("what was I doing between 10:40 and 11:10?") == (at(17, 10, 40), at(17, 11, 10))
+    assert span("10:40-11:10 this morning") == (at(17, 10, 40), at(17, 11, 10))
+    assert span("what was on screen at 3pm yesterday") == (at(16, 14, 45), at(16, 15, 15))
+    assert span("from 9 to 11 on tuesday") == (at(15, 9), at(15, 11))
+    assert span("from 2 to 4") == (at(17, 14), at(17, 15, 30)), "bare 2-4 = afternoon, capped at now"
+    assert span("after 11") == (at(17, 11), now)
+    assert span("before noon") == (at(17, 0), at(17, 12))
+    assert span("around 10:45am") == (at(17, 10, 30), at(17, 11))
+    assert span("what was I doing at 4pm") == (at(16, 15, 45), at(16, 16, 15)), \
+        "a time later than now, with no day named, means yesterday"
+    assert time_window("the gate allows at most 10 cards", now) is None, "numbers aren't times"
+    print("ok  time window phrases + clock times")
+
+
+def test_coverage_names_the_gaps():
+    from ambient.plugin import coverage
+    t = lambda h, m: int(datetime(2026, 9, 17, h, m).timestamp() * 1000)  # noqa: E731
+    text = coverage([t(10, 41), t(10, 43), t(11, 5)], t(10, 40), t(11, 10))
+    assert "3 screen captures" in text and "10:43–11:05" in text and "unknown" in text
+    assert "10:40–10:41" not in text, "gaps shorter than the threshold are not listed"
+    assert "No screen captures" in coverage([], t(10, 40), t(11, 10))
+    assert "No gap" in coverage([t(10, 40), t(10, 44), t(10, 48)], t(10, 40), t(10, 50))
+    print("ok  coverage names the gaps")
 
 
 def test_memory_recall_and_turns():
