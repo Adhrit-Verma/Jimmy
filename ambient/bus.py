@@ -70,7 +70,8 @@ class Counters:
 
 class ContextBus:
     def __init__(self, db_path: str | Path | None = None, monitor: int | None = None,
-                 audio: bool = True, thumbs: bool = True, cards: bool = True):
+                 audio: bool = True, thumbs: bool = True, cards: bool = True,
+                 overlay: bool = True):
         self.store = Store(db_path or config.DB_PATH)
         self.exclusions = Exclusions(config.EXCLUSIONS_FILE)
         self.faces = FaceStage()
@@ -85,6 +86,10 @@ class ContextBus:
         self._running = False
         self._audio = None
         self.gate = self._make_gate() if cards else None
+        self.want_overlay = overlay
+        self.paused_until = 0          # epoch ms; the overlay's "pause for 2 hours"
+        self._api = None
+        self._overlay_proc = None
 
     # --- capture windows -------------------------------------------------
     def _expire_windows(self, now: float, ts: int, keep: str | None = None) -> None:
@@ -116,6 +121,11 @@ class ContextBus:
     # --- one tick --------------------------------------------------------
     def tick(self) -> str:
         """Returns a short status word, for the console and for tests."""
+        if now_ms() < self.paused_until:
+            # User pause: nothing is captured at all, screen or audio.
+            if self._audio and not self._audio.paused.is_set():
+                self._audio.paused.set()
+            return "paused"
         status = self._tick()
         self._apply_audio_policy(sensitive=(status == "excluded"))
         return status
@@ -230,8 +240,11 @@ class ContextBus:
             engine = None                      # Tier 1 still runs and logs candidates
 
         def on_card(card):
-            self.store.add_card(card.type, card.line, card.evidence, card.ts)
+            card_id = self.store.add_card(card.type, card.line, card.evidence, card.ts)
             print(f"\n[card] {card.type}: {card.line}   ({card.why})\n")
+            if self._api:
+                self._api.publish({"type": "card", "id": card_id, "kind": card.type,
+                                   "line": card.line, "ts": card.ts})
 
         def on_decision(cand, card, why):
             if card is None:
@@ -241,10 +254,58 @@ class ContextBus:
         return Gate(self.store, engine, self._gate_memory, on_card=on_card,
                     on_decision=on_decision, background=True, history_until=now_ms())
 
+    # --- overlay (Stage 4) ------------------------------------------------
+    def overlay_state(self) -> dict:
+        paused = now_ms() < self.paused_until
+        return {"paused": paused, "paused_until": self.paused_until if paused else 0,
+                "cards": self.gate is not None}
+
+    def pause(self, minutes: float) -> None:
+        self.paused_until = now_ms() + int(minutes * 60_000)
+        print(f"[bus] paused for {minutes:.0f} min")
+
+    def resume(self) -> None:
+        self.paused_until = 0
+        print("[bus] resumed")
+
+    def dismiss(self, card_id: int) -> None:
+        """A card waved away in the overlay: record it, and quiet the gate for a while."""
+        self.store.set_card_state(card_id, "dismissed")
+        if self.gate:
+            self.gate.dismissed(now_ms())
+
+    def _start_overlay(self) -> None:
+        """Serve the local API and launch the Electron overlay, if it's been built."""
+        import os
+        import subprocess
+        from .api import OverlayAPI
+        root = config.ROOT / "overlay"
+        exe = root / "node_modules" / "electron" / "dist" / "electron.exe"
+        if not (root / "dist" / "index.html").exists() or not exe.exists():
+            print("[overlay] not built: cd overlay && npm install && npm run build")
+            return
+        self._api = OverlayAPI({"state": self.overlay_state, "pause": self.pause,
+                                "resume": self.resume, "dismiss": self.dismiss}).start()
+        env = dict(os.environ, JIMMY_OVERLAY_URL=self._api.url, JIMMY_OVERLAY_TOKEN=self._api.token)
+        self._overlay_proc = subprocess.Popen([str(exe), str(root)], env=env, cwd=str(root))
+        print(f"[overlay] up (Ctrl+Alt+J pauses)")
+
+    def _stop_overlay(self) -> None:
+        if self._overlay_proc and self._overlay_proc.poll() is None:
+            self._overlay_proc.terminate()
+        if self._api:
+            self._api.stop()
+            self._api = None
+
     # --- run -------------------------------------------------------------
     def run(self, duration_s: float | None = None, verbose: bool = True) -> Counters:
         self._running = True
         started = time.monotonic()
+        if self.want_overlay:
+            try:
+                self._start_overlay()
+            except Exception as exc:  # the overlay is optional; capture must go on
+                print(f"[overlay] disabled: {type(exc).__name__}: {exc}")
 
         if self.want_audio:
             from .audio import AudioPipeline
@@ -294,6 +355,7 @@ class ContextBus:
 
     def close(self, verbose: bool = False) -> None:
         self._running = False
+        self._stop_overlay()
         if self._audio:
             self._audio.stop()
             if verbose and self._audio.errors:

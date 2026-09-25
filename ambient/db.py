@@ -218,6 +218,9 @@ class Store:
         with self._lock:
             return [dict(r) for r in self.conn.execute(sql, (since_ms, until_ms, since_ms, until_ms))]
 
+    def set_card_state(self, card_id: int, state: str) -> None:
+        self._write("UPDATE cards SET state = ? WHERE id = ?", (state, card_id))
+
     def block_text(self, ref: int) -> str:
         """Full text behind a search hit's `ref` (> 0: a text block, < 0: speech)."""
         sql = ("SELECT text FROM text_blocks WHERE id = ?" if ref > 0

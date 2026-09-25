@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+/* The window is a transparent sheet over the desktop: nothing but the pill and
+   cards may paint. The system font is Windows 11's own, so it reads as native. */
+html, body, #root {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+}
+body {
+  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}

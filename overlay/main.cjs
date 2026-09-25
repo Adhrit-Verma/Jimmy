@@ -1,0 +1,129 @@
+// Jimmy overlay: Electron main process (Stage 4, D23).
+//
+// One transparent, click-through, always-on-top window over the primary display's
+// work area: a pill at top-centre, cards at top-right. It never takes focus and has
+// no taskbar entry. Only this process talks to the Python API (127.0.0.1 + token);
+// the page has no network access and no Node, just the small bridge in preload.cjs.
+//
+// Flags: --demo (fake cards, no Python needed)  --snapshot <file.png> (render, save, quit)
+const { app, BrowserWindow, screen, ipcMain, globalShortcut } = require("electron");
+const fs = require("fs");
+const path = require("path");
+
+const API = process.env.JIMMY_OVERLAY_URL;
+const TOKEN = process.env.JIMMY_OVERLAY_TOKEN;
+const DEMO = process.argv.includes("--demo");
+const snapAt = process.argv.indexOf("--snapshot");
+const SNAPSHOT = snapAt > 0 ? process.argv[snapAt + 1] : null;
+const HOTKEY = "Control+Alt+J";
+
+let win = null;
+
+function send(event) {
+  if (win && !win.isDestroyed()) win.webContents.send("event", event);
+}
+
+async function call(route, body) {
+  if (DEMO || !API) return null;
+  const res = await fetch(`${API}/${route}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body || {}),
+  });
+  const state = await res.json();
+  send({ type: "state", ...state });
+  return state;
+}
+
+// Server-Sent Events from Python, re-dialled if the connection drops. If Python is
+// gone for good (capture stopped), the overlay quits with it.
+async function listen() {
+  let failures = 0;
+  while (true) {
+    try {
+      const res = await fetch(`${API}/events`, { headers: { Authorization: `Bearer ${TOKEN}` } });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      failures = 0;
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let buf = "";
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let cut;
+        while ((cut = buf.indexOf("\n\n")) >= 0) {
+          const chunk = buf.slice(0, cut);
+          buf = buf.slice(cut + 2);
+          for (const line of chunk.split("\n")) {
+            if (line.startsWith("data: ")) {
+              try { send(JSON.parse(line.slice(6))); } catch { /* ignore a malformed event */ }
+            }
+          }
+        }
+      }
+    } catch {
+      failures += 1;
+    }
+    if (failures > 10) return app.quit();          // ~15 s of nothing: capture has stopped
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+}
+
+function demo() {
+  const lines = [
+    { kind: "RECALL", line: "Same Sunandha UI/UX resume as Tue 15:02" },
+    { kind: "FOCUS", line: "Back to: apply for jobs and review" },
+  ];
+  send({ type: "state", paused: false, paused_until: 0, cards: true });
+  let i = 0;
+  const next = () => send({ type: "card", id: ++i, ts: Date.now(), ...lines[(i - 1) % lines.length] });
+  setTimeout(next, 600);
+  setTimeout(next, 1400);
+  if (!SNAPSHOT) setInterval(next, 9000);
+}
+
+app.whenReady().then(() => {
+  const { workArea } = screen.getPrimaryDisplay();
+  win = new BrowserWindow({
+    ...workArea,
+    transparent: true,
+    frame: false,
+    resizable: false,
+    movable: false,
+    skipTaskbar: true,
+    focusable: false,          // never steals focus from what the user is doing
+    hasShadow: false,
+    alwaysOnTop: true,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.cjs"),
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+    },
+  });
+  win.setAlwaysOnTop(true, "screen-saver");
+  win.setIgnoreMouseEvents(true, { forward: true }); // click-through until the pointer is on UI
+  win.loadFile(path.join(__dirname, "dist", "index.html"));
+
+  win.webContents.once("did-finish-load", () => {
+    win.showInactive();
+    if (DEMO || !API) demo();
+    else listen();
+    if (SNAPSHOT) {
+      setTimeout(async () => {
+        const img = await win.webContents.capturePage();
+        fs.writeFileSync(SNAPSHOT, img.toPNG());
+        app.quit();
+      }, 2600);
+    }
+  });
+
+  ipcMain.on("pointer-over-ui", (_e, over) => win.setIgnoreMouseEvents(!over, { forward: true }));
+  ipcMain.handle("api", (_e, route, body) => call(route, body));
+  globalShortcut.register(HOTKEY, () => call("toggle-pause"));
+});
+
+app.on("will-quit", () => globalShortcut.unregisterAll());
+app.on("window-all-closed", () => app.quit());
