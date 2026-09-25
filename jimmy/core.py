@@ -122,10 +122,15 @@ class Jimmy:
                                    f"{type(exc).__name__}: {exc}"))
         return out
 
-    def messages(self, question: str, session: str, now_ms: int | None = None) -> list[dict]:
-        ctx = render_context(self.gather(question, now_ms))
+    def messages(self, question: str, session: str, now_ms: int | None = None,
+                 snippets: list[Snippet] | None = None, instructions: str = "") -> list[dict]:
+        """`snippets` given: answer from exactly those (the voice answer panel shows
+        the same evidence it was answered from). Otherwise gather as usual."""
+        ctx = render_context(snippets if snippets is not None else self.gather(question, now_ms))
         self.last_context = ctx
         system = SYSTEM.format(now=time.strftime("%A %d %B %Y, %H:%M"))
+        if instructions:
+            system += f"\n\n{instructions}"
         if ctx:
             system += f"\n\n<context>\n{ctx}\n</context>"
         history = [{"role": t["role"], "content": t["text"]}
@@ -143,10 +148,11 @@ class Jimmy:
         self.memory.add_turn(session, "assistant", answer)
         return answer
 
-    def ask_stream(self, question: str, session: str = "default") -> Iterator[str]:
+    def ask_stream(self, question: str, session: str = "default",
+                   snippets: list[Snippet] | None = None, instructions: str = "") -> Iterator[str]:
         """Answer a question token by token, for chat. Retrieval and the key check
         happen now, not on first iteration; the answer is saved once it ends."""
-        msgs = self.messages(question, session)
+        msgs = self.messages(question, session, snippets=snippets, instructions=instructions)
         self.memory.add_turn(session, "user", question)
         if not self.llm.configured:
             answer = self._offline_answer()

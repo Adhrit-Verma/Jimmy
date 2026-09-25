@@ -107,9 +107,12 @@ def hybrid(store: Store, query: str, since_ms: int = 0, until_ms: int = 1 << 62,
     # Strip screen furniture (browser chrome, sidebar chat lists: lines seen in
     # >= 3 windows, as the gate does, D22) and collapse repeats of the same text.
     # The first timeline search listed Claude's sidebar three times.
+    from .redact import is_own_window
     junk = furniture(store)
     out, seen_text = [], set()
     for r in sorted(merged.values(), key=lambda r: -r["score"]):
+        if is_own_window(r.get("app"), r.get("title")):
+            continue                  # Jimmy's own windows, captured before D25 excluded them
         text = "\n".join(ln for ln in (x.strip() for x in r["text"].split("\n")) if ln and ln not in junk)
         key = " ".join(text.lower().split())[:200]
         if not text or key in seen_text:
@@ -163,7 +166,10 @@ def timeline_hooks(store: Store) -> dict:
         days = store.days()
         day = p.get("day") or (days[0] if days else time.strftime("%Y-%m-%d"))
         start = int(datetime.strptime(day, "%Y-%m-%d").timestamp() * 1000)
-        return {"day": day, "days": days, "frames": store.timeline(start, start + 86_400_000 - 1)}
+        from .redact import is_own_window
+        frames = [f for f in store.timeline(start, start + 86_400_000 - 1)
+                  if not is_own_window(f["app"], f["title"])]
+        return {"day": day, "days": days, "frames": frames}
 
     def get_frame(p: dict) -> dict | None:
         return store.frame(int(p["id"]))

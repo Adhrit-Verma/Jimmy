@@ -137,6 +137,104 @@ def test_timeline_api_and_thumb_traversal():
     print("ok  timeline API; thumbs can't escape their folder")
 
 
+def test_wake_word_and_text_helpers():
+    from ambient.ask import excerpt, parse_wake, speakable
+    assert parse_wake("Jimmy, what was that form on Friday?") == "what was that form on Friday"
+    assert parse_wake("hey jimmie what did I read") == "what did I read"
+    assert parse_wake("Jimmy.") == "" and parse_wake("okay Jimmy") == ""
+    assert parse_wake("I told Jimmy about it") is None, "the name mid-sentence is not a command"
+    long = "x" * 80
+    ex = excerpt(f"nothing here\nthe McKinsey form {long} closes Monday", ["mckinsey"])
+    assert ex.startswith("the McKinsey form") and long not in ex, "the relevant line, long tokens folded"
+    assert speakable("One. Two is longer. Three!", limit=16) == "One.", "reads whole sentences only"
+    print("ok  wake word, excerpt, speakable")
+
+
+def test_asker_answers_voice_questions_and_speaks_only_those():
+    from ambient.ask import Asker
+
+    class FakeJimmy:
+        class llm:
+            configured = True
+        def ask_stream(self, q, session, snippets, instructions):
+            assert snippets, "the answer is built from the evidence shown"
+            yield "The McKinsey form, "
+            yield "Friday 14:09."
+
+    import ambient.ask as ask_mod
+    ask_mod.now_ms = lambda: T0 + 60 * MIN      # the fixture's "now"; T0 lies in the real future
+    s = store_with_history()
+    recall.index(s)
+    events, spoken = [], []
+    a = Asker(s, events.append, speak=spoken.append, jimmy=FakeJimmy())
+
+    assert a.hear(0, "mic", "Jimmy.") is True and events[-1] == {"type": "listening"}
+    assert a.hear(0, "mic", "what was the mckinsey application") is True, "the next line is the question"
+    for _ in range(100):
+        if any(e["type"] == "answer_end" for e in events):
+            break
+        __import__("time").sleep(0.05)
+    kinds = [e["type"] for e in events]
+    assert kinds[:3] == ["listening", "answer_start", "answer_evidence"] and kinds[-1] == "answer_end", kinds
+    ev = next(e for e in events if e["type"] == "answer_evidence")
+    assert ev["evidence"][0]["app"] == "Chrome" and "McKinsey" in ev["evidence"][0]["title"]
+    assert next(e for e in events if e["type"] == "answer_end")["text"] == "The McKinsey form, Friday 14:09."
+    assert spoken == ["The McKinsey form, Friday 14:09."], "spoken questions are answered aloud"
+
+    events.clear()
+    a._run("mckinsey application", "typed")
+    assert len(spoken) == 1, "typed questions are answered silently"
+    assert a.hear(0, "loopback", "Jimmy, what was that") is False, "only the user's mic can ask"
+    assert a.hear(0, "mic", "just talking about lunch") is False
+    print("ok  asker: voice in, evidence + answer out, spoken reply")
+
+
+def test_router_and_follow_ups():
+    """D27: not every question is a search of the past."""
+    from ambient.ask import route
+    for text, mode in (("can you listen to me", "chat"), ("thanks Jimmy", "chat"),
+                       ("what can you do", "chat"), ("how does OAuth work", "chat"),
+                       ("what's on my screen", "screen"), ("summarise this page", "screen"),
+                       ("what am I looking at right now", "screen"),
+                       ("what was that consulting application on Friday", "recall"),
+                       ("what did I do yesterday", "recall"), ("the McKinsey form", "recall")):
+        assert route(text, now=T0)[0] == mode, f"{text!r} -> {route(text, now=T0)[0]}, wanted {mode}"
+    last = {"mode": "recall", "query": "consulting application Friday", "ts": T0 - 30_000}
+    assert route("and when does it close?", last, T0) == ("recall", "consulting application Friday and when does it close?")
+    stale = dict(last, ts=T0 - 3600_000)
+    assert route("and when does it close?", stale, T0)[1] == "and when does it close?", "an hour later is a new topic"
+    print("ok  router: chat / screen / recall, follow-ups")
+
+
+def test_commands_are_never_evidence():
+    import ambient.ask as ask_mod
+    s = store_with_history()
+    s.add_audio(T0 + 13 * MIN, T0 + 13 * MIN + 1, "command", "Jimmy what was the mckinsey application")
+    s.add_audio(T0 + 14 * MIN, T0 + 14 * MIN + 1, "mic", "Jimmy can you find the mckinsey application")  # pre-D27
+    recall.index(s)
+    assert s.search('"mckinsey"', 20) and all(h["source"] != "command" for h in s.search('"mckinsey"', 20))
+    ask_mod.now_ms = lambda: T0 + 60 * MIN
+    items, _, _ = ask_mod.gather_evidence(s, "the mckinsey application", now=T0 + 60 * MIN)
+    assert items and all("jimmy" not in e["text"].lower() for e in items), [e["text"] for e in items]
+    print("ok  commands to Jimmy are never evidence")
+
+
+def test_jimmy_never_captures_itself():
+    from ambient.redact import Exclusions, is_own_window
+    assert is_own_window("C:/x/electron.exe", "Jimmy · Timeline") and is_own_window("electron.exe", "Jimmy")
+    assert not is_own_window("Code.exe", "Jimmy - Visual Studio Code")
+    assert not is_own_window("electron.exe", "Slack")
+    assert Exclusions().check(app="electron.exe", title="Jimmy") == "excluded-self: Jimmy's own window"
+    s = store_with_history()
+    w = s.open_window(ts=T0 + 30 * MIN)
+    f = s.add_frame(w, "electron.exe", "Jimmy", ts=T0 + 30 * MIN)
+    s.add_text(f, "uia", "McKinsey Forward application form shown again inside Jimmy")
+    recall._furniture["at"] = 0
+    assert all(h["app"] != "electron.exe" for h in recall.hybrid(s, "mckinsey application", k=10)), \
+        "old self-captures are skipped when reading"
+    print("ok  Jimmy never captures or cites itself")
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

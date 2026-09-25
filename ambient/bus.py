@@ -91,6 +91,9 @@ class ContextBus:
         self.paused_until = 0          # epoch ms; the overlay's "pause for 2 hours"
         self._api = None
         self._overlay_proc = None
+        self._asker = None          # voice / typed questions (D25), set up with the overlay
+        self._voice = None
+        self._speaking = False
 
     # --- capture windows -------------------------------------------------
     def _expire_windows(self, now: float, ts: int, keep: str | None = None) -> None:
@@ -146,10 +149,12 @@ class ContextBus:
         if not self._audio:
             return
         from .audio import other_app_using_mic
-        pause = sensitive and not other_app_using_mic()
+        speaking = getattr(self, "_speaking", False)   # D25: never transcribe Jimmy's own voice
+        pause = speaking or (sensitive and not other_app_using_mic())
         if pause != self._audio.paused.is_set():
             (self._audio.paused.set if pause else self._audio.paused.clear)()
-            print(f"[audio] {'paused: sensitive surface' if pause else 'resumed'}")
+            why = "Jimmy speaking" if speaking else "sensitive surface"
+            print(f"[audio] {'paused: ' + why if pause else 'resumed'}")
         if pause:
             self.counters.audio_paused_ticks += 1
 
@@ -222,8 +227,14 @@ class ContextBus:
 
     # --- audio -----------------------------------------------------------
     def _on_audio(self, ts_start: int, ts_end: int, source: str, text: str) -> None:
-        self.store.add_audio(ts_start, ts_end, source, text, window_id=self.window_id)
+        # "Jimmy, …" is a question for Jimmy: stored as a command, never evidence
+        # (D27: "can you listen to me" once answered with itself), and not for the gate.
+        command = bool(self._asker and self._asker.hear(ts_end, source, text))
+        self.store.add_audio(ts_start, ts_end, "command" if command else source, text,
+                             window_id=self.window_id)
         self.counters.audio_segments += 1
+        if command:
+            return
         if self.gate:
             self.gate.observe_speech(ts_start, ts_end, source, text)
 
@@ -285,15 +296,64 @@ class ContextBus:
         if not (root / "dist" / "index.html").exists() or not exe.exists():
             print("[overlay] not built: cd overlay && npm install && npm run build")
             return
+        from .ask import Asker, Voice
         from .recall import timeline_hooks
+        self._voice = Voice(on_start=self._voice_started, on_end=self._voice_ended) \
+            if config.VOICE_ANSWERS else None
         self._api = OverlayAPI({"state": self.overlay_state, "pause": self.pause,
                                 "resume": self.resume, "dismiss": self.dismiss,
+                                "post_ask": lambda b: self._asker.ask(str(b.get("q", "")).strip(), "typed")
+                                if str(b.get("q", "")).strip() else None,
+                                "post_stop-voice": lambda b: self._voice and self._voice.stop(),
+                                "post_quit": lambda b: self.stop_running(),
                                 **timeline_hooks(self.store)}).start()
+        self._asker = Asker(self.store, self._api.publish,
+                            speak=self._voice.say if self._voice else None,
+                            screen_now=self.screen_now)
         env = dict(os.environ, JIMMY_OVERLAY_URL=self._api.url, JIMMY_OVERLAY_TOKEN=self._api.token)
-        self._overlay_proc = subprocess.Popen([str(exe), str(root)], env=env, cwd=str(root))
-        print(f"[overlay] up (Ctrl+Alt+J pauses)")
+        # Piped: a GUI program's console output goes nowhere on Windows unless it is,
+        # and page errors must reach this terminal (D26).
+        self._overlay_proc = subprocess.Popen(
+            [str(exe), str(root)], env=env, cwd=str(root), stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
+
+        def relay(stream):
+            for line in stream:
+                line = line.rstrip()
+                if line.startswith("[overlay") or "rror" in line or "panel failed" in line:
+                    print(line if line.startswith("[") else f"[overlay] {line}")
+        threading.Thread(target=relay, args=(self._overlay_proc.stdout,), daemon=True,
+                         name="overlay-log").start()
+        print("[overlay] up. Say \"Jimmy, …\" to ask; Ctrl+Alt+Space to type; Ctrl+Alt+J pauses")
+
+    def screen_now(self) -> dict | None:
+        """The window the user is on right now: its latest frame and everything it
+        has shown, for "what's on my screen?" (D27). None for excluded or unseen."""
+        aw = screen.active_window()
+        if self.exclusions.check(app=aw.app, title=aw.title):
+            return None                   # banking, password managers, Jimmy itself
+        w = self._open.get(aw.app)
+        if w is None:
+            return None
+        frame, text = self.store.window_content(w.id, aw.title)
+        return {"frame": frame, "text": text} if frame else None
+
+    def _voice_started(self) -> None:
+        self._speaking = True
+        if self._audio:
+            self._audio.paused.set()       # at once, not at the next tick
+
+    def _voice_ended(self) -> None:
+        self._speaking = False             # the next tick's audio policy resumes the mic
+
+    def stop_running(self) -> None:
+        """Quit from the overlay: the same clean shutdown as Ctrl-C."""
+        print("[bus] quit requested from the overlay")
+        self._running = False
 
     def _stop_overlay(self) -> None:
+        if getattr(self, "_voice", None):
+            self._voice.close()
         if self._overlay_proc and self._overlay_proc.poll() is None:
             self._overlay_proc.terminate()
         if self._api:

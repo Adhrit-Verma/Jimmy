@@ -8,4 +8,6 @@ contextBridge.exposeInMainWorld("jimmy", {
   pointerOverUi: (over) => ipcRenderer.send("pointer-over-ui", over),
   openTimeline: () => ipcRenderer.send("open-timeline"),
   closeWindow: () => ipcRenderer.send("close-window"),
+  focusAsk: () => ipcRenderer.send("focus-ask"),
+  releaseFocus: () => ipcRenderer.send("release-focus"),
 });

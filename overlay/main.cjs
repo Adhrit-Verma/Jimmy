@@ -15,6 +15,8 @@ const TOKEN = process.env.JIMMY_OVERLAY_TOKEN;
 const DEMO = process.argv.includes("--demo");
 const snapAt = process.argv.indexOf("--snapshot");
 const SNAPSHOT = snapAt > 0 ? process.argv[snapAt + 1] : null;
+const delayAt = process.argv.indexOf("--snap-delay");
+const SNAP_DELAY = delayAt > 0 ? Number(process.argv[delayAt + 1]) : 2600;
 const HOTKEY = "Control+Alt+J";
 const TIMELINE_HOTKEY = "Control+Alt+T";
 const OPEN_TIMELINE = process.argv.includes("--timeline");
@@ -146,17 +148,31 @@ app.whenReady().then(() => {
   win.setAlwaysOnTop(true, "screen-saver");
   win.setIgnoreMouseEvents(true, { forward: true }); // click-through until the pointer is on UI
   win.loadFile(path.join(__dirname, "dist", "index.html"));
+  // Page errors surface in the `ambient run` terminal instead of vanishing (D26:
+  // a render error once blanked the whole overlay and nothing said why).
+  win.webContents.on("console-message", (e, ...args) => {
+    const level = e.level ?? args[0];
+    const message = e.message ?? args[1];
+    if (level === "error" || level === "warning" || level >= 2) console.error(`[overlay page] ${message}`);
+  });
+  win.webContents.on("render-process-gone", (_e, d) => console.error(`[overlay page] crashed: ${d.reason}`));
 
   win.webContents.once("did-finish-load", () => {
     win.showInactive();
     if (DEMO || !API) demo();
     else listen();
     if (SNAPSHOT && !OPEN_TIMELINE) {
+      win.webContents.executeJavaScript(`window.__errs=[];addEventListener('error',e=>__errs.push(String(e.message)));
+        addEventListener('unhandledrejection',e=>__errs.push('rejection: '+String(e.reason)));`);
       setTimeout(async () => {
+        const probe = await win.webContents.executeJavaScript(
+          `JSON.stringify({root: document.getElementById('root').innerHTML.length, errs: window.__errs,
+            visible: document.visibilityState})`);
+        console.error(`[snapshot] ${probe} window visible=${win.isVisible()}`);
         const img = await win.webContents.capturePage();
         fs.writeFileSync(SNAPSHOT, img.toPNG());
         app.quit();
-      }, 2600);
+      }, SNAP_DELAY);
     }
   });
 
@@ -164,6 +180,21 @@ app.whenReady().then(() => {
   ipcMain.handle("api", (_e, route, body) => call(route, body));
   ipcMain.handle("get", (_e, route, params) => get(route, params));
   ipcMain.on("open-timeline", () => openTimeline());
+  // Typing a question (D25) is the one time the overlay may take focus; it gives
+  // it back as soon as the question is sent or dismissed.
+  const focusAsk = () => {
+    win.setFocusable(true);
+    win.setIgnoreMouseEvents(false);
+    win.focus();
+    send({ type: "focus-ask" });
+  };
+  ipcMain.on("focus-ask", focusAsk);
+  ipcMain.on("release-focus", () => {
+    win.setFocusable(false);
+    win.setIgnoreMouseEvents(true, { forward: true });
+    win.blur();
+  });
+  globalShortcut.register("Control+Alt+Space", focusAsk);
   ipcMain.on("close-window", (e) => BrowserWindow.fromWebContents(e.sender)?.close());
   globalShortcut.register(HOTKEY, () => call("toggle-pause"));
   globalShortcut.register(TIMELINE_HOTKEY, () => openTimeline());

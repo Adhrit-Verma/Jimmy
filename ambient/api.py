@@ -104,6 +104,8 @@ class OverlayAPI:
                 elif route == "toggle-pause":
                     st = api.hooks["state"]()
                     api.hooks["resume"]() if st.get("paused") else api.hooks["pause"](120)
+                elif api.hooks.get(f"post_{route}"):      # D25: ask, quit, stop-voice
+                    api.hooks[f"post_{route}"](body)
                 else:
                     return self.send_error(404)
                 state = api.hooks["state"]()

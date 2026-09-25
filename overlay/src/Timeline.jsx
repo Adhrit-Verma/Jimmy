@@ -13,10 +13,13 @@ const niceDay = (d) =>
   new Date(`${d}T00:00`).toLocaleDateString([], { weekday: "long", day: "numeric", month: "short" });
 const appName = (a) => (a || "").replace(/\.exe$/i, "");
 
-function useThumb(path) {
+export function useThumb(path) {
   const [src, setSrc] = useState(path ? thumbCache.get(path) : null);
   useEffect(() => {
-    if (!path || thumbCache.has(path)) return setSrc(thumbCache.get(path) || null);
+    if (!path || thumbCache.has(path)) {
+      setSrc(thumbCache.get(path) || null);
+      return;                                      // effects return nothing or a cleanup (D26)
+    }
     let live = true;
     bridge?.get("thumb", { path }).then((r) => {
       if (r?.data) thumbCache.set(path, r.data);
@@ -27,7 +30,7 @@ function useThumb(path) {
   return src;
 }
 
-function Thumb({ path, className }) {
+export function Thumb({ path, className }) {
   const src = useThumb(path);
   return src
     ? <img src={src} className={`object-cover ${className}`} draggable={false} />

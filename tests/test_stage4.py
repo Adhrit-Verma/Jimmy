@@ -118,6 +118,19 @@ def test_overlay_page_has_no_network():
     print("ok  overlay window: isolated, click-through, never takes focus")
 
 
+def test_effects_never_return_a_value():
+    """D26: `useEffect(() => el.scrollIntoView(...))` returned a Promise (this
+    Chromium's scrollIntoView does), React called it as the cleanup, and the whole
+    overlay went blank on the second answer. Effects must use a braced body."""
+    import re
+    src = Path(__file__).resolve().parents[1] / "overlay" / "src"
+    bad = [f"{p.name}:{n}" for p in src.glob("*.jsx")
+           for n, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1)
+           if re.search(r"useEffect\(\(\)\s*=>\s*[^{\s]", line)]
+    assert not bad, f"expression-bodied effects (return values become 'cleanups'): {bad}"
+    print("ok  effects have braced bodies")
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

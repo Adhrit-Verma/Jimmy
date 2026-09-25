@@ -28,8 +28,8 @@ GATE_PIXEL_DELTA = 12        # grey levels; below this is compression shimmer
 # chat scroll at 0.6 %, too close to call; 0.25 is 25x a cursor blink (0.01 %)
 # and >10x a taskbar clock tick (~0.02 %).
 GATE_CHANGED_PCT = 0.25
-THUMB_WIDTH = 640
-THUMB_JPEG_QUALITY = 70
+THUMB_WIDTH = 1280           # D27: large enough to read when opened big (was 640; ~2-3x storage)
+THUMB_JPEG_QUALITY = 65
 
 # --- text extraction ------------------------------------------------------
 # Measured on a live Electron window: 317 nodes / 4.8k chars / ~230 ms. Chromium
@@ -120,3 +120,12 @@ DISMISS_COOLDOWN_S = 30 * 60  # after a dismissal (wired by the Stage 4 overlay)
 
 # --- recall timeline, Stage 5 (D24) -----------------------------------------
 INDEX_EVERY_S = 60           # embed new captures for meaning search this often while running
+
+# --- ask by voice, answers come to you (D25) --------------------------------
+ASK_EVIDENCE = 6             # moments shown beside a spoken answer
+LISTEN_WINDOW_S = 8          # after "Jimmy" alone, the next thing said (within this) is the question
+VOICE_ANSWERS = True         # read spoken questions' answers aloud (Windows' built-in voice)
+VOICE_MAX_CHARS = 320        # read at most this much: the first sentences that fit
+VOICE_RATE = 1               # SAPI speaking rate, -10..10
+VOICE_VOLUME = 100           # 0..100
+CONVO_S = 180                # questions this close together are one conversation (D27)

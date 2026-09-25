@@ -175,7 +175,7 @@ class Store:
                snippet(audio_fts, 0, '[', ']', '...', {n}), bm25(audio_fts), NULL, a.window_id,
                -a.id
           FROM audio_fts JOIN audio_segments a ON a.id = audio_fts.rowid
-         WHERE audio_fts MATCH ? AND a.ts_start BETWEEN ? AND ?
+         WHERE audio_fts MATCH ? AND a.ts_start BETWEEN ? AND ? AND a.source != 'command'
          ORDER BY rank LIMIT ?
         """
         args = (query, since_ms, until_ms, query, since_ms, until_ms, limit)
@@ -234,7 +234,7 @@ class Store:
          WHERE NOT EXISTS (SELECT 1 FROM embeddings e WHERE e.ref = t.id AND e.model = ?)
         UNION ALL
         SELECT -a.id, a.ts_start, a.text FROM audio_segments a
-         WHERE NOT EXISTS (SELECT 1 FROM embeddings e WHERE e.ref = -a.id AND e.model = ?)
+         WHERE a.source != 'command' AND NOT EXISTS (SELECT 1 FROM embeddings e WHERE e.ref = -a.id AND e.model = ?)
          ORDER BY ts LIMIT ?"""
         with self._lock:
             return [dict(r) for r in self.conn.execute(sql, (model, model, limit))]
@@ -255,7 +255,7 @@ class Store:
         UNION ALL
         SELECT e.ref, e.ts, e.chunk, e.vec, NULL, NULL, NULL, a.source
           FROM embeddings e JOIN audio_segments a ON a.id = -e.ref
-         WHERE e.ref < 0 AND e.model = ? AND e.ts BETWEEN ? AND ?"""
+         WHERE e.ref < 0 AND e.model = ? AND e.ts BETWEEN ? AND ? AND a.source != 'command'"""
         with self._lock:
             return [dict(r) for r in self.conn.execute(sql, (model, since_ms, until_ms,
                                                              model, since_ms, until_ms))]
@@ -288,6 +288,39 @@ class Store:
                 "ORDER BY ts_start", (f["ts"] - 120_000, f["ts"] + 120_000))]
         return out
 
+    def frame_for(self, ref: int, ts: int) -> dict | None:
+        """The frame behind a search hit: its own frame for screen text (ref > 0),
+        the closest frame in time for speech (ref < 0), so every piece of evidence
+        can show a thumbnail."""
+        cols = "f.id, f.ts, f.app, f.title, f.thumb_path"
+        with self._lock:
+            row = (self.conn.execute(f"SELECT {cols} FROM text_blocks t JOIN frames f "
+                                     "ON f.id = t.frame_id WHERE t.id = ?", (ref,)).fetchone()
+                   if ref > 0 else
+                   self.conn.execute(f"SELECT {cols} FROM frames f ORDER BY ABS(f.ts - ?) LIMIT 1",
+                                     (ts,)).fetchone())
+        return dict(row) if row else None
+
+    def window_content(self, window_id: str, title: str) -> tuple[dict | None, str]:
+        """(latest frame, everything stored for this title in this capture window, in
+        screen order): what the page or document the user is on now contains (D27).
+        By title, because a capture window spans the whole app: all of Chrome's tabs."""
+        with self._lock:
+            f = self.conn.execute("SELECT id, ts, app, title, thumb_path FROM frames WHERE window_id = ? "
+                                  "AND title IS ? ORDER BY ts DESC LIMIT 1", (window_id, title)).fetchone()
+            text = "\n".join(r[0] for r in self.conn.execute(
+                "SELECT t.text FROM text_blocks t JOIN frames f ON f.id = t.frame_id "
+                "WHERE f.window_id = ? AND f.title IS ? ORDER BY f.ts", (window_id, title)))
+        return (dict(f) if f else None), text
+
+    def latest_frame(self, app: str, title: str, since_ms: int, until_ms: int) -> dict | None:
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT id, ts, app, title, thumb_path FROM frames WHERE app IS ? AND title IS ? "
+                "AND ts BETWEEN ? AND ? ORDER BY ts DESC LIMIT 1",
+                (app, title, since_ms, until_ms)).fetchone()
+        return dict(row) if row else None
+
     def set_card_state(self, card_id: int, state: str) -> None:
         self._write("UPDATE cards SET state = ? WHERE id = ?", (state, card_id))
 
@@ -315,7 +348,7 @@ class Store:
     def speech(self, since_ms: int, until_ms: int, limit: int = 10) -> list[dict]:
         """Transcribed speech in a window, most recent first."""
         sql = """SELECT ts_start, source, text FROM audio_segments
-                  WHERE ts_start BETWEEN ? AND ? ORDER BY ts_start DESC LIMIT ?"""
+                  WHERE ts_start BETWEEN ? AND ? AND source != 'command' ORDER BY ts_start DESC LIMIT ?"""
         with self._lock:
             return [dict(r) for r in self.conn.execute(sql, (since_ms, until_ms, limit))]
 

@@ -54,6 +54,14 @@ EXCLUDED_URL_PATTERNS = [
 ]
 
 
+def is_own_window(app: str | None, title: str | None) -> bool:
+    """Jimmy's overlay and timeline windows. Jimmy must never capture itself: with
+    the timeline open, it re-captured your old text from Jimmy's own screen, and
+    search then ranked that copy above the original moment (D25)."""
+    return bool(app and title and Path(app).name.lower() == "electron.exe"
+                and title.strip().lower().startswith("jimmy"))
+
+
 class Exclusions:
     """Default list in code, optional user additions from a plain text file.
 
@@ -90,6 +98,8 @@ class Exclusions:
     def check(self, app: str | None = None, title: str | None = None,
               url: str | None = None) -> str | None:
         """Return a short reason string if this surface is excluded, else None."""
+        if is_own_window(app, title):
+            return "excluded-self: Jimmy's own window"
         if app and Path(app).name.lower() in self.exes:
             return f"excluded-exe:{Path(app).name.lower()}"
         if title:
