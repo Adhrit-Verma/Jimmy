@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img alt="Windows 11" src="https://img.shields.io/badge/Windows%2011-0078D6?logo=windows&logoColor=white">
+  <img alt="Windows 11" src="https://img.shields.io/badge/Windows%2011-0078D6">
   <img alt="Python 3.12" src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white">
   <img alt="Electron" src="https://img.shields.io/badge/overlay-Electron%20%2B%20React-47848F?logo=electron&logoColor=white">
   <img alt="Local first" src="https://img.shields.io/badge/capture-stays%20on%20your%20laptop-2ea44f">
