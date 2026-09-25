@@ -309,6 +309,22 @@ def test_asker_asks_back_and_waits():
     print("ok  asker: asks back, waits, resolves by voice or button, shows evidence")
 
 
+def test_screen_keeps_a_revisited_page():
+    """D30: a page seen in many windows looks like furniture; on screen, it's content."""
+    from ambient.ask import Asker
+    s = store_with_history()        # "Image suspicion check sidebar" is in 4 windows: furniture
+    recall._furniture["at"] = 0
+    frame = {"id": 1, "ts": T0, "app": "claude.exe", "title": "Claude", "thumb_path": None}
+    page = "Image suspicion check sidebar"
+    a = Asker(s, lambda e: None, screen_now=lambda: {"frame": frame, "text": page})
+    assert page in a._screen_evidence()[0]["text"], "all 'furniture': it was the page itself"
+    body = "Quarterly plan draft with the budget table and three open questions for Monday"
+    a.screen_now = lambda: {"frame": frame, "text": f"{page}\n{body}"}
+    got = a._screen_evidence()[0]["text"]
+    assert body in got and page not in got, "a little furniture beside real content is still dropped"
+    print("ok  screen evidence keeps a revisited page, drops a sidebar")
+
+
 def test_demo_script_parses():
     from ambient.demo import DEFAULT_SCRIPT, parse
     steps = parse(DEFAULT_SCRIPT)

@@ -354,10 +354,15 @@ class Asker:
         now = self.screen_now()
         if not now:
             return []
-        text = "\n".join(ln for ln in now["text"].split("\n") if ln.strip() not in furniture(self.store))
+        raw = now["text"]
+        kept = "\n".join(ln for ln in raw.split("\n") if ln.strip() not in furniture(self.store))
+        # A page you keep coming back to repeats across windows just like a sidebar
+        # does. If "furniture" is most of the window, it was the content (D30).
+        text = kept if len(kept) >= len(raw) / 2 else raw
         item = _item(-20_000_000 - now["frame"]["id"], now["frame"]["ts"], "now",
                      text or now["frame"]["title"], now["frame"], "now", [])
-        item.update(text=f"{now['frame']['title']}\n{text}"[:4000], day="Now", time="")
+        # The newest text, not the oldest: this is about the screen now.
+        item.update(text=f"{now['frame']['title']}\n{text[-3900:]}", day="Now", time="")
         return [item]
 
     def _run(self, question: str, source: str, force: tuple[str, str] | None = None) -> None:

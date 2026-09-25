@@ -13,3 +13,4 @@ __pycache__/
 overlay/node_modules/
 overlay/dist/
 *.png
+!docs/img/*.png
