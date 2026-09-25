@@ -117,3 +117,6 @@ MAX_CARDS_PER_HOUR = 4       # hard cap, rolling hour (the spec's gate is <= 10)
 MIN_CARD_GAP_S = 10 * 60     # never two cards closer than this
 MAX_CANDIDATES_PER_HOUR = 20  # cap on Tier 2 (cloud) calls, rolling hour
 DISMISS_COOLDOWN_S = 30 * 60  # after a dismissal (wired by the Stage 4 overlay)
+
+# --- recall timeline, Stage 5 (D24) -----------------------------------------
+INDEX_EVERY_S = 60           # embed new captures for meaning search this often while running

@@ -2,6 +2,9 @@
 
 /* The window is a transparent sheet over the desktop: nothing but the pill and
    cards may paint. The system font is Windows 11's own, so it reads as native. */
+:root {
+  color-scheme: dark;   /* dark native scrollbars and form controls */
+}
 html, body, #root {
   margin: 0;
   height: 100%;

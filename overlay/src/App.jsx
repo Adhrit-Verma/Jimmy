@@ -62,6 +62,20 @@ function Pill({ state }) {
               {paused ? "Resume" : "Pause 2h"}
             </motion.button>
           )}
+          {open && (
+            <motion.button
+              key="timeline"
+              initial={{ opacity: 0, width: 0 }}
+              animate={{ opacity: 1, width: "auto" }}
+              exit={{ opacity: 0, width: 0 }}
+              onClick={() => bridge?.openTimeline()}
+              aria-label="Open timeline"
+              className="flex items-center gap-1 overflow-hidden whitespace-nowrap rounded-full bg-white/10 px-2 py-0.5 text-neutral-100 hover:bg-white/15"
+            >
+              <History size={12} />
+              Timeline
+            </motion.button>
+          )}
         </AnimatePresence>
       </motion.div>
     </div>

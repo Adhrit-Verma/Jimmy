@@ -7,6 +7,7 @@ happiest where it was initialised; audio runs on its own threads.
 from __future__ import annotations
 
 import signal
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -284,8 +285,10 @@ class ContextBus:
         if not (root / "dist" / "index.html").exists() or not exe.exists():
             print("[overlay] not built: cd overlay && npm install && npm run build")
             return
+        from .recall import timeline_hooks
         self._api = OverlayAPI({"state": self.overlay_state, "pause": self.pause,
-                                "resume": self.resume, "dismiss": self.dismiss}).start()
+                                "resume": self.resume, "dismiss": self.dismiss,
+                                **timeline_hooks(self.store)}).start()
         env = dict(os.environ, JIMMY_OVERLAY_URL=self._api.url, JIMMY_OVERLAY_TOKEN=self._api.token)
         self._overlay_proc = subprocess.Popen([str(exe), str(root)], env=env, cwd=str(root))
         print(f"[overlay] up (Ctrl+Alt+J pauses)")
@@ -297,6 +300,24 @@ class ContextBus:
             self._api.stop()
             self._api = None
 
+    def _index_loop(self) -> None:
+        """Embed new captures for meaning search once a minute (Stage 5, D24).
+        If the embedding model is unavailable, keyword search still works; retry later."""
+        from jimmy.core import LLMError
+
+        from .recall import index
+        while self._running:
+            for _ in range(config.INDEX_EVERY_S):
+                if not self._running:
+                    return
+                time.sleep(1)
+            try:
+                index(self.store, limit=200)
+            except LLMError:
+                pass
+            except Exception as exc:   # indexing must never take capture down
+                print(f"[index] {type(exc).__name__}: {exc}")
+
     # --- run -------------------------------------------------------------
     def run(self, duration_s: float | None = None, verbose: bool = True) -> Counters:
         self._running = True
@@ -306,6 +327,7 @@ class ContextBus:
                 self._start_overlay()
             except Exception as exc:  # the overlay is optional; capture must go on
                 print(f"[overlay] disabled: {type(exc).__name__}: {exc}")
+        threading.Thread(target=self._index_loop, daemon=True, name="indexer").start()
 
         if self.want_audio:
             from .audio import AudioPipeline

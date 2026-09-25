@@ -166,6 +166,9 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("doctor", help="check every component on this machine")
 
+    ix = sub.add_parser("index", help="embed captured text for meaning search (Stage 5)")
+    ix.add_argument("--db", default=None)
+
     rp = sub.add_parser("replay", help="run the trigger gate over stored history (Stage 3 GO gate)")
     rp.add_argument("--since", help="'YYYY-MM-DD HH:MM' (default: all history)")
     rp.add_argument("--until", help="'YYYY-MM-DD HH:MM' (default: now)")
@@ -194,16 +197,30 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if a.cmd == "search":
+        # Keywords + meaning, within any time the query names (Stage 5, D24).
+        from .plugin import time_window
+        from .recall import hybrid
+        w = time_window(a.query, int(time.time() * 1000))
         with Store(db) as store:
-            hits = store.search(a.query, a.limit)
+            hits = hybrid(store, a.query, w[0] if w else 0, w[1] if w else 1 << 62, a.limit)
         if not hits:
             print("no matches")
             return 1
         for h in hits:
             when = time.strftime("%a %d %b %H:%M", time.localtime(h["ts"] / 1000))
-            where = h["title"] or h["app"] or h["source"]
-            print(f"{when}  [{h['kind']}/{h['source']}]  {(where or '')[:48]}")
-            print(f"    {h['snippet']}")
+            where = h["title"] or h["app"] or f"heard near {h['source']}"
+            print(f"{when}  [{h['via']}]  {(where or '')[:56]}")
+            print(f"    {' '.join(h['text'].split())[:160]}")
+        return 0
+
+    if a.cmd == "index":
+        from .recall import index
+        t0, total = time.time(), 0
+        with Store(db) as store:
+            while n := index(store):
+                total += n
+                print(f"  embedded {total} chunks ({time.time() - t0:.0f}s)", flush=True)
+        print(f"index up to date: {total} new chunks in {time.time() - t0:.1f}s")
         return 0
 
     if a.cmd == "stats":

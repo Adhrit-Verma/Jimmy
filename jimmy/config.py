@@ -52,3 +52,8 @@ CARD_ENGINE = os.environ.get("JIMMY_CARD_ENGINE") or "local"   # "local" | "clou
 # RECALL needs two yeses (D22): the local model filters, the cloud confirms. Only
 # the few local yeses leave the laptop. "none" = local only (lower precision).
 RECALL_VERIFY = os.environ.get("JIMMY_RECALL_VERIFY") or "cloud"
+
+# --- embeddings, Stage 5 (D24) ----------------------------------------------
+# bge-m3 via local Ollama: multilingual (English + Hindi/Hinglish), chosen by the
+# human over embeddinggemma and nomic-embed-text. Text never leaves the laptop.
+EMBED_MODEL = os.environ.get("JIMMY_EMBED_MODEL") or "bge-m3"

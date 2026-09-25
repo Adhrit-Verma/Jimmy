@@ -16,8 +16,48 @@ const DEMO = process.argv.includes("--demo");
 const snapAt = process.argv.indexOf("--snapshot");
 const SNAPSHOT = snapAt > 0 ? process.argv[snapAt + 1] : null;
 const HOTKEY = "Control+Alt+J";
+const TIMELINE_HOTKEY = "Control+Alt+T";
+const OPEN_TIMELINE = process.argv.includes("--timeline");
 
 let win = null;
+let timeline = null;
+
+// Stage 5: the recall timeline. A normal, focusable window (unlike the overlay),
+// frameless with its own drag bar, same page bundle at #timeline.
+function openTimeline() {
+  if (timeline && !timeline.isDestroyed()) {
+    timeline.show();
+    timeline.focus();
+    return timeline;
+  }
+  timeline = new BrowserWindow({
+    width: 1180, height: 760, minWidth: 820, minHeight: 540,
+    frame: false,
+    backgroundColor: "#0a0a0a",
+    title: "Jimmy · Timeline",
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.cjs"),
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+    },
+  });
+  const q = process.env.JIMMY_TIMELINE_QUERY;
+  timeline.loadFile(path.join(__dirname, "dist", "index.html"),
+                    { hash: q ? `timeline?q=${encodeURIComponent(q)}` : "timeline" });
+  timeline.once("ready-to-show", () => timeline.show());
+  return timeline;
+}
+
+async function get(route, params) {
+  if (!API) return null;
+  const qs = new URLSearchParams(params || {}).toString();
+  const res = await fetch(`${API}/${route}${qs ? `?${qs}` : ""}`, {
+    headers: { Authorization: `Bearer ${TOKEN}` },
+  });
+  return res.ok ? res.json() : null;
+}
 
 function send(event) {
   if (win && !win.isDestroyed()) win.webContents.send("event", event);
@@ -111,7 +151,7 @@ app.whenReady().then(() => {
     win.showInactive();
     if (DEMO || !API) demo();
     else listen();
-    if (SNAPSHOT) {
+    if (SNAPSHOT && !OPEN_TIMELINE) {
       setTimeout(async () => {
         const img = await win.webContents.capturePage();
         fs.writeFileSync(SNAPSHOT, img.toPNG());
@@ -122,7 +162,22 @@ app.whenReady().then(() => {
 
   ipcMain.on("pointer-over-ui", (_e, over) => win.setIgnoreMouseEvents(!over, { forward: true }));
   ipcMain.handle("api", (_e, route, body) => call(route, body));
+  ipcMain.handle("get", (_e, route, params) => get(route, params));
+  ipcMain.on("open-timeline", () => openTimeline());
+  ipcMain.on("close-window", (e) => BrowserWindow.fromWebContents(e.sender)?.close());
   globalShortcut.register(HOTKEY, () => call("toggle-pause"));
+  globalShortcut.register(TIMELINE_HOTKEY, () => openTimeline());
+
+  if (OPEN_TIMELINE) {
+    const t = openTimeline();
+    if (SNAPSHOT) {
+      t.webContents.once("did-finish-load", () => setTimeout(async () => {
+        const img = await t.webContents.capturePage();
+        fs.writeFileSync(SNAPSHOT, img.toPNG());
+        app.quit();
+      }, 4000));
+    }
+  }
 });
 
 app.on("will-quit", () => globalShortcut.unregisterAll());

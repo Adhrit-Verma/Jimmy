@@ -11,7 +11,7 @@ import time
 from typing import Callable, Iterator, NamedTuple, Protocol
 
 from . import config
-from .llm import LLM, LLMError
+from .llm import LLM, LLMError, embed
 from .memory import Memory
 
 
@@ -180,4 +180,4 @@ class Jimmy:
             getattr(p, "close", lambda: None)()
 
 
-__all__ = ["Jimmy", "Snippet", "Plugin", "LLMError", "ToolNotConfigured", "render_context"]
+__all__ = ["Jimmy", "Snippet", "Plugin", "LLMError", "ToolNotConfigured", "render_context", "embed"]

@@ -10,6 +10,8 @@ an out-of-process caller (D16): the Electron overlay. Standard library only.
 
 Routes: GET /events (Server-Sent Events: state, cards), GET /state,
 POST /dismiss {"id"}, POST /pause {"minutes"}, POST /resume, POST /toggle-pause.
+Stage 5 (the timeline window): GET /timeline?day=YYYY-MM-DD, /frame?id=,
+/thumb?path=, /search?q=.
 """
 from __future__ import annotations
 
@@ -19,6 +21,7 @@ import secrets
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Callable
+from urllib.parse import parse_qs, urlsplit
 
 
 class OverlayAPI:
@@ -50,9 +53,19 @@ class OverlayAPI:
             def do_GET(self):
                 if not self._ok():
                     return
-                if self.path == "/state":
+                url = urlsplit(self.path)
+                if url.path == "/state":
                     return self._json(api.hooks["state"]())
-                if self.path != "/events":
+                # Stage 5 reads: timeline, frame, thumb, search (hooks named get_<route>).
+                getter = api.hooks.get(f"get_{url.path.strip('/')}")
+                if getter:
+                    params = {k: v[0] for k, v in parse_qs(url.query).items()}
+                    try:
+                        result = getter(params)
+                    except (KeyError, ValueError):
+                        return self.send_error(400)
+                    return self._json(result) if result is not None else self.send_error(404)
+                if url.path != "/events":
                     return self.send_error(404)
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream")

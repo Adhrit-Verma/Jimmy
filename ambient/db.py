@@ -39,6 +39,12 @@ CREATE TABLE IF NOT EXISTS cards (
     id INTEGER PRIMARY KEY, ts INT NOT NULL, type TEXT NOT NULL,
     line TEXT NOT NULL, evidence TEXT, state TEXT DEFAULT 'shown'
 );
+CREATE TABLE IF NOT EXISTS embeddings (
+    id INTEGER PRIMARY KEY, ref INT NOT NULL, ts INT NOT NULL,
+    model TEXT NOT NULL, chunk TEXT NOT NULL, vec BLOB NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_emb_ref ON embeddings(ref);
+CREATE INDEX IF NOT EXISTS ix_emb_ts ON embeddings(ts);
 CREATE INDEX IF NOT EXISTS ix_frames_ts ON frames(ts);
 CREATE INDEX IF NOT EXISTS ix_frames_window ON frames(window_id);
 CREATE INDEX IF NOT EXISTS ix_text_frame ON text_blocks(frame_id);
@@ -217,6 +223,70 @@ class Store:
         ORDER BY ts_end"""
         with self._lock:
             return [dict(r) for r in self.conn.execute(sql, (since_ms, until_ms, since_ms, until_ms))]
+
+    # --- Stage 5: embeddings and the timeline ----------------------------
+    # `ref` is the same as in search(): > 0 a text block id, < 0 an audio segment id.
+    def unembedded(self, model: str, limit: int = 200) -> list[dict]:
+        """Text and speech not yet embedded with `model`, oldest first."""
+        sql = """
+        SELECT t.id AS ref, f.ts AS ts, t.text AS text FROM text_blocks t
+          JOIN frames f ON f.id = t.frame_id
+         WHERE NOT EXISTS (SELECT 1 FROM embeddings e WHERE e.ref = t.id AND e.model = ?)
+        UNION ALL
+        SELECT -a.id, a.ts_start, a.text FROM audio_segments a
+         WHERE NOT EXISTS (SELECT 1 FROM embeddings e WHERE e.ref = -a.id AND e.model = ?)
+         ORDER BY ts LIMIT ?"""
+        with self._lock:
+            return [dict(r) for r in self.conn.execute(sql, (model, model, limit))]
+
+    def add_embeddings(self, rows: list[tuple[int, int, str, str, bytes]]) -> None:
+        """rows: (ref, ts, model, chunk, float32 bytes)."""
+        with self._lock:
+            self.conn.executemany(
+                "INSERT INTO embeddings(ref, ts, model, chunk, vec) VALUES (?,?,?,?,?)", rows)
+            self.conn.commit()
+
+    def vectors(self, model: str, since_ms: int, until_ms: int) -> list[dict]:
+        """Every embedded chunk in a window, with where and when it was seen."""
+        sql = """
+        SELECT e.ref, e.ts, e.chunk, e.vec, f.id AS frame_id, f.app, f.title, NULL AS source
+          FROM embeddings e JOIN text_blocks t ON t.id = e.ref JOIN frames f ON f.id = t.frame_id
+         WHERE e.ref > 0 AND e.model = ? AND e.ts BETWEEN ? AND ?
+        UNION ALL
+        SELECT e.ref, e.ts, e.chunk, e.vec, NULL, NULL, NULL, a.source
+          FROM embeddings e JOIN audio_segments a ON a.id = -e.ref
+         WHERE e.ref < 0 AND e.model = ? AND e.ts BETWEEN ? AND ?"""
+        with self._lock:
+            return [dict(r) for r in self.conn.execute(sql, (model, since_ms, until_ms,
+                                                             model, since_ms, until_ms))]
+
+    def days(self) -> list[str]:
+        """Local dates (YYYY-MM-DD) that have captures, newest first."""
+        with self._lock:
+            return [r[0] for r in self.conn.execute(
+                "SELECT DISTINCT date(ts / 1000, 'unixepoch', 'localtime') AS d FROM frames ORDER BY d DESC")]
+
+    def timeline(self, since_ms: int, until_ms: int) -> list[dict]:
+        """Every frame in a window, for the scrub strip."""
+        with self._lock:
+            return [dict(r) for r in self.conn.execute(
+                "SELECT id, ts, app, title, thumb_path, face_count FROM frames "
+                "WHERE ts BETWEEN ? AND ? ORDER BY ts", (since_ms, until_ms))]
+
+    def frame(self, frame_id: int) -> dict | None:
+        """One frame with the new text it stored and speech within 2 minutes of it."""
+        with self._lock:
+            f = self.conn.execute("SELECT id, ts, app, title, thumb_path, face_count, window_id "
+                                  "FROM frames WHERE id = ?", (frame_id,)).fetchone()
+            if not f:
+                return None
+            out = dict(f)
+            out["text"] = [dict(r) for r in self.conn.execute(
+                "SELECT source, text FROM text_blocks WHERE frame_id = ?", (frame_id,))]
+            out["speech"] = [dict(r) for r in self.conn.execute(
+                "SELECT ts_start, source, text FROM audio_segments WHERE ts_start BETWEEN ? AND ? "
+                "ORDER BY ts_start", (f["ts"] - 120_000, f["ts"] + 120_000))]
+        return out
 
     def set_card_state(self, card_id: int, state: str) -> None:
         self._write("UPDATE cards SET state = ? WHERE id = ?", (state, card_id))

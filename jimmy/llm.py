@@ -205,3 +205,23 @@ class LLM:
 def local_llm(model: str | None = None) -> LLM:
     """The same client pointed at local Ollama. Ollama ignores the key."""
     return LLM(key="ollama", model=model or config.LOCAL_MODEL, base_url=config.LOCAL_BASE_URL)
+
+
+def embed(texts: list[str], model: str | None = None) -> list[list[float]]:
+    """Meaning-vectors for `texts` from the local embedding model (Stage 5, D24).
+    The same client class, pointed at Ollama; raises LLMError if it's unreachable."""
+    if not texts:
+        return []
+    client = local_llm(model or config.EMBED_MODEL)
+    try:
+        # Its own timeout: the first call loads ~1.2 GB into VRAM, and a batch of
+        # chunks is slower than a chat reply (a 60 s limit timed out on first use).
+        resp = client._http().post("/embeddings", json={"model": client.model, "input": texts},
+                                   timeout=httpx.Timeout(300, connect=5))
+        if resp.status_code != 200:
+            raise LLMError(f"embeddings HTTP {resp.status_code}: {resp.text[:200]}")
+        return [d["embedding"] for d in sorted(resp.json()["data"], key=lambda d: d["index"])]
+    except httpx.HTTPError as exc:
+        raise LLMError(f"embedding model unreachable: {type(exc).__name__}: {exc}") from exc
+    finally:
+        client.close()

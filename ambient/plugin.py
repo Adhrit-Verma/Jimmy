@@ -16,6 +16,7 @@ from jimmy.core import Snippet
 from jimmy.memory import fts_query
 
 from .db import Store
+from .recall import hybrid
 
 WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 _UNITS = {"min": 60, "minute": 60, "hour": 3600, "hr": 3600, "day": 86400}
@@ -198,12 +199,16 @@ class AmbientPlugin:
         since, until = (window[0], window[1]) if window else (0, now_ms)
         out: list[Snippet] = []
 
-        for h in self.search_captures(question, since, until):
-            if h["kind"] == "screen":
-                where = " — ".join(p for p in (h["app"], h["title"]) if p)
-                out.append(Snippet(h["ts"], f"screen · {where}", _clean(h["snippet"])))
-            else:
-                out.append(Snippet(h["ts"], f"heard near {h['source']}", _clean(h["snippet"])))
+        # Keywords + meaning (Stage 5, D24), only when the question has a topic:
+        # "what was I doing on Tuesday" has none, and meaning search would return
+        # arbitrary nearest text; the activity timeline below answers that instead.
+        if fts_query(question):
+            for h in hybrid(store, question, since, until, jcfg.SEARCH_HITS):
+                if h["ref"] > 0:
+                    where = " — ".join(p for p in (h["app"], h["title"]) if p)
+                    out.append(Snippet(h["ts"], f"screen · {where}", h["text"]))
+                else:
+                    out.append(Snippet(h["ts"], f"heard near {h['source']}", h["text"]))
 
         # A named time, or nothing matched by keyword: say what was going on then.
         if window or not out:
