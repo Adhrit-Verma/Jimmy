@@ -72,6 +72,7 @@ async function call(route, body) {
     headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
     body: JSON.stringify(body || {}),
   });
+  if (!res.ok) throw new Error(`${route}: HTTP ${res.status}`);
   const state = await res.json();
   send({ type: "state", ...state });
   return state;

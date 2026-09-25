@@ -235,6 +235,88 @@ def test_jimmy_never_captures_itself():
     print("ok  Jimmy never captures or cites itself")
 
 
+def test_clarify_now_or_earlier():
+    """D28: "what's this?" could mean the screen now or one captured earlier: ask."""
+    from ambient.ask import interpret, route
+    for text, mode in (("what is this", "clarify"), ("what was on my screen", "clarify"),
+                       ("that page I was reading", "clarify"),
+                       ("what was on my screen at 3pm yesterday", "recall"),
+                       ("what is this page", "screen"), ("what's on my screen", "screen")):
+        assert route(text, now=T0)[0] == mode, f"{text!r} -> {route(text, now=T0)[0]}, wanted {mode}"
+    for reply, mode in (("right now", "screen"), ("the one on my screen", "screen"),
+                        ("the one from Friday", "recall"), ("earlier", "recall"), ("umm not sure", None)):
+        assert interpret(reply) == mode, f"{reply!r} -> {interpret(reply)}, wanted {mode}"
+    last = {"mode": "recall", "query": "mckinsey", "ts": T0 - 30_000}
+    assert route("what's this?", last, T0)[0] == "clarify", "a bare 'this' may mean the screen"
+    assert route("what's this?", dict(last, mode="screen"), T0)[0] == "screen"
+    assert route("show me the best match", last, T0)[0] == "show"
+    assert route("open the second one", last, T0)[0] == "show"
+    print("ok  router: clarify, replies, show")
+
+
+def test_asker_asks_back_and_waits():
+    import ambient.ask as ask_mod
+    from ambient.ask import CLARIFY_Q, Asker
+
+    class FakeJimmy:
+        class llm:
+            configured = True
+        sessions = []
+        def ask_stream(self, q, session, snippets, instructions):
+            self.sessions.append(session)
+            yield "It's the page you're on."
+
+    clock = [T0 + 60 * MIN]
+    ask_mod.now_ms = lambda: clock[0]
+    s = store_with_history()
+    shot = {"frame": {"id": 1, "ts": clock[0], "app": "chrome.exe", "title": "Docs", "thumb_path": None},
+            "text": "Quarterly plan draft"}
+    events, spoken = [], []
+    a = Asker(s, events.append, speak=spoken.append, jimmy=FakeJimmy(), screen_now=lambda: shot)
+
+    def turn(fn):
+        events.clear()
+        fn()
+        assert a.wait_idle(10)
+        return events
+
+    ev = turn(lambda: a.hear(0, "mic", "Jimmy, what's this?"))
+    end = next(e for e in ev if e["type"] == "answer_end")
+    assert end["awaiting"] and end["text"] == CLARIFY_Q and spoken[-1] == CLARIFY_Q
+    assert ev[-1]["type"] == "listening" and a.pending, "the pill keeps listening for the reply"
+
+    ev = turn(lambda: a.hear(0, "mic", "umm"))           # unclear: asked once more, no wake word needed
+    assert next(e for e in ev if e["type"] == "answer_end")["awaiting"] and a.pending["asked"] == 2
+    ev = turn(lambda: a.hear(0, "mic", "the one on my screen right now"))
+    assert a.pending is None
+    assert next(e for e in ev if e["type"] == "answer_evidence")["mode"] == "screen"
+    assert next(e for e in ev if e["type"] == "answer_end")["text"] == "It's the page you're on."
+    assert a._jimmy.sessions[-1] != a.session, "a screen answer never sees (or feeds) the history"
+
+    clock[0] += 3600_000                                 # a new conversation, not a follow-up
+    turn(lambda: a.hear(0, "mic", "Jimmy, what is this"))
+    ev = turn(lambda: a.choose("earlier"))              # the card's button does the same
+    assert next(e for e in ev if e["type"] == "answer_evidence")["mode"] == "recall"
+
+    turn(lambda: a.hear(0, "mic", "Jimmy, what's this"))
+    clock[0] += 60_000                                   # no reply in time: a stray line is not an answer
+    assert a.hear(0, "mic", "just talking about lunch") is False
+
+    a.last_evidence = [{"id": 1}, {"id": 2}]
+    a.turns[-1:] = [{"q": "x", "a": "y", "mode": "recall", "query": "mckinsey", "ts": clock[0]}]
+    ev = turn(lambda: a.hear(0, "mic", "Jimmy, open the second one"))
+    assert ev == [{"type": "open_evidence", "index": 1}] and spoken[-1] == "Here it is."
+    print("ok  asker: asks back, waits, resolves by voice or button, shows evidence")
+
+
+def test_demo_script_parses():
+    from ambient.demo import DEFAULT_SCRIPT, parse
+    steps = parse(DEFAULT_SCRIPT)
+    assert all(c in {"wait", "card", "say", "reply", "show", "close"} for c, _ in steps), steps
+    assert ("reply", "the one on my screen right now") in steps and ("close", "") in steps
+    print("ok  demo script parses")
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

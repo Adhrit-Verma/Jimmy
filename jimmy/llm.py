@@ -20,7 +20,9 @@ class LLMError(RuntimeError):
     pass
 
 
-EMPTY = "the model returned an empty answer twice; try again"
+# Measured 2026-09-25: empties come in runs; twice-empty broke 3 of ~10 demo answers.
+ATTEMPTS = 3
+EMPTY = "the model returned an empty answer three times; try again"
 
 
 def api_key() -> str | None:
@@ -132,15 +134,15 @@ class LLM:
         return self._stream(self._body(messages, True, max_tokens, temperature))
 
     def _once(self, body: dict) -> str:
-        for attempt in (0, 1):
+        for attempt in range(ATTEMPTS):
             try:
                 resp = self._http().post("/chat/completions", json=body)
             except httpx.HTTPError as exc:
-                if attempt:
+                if attempt == ATTEMPTS - 1:
                     raise LLMError(f"LLM unreachable: {type(exc).__name__}: {exc}") from exc
                 time.sleep(config.RETRY_WAIT_S)
                 continue
-            if resp.status_code in config.RETRY_STATUSES and not attempt:
+            if resp.status_code in config.RETRY_STATUSES and attempt < ATTEMPTS - 1:
                 time.sleep(config.RETRY_WAIT_S)
                 continue
             if resp.status_code != 200:
@@ -150,7 +152,7 @@ class LLM:
             answer = (f.feed(msg.get("content") or "") + f.flush()).strip()
             if answer:
                 return answer
-            if attempt:
+            if attempt == ATTEMPTS - 1:
                 raise LLMError(EMPTY)
             # Measured: ~1 in 5 calls to the hosted model came back 200 and empty.
         raise LLMError("LLM retry exhausted")
@@ -158,10 +160,10 @@ class LLM:
     def _stream(self, body: dict) -> Iterator[str]:
         f = ThinkFilter()
         sent = False  # once text has reached the user, a retry would repeat it
-        for attempt in (0, 1):
+        for attempt in range(ATTEMPTS):
             try:
                 with self._http().stream("POST", "/chat/completions", json=body) as resp:
-                    if resp.status_code in config.RETRY_STATUSES and not attempt:
+                    if resp.status_code in config.RETRY_STATUSES and attempt < ATTEMPTS - 1:
                         time.sleep(config.RETRY_WAIT_S)
                         continue
                     if resp.status_code != 200:
@@ -187,11 +189,11 @@ class LLM:
                         yield tail
                     if sent:
                         return
-                    if attempt:
+                    if attempt == ATTEMPTS - 1:
                         raise LLMError(EMPTY)
                     # An empty answer: nothing reached the screen, so retrying is safe.
             except httpx.HTTPError as exc:
-                if attempt or sent:
+                if attempt == ATTEMPTS - 1 or sent:
                     raise LLMError(f"LLM stream broke: {type(exc).__name__}: {exc}") from exc
                 time.sleep(config.RETRY_WAIT_S)
         raise LLMError("LLM retry exhausted")

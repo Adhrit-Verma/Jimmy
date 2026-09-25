@@ -38,7 +38,7 @@ _WAKE = re.compile(r"^\W*(?:(?:hey|hi|ok|okay|yo)\W+)?(?:jimmy|jimmie|jimi|jimmi
 # --- routing (D27): plain rules, deterministic and testable ------------------
 _SCREEN = re.compile(
     r"\b(?:on|in) (?:my|the|this) (?:screen|window|page|tab)\b"
-    r"|\bwhat(?:'s| is) (?:this|that)(?: page| window| tab| thing)?\b(?!.*\b(?:was|saw|earlier|yesterday)\b)"
+    r"|\bwhat(?:'s| is) (?:this|that) (?:page|window|tab|site|document|file)\b"
     r"|\bwhat(?: am i|'m i| i'm) (?:looking at|reading|seeing|watching|doing)(?: right)? now\b"
     r"|\b(?:summari[sz]e|explain|read|describe) (?:this|the page|the screen|my screen|what'?s on)\b"
     r"|\bwhat(?:'s| is) on (?:my |the )?screen\b", re.I)
@@ -51,6 +51,19 @@ _PAST = re.compile(
     r"find|look(?:ed)? up|which|when did|where did|who was|opened|read|watched|wrote|typed)\b", re.I)
 _FOLLOW = re.compile(r"^(?:and|also|so|then|what about|how about|and what|but)\b"
                      r"|\b(?:it|that|this|those|these|they|them|there|then|he|she)\b", re.I)
+# D28: the screen *now* vs a screen captured earlier. Jimmy asks when it can't tell.
+_SCREEN_WORD = re.compile(r"\b(?:screen|window|page|tab|site|document)\b", re.I)
+_DEICTIC = re.compile(r"^(?:what(?:'s| is)|tell me (?:more )?about|explain|who(?:'s| is))\s+"
+                      r"(?:this|that|it)\b(?:\s+\w+){0,3}\s*\??$", re.I)
+# "What's this?" and nothing more: "this" points at what's in front of you, so even
+# mid-conversation it may mean the screen. Ask, unless we were just on the screen.
+_BARE_THIS = re.compile(r"^(?:what(?:'s| is)|explain|tell me about)\s+this\s*\??$", re.I)
+_NOW = re.compile(r"\b(?:now|right now|currently|current|at the moment|in front of me|open now|"
+                  r"this one|on (?:my|the) screen)\b", re.I)
+_SHOW = re.compile(r"\b(?:show|open|zoom|enlarge|bigger)\b.*\b(?:first|best|top|second|third|one|it|that|match)\b"
+                   r"|\b(?:show|zoom|open)(?: it| that)?(?: bigger| bigger please)?$", re.I)
+_ORDINAL = {"first": 0, "best": 0, "top": 0, "second": 1, "third": 2}
+CLARIFY_Q = ("Do you mean what's on your screen right now, or something you saw earlier?")
 
 ANSWER_STYLE = """The user just asked this question out loud. The <context> items are the
 evidence shown next to your answer on their screen. Reply in at most three short
@@ -63,7 +76,10 @@ If the context doesn't answer the question, say so in one sentence."""
 SCREEN_STYLE = """The user is asking about what is on their screen right now. The <context> is
 the text of the window they're looking at, with its app and title. Answer in at most
 three short sentences, plain text, easy to read aloud: what it is, then what matters
-for their question. If they ask for a summary, summarise the content, not the interface."""
+for their question. If they ask for a summary, summarise the content, not the interface.
+Use only this <context>: the screen changes, so never reuse an earlier answer. If the
+text is thin (menus, a sidebar, a title), say which app and window it is and that you
+can't read its main content."""
 
 CHAT_STYLE = """The user is talking to you out loud; this is conversation, not a search of
 their history. Reply naturally and briefly (one or two sentences, plain text, easy to
@@ -87,19 +103,41 @@ def route(text: str, last: dict | None = None, now: int | None = None) -> tuple[
     t = text.strip()
     if _CHAT.search(t) and not _PAST.search(t):
         return "chat", t
-    if _SCREEN.search(t):
-        return "screen", t
+    if last and last["mode"] in ("recall", "screen") and _SHOW.search(t) and len(t.split()) <= 8:
+        return "show", t                          # "show me the first one": zoom evidence
     fresh_time = time_window(t, now) is not None
+    past = bool(_PAST.search(t))
+    if _SCREEN.search(t) and not past:
+        return "screen", t
+    # "What was on my screen?" / "that page I was on": now, or captured earlier?
+    if _SCREEN_WORD.search(t) and past and not fresh_time:
+        return "clarify", t
+    if _BARE_THIS.match(t) and not (last and last["mode"] == "screen"):
+        return "clarify", t
     # A short follow-up ("and when does it close?") continues the last topic.
     if (last and now - last["ts"] < config.CONVO_S * 1000 and last["mode"] in ("recall", "screen")
             and not fresh_time and len(t.split()) <= 12 and _FOLLOW.search(t)):
         return last["mode"], f"{last['query']} {t}"
-    if _PAST.search(t) or fresh_time:
+    if past or fresh_time:
         return "recall", t
+    if _DEICTIC.match(t):
+        return "clarify", t                       # "what's this?": on screen now, or earlier?
     # A general question with no past or screen cue ("how does OAuth work?"): talk.
     if re.match(r"(?:what|who|how|why|when|where|is|are|can|could|does|do|should|will)\b", t, re.I):
         return "chat", t
     return "recall", t                  # a bare topic ("the McKinsey form") means: find it
+
+
+def interpret(reply: str, now: int | None = None) -> str | None:
+    """A reply to CLARIFY_Q -> "screen", "recall", or None if still unclear."""
+    from .plugin import time_window
+    earlier = bool(_PAST.search(reply) or time_window(reply, now or now_ms())
+                   or re.search(r"\b(?:earlier|before|ago|previous|old|that day)\b", reply, re.I))
+    if earlier:
+        return "recall"
+    if _NOW.search(reply) or _SCREEN_WORD.search(reply):
+        return "screen"
+    return None
 
 
 def excerpt(text: str, terms: list[str], limit: int = 220) -> str:
@@ -239,11 +277,24 @@ class Asker:
         self._n = 0
         self.turns: list[dict] = []        # this conversation: {q, a, mode, query, ts}
         self.session = ""
+        self.pending: dict | None = None   # D28: a question Jimmy asked back, awaiting a reply
+        self.busy = 0
+        self.last_evidence: list[dict] = []
 
     def hear(self, ts_end: int, source: str, text: str) -> bool:
         """Called for every transcribed segment. True if it was meant for Jimmy."""
         if source != "mic":
             return False
+        if self.pending and now_ms() < self.listen_until and text.strip():
+            # The reply to Jimmy's question: no wake word needed.
+            self.listen_until = 0
+            reply = parse_wake(text)
+            if reply is not None and len(reply.split()) >= 4 and interpret(reply) is None:
+                self.pending = None       # "Jimmy, <a new question>": drop the old one
+                self.ask(reply, "voice")
+                return True
+            self.resolve(reply if reply is not None else text.strip(), "voice")
+            return True
         q = parse_wake(text)
         if q is None:
             if now_ms() < self.listen_until and len(text.split()) >= 2:
@@ -258,8 +309,33 @@ class Asker:
         self.ask(q, "voice")
         return True
 
-    def ask(self, question: str, source: str = "typed") -> None:
-        threading.Thread(target=self._run, args=(question, source), daemon=True, name="ask").start()
+    def ask(self, question: str, source: str = "typed", force: tuple[str, str] | None = None) -> None:
+        self.busy += 1
+        threading.Thread(target=self._run, args=(question, source, force), daemon=True, name="ask").start()
+
+    def resolve(self, reply: str, source: str = "voice") -> None:
+        """Answer to "now, or earlier?" (D28). Unclear twice → assume earlier."""
+        p = self.pending
+        if not p:
+            return
+        mode = interpret(reply)
+        if mode is None and p["asked"] < 2:      # _answer counts the re-ask
+            self.ask(p["q"], source, force=("clarify", p["q"]))
+            return
+        self.pending = None
+        mode = mode or "recall"
+        query = f"{p['q']} {reply}" if mode == "recall" else p["q"]
+        self.ask(f"{p['q']} ({reply})", source, force=(mode, query))
+
+    def choose(self, choice: str) -> None:
+        """The same, from the card's buttons."""
+        self.resolve("right now on my screen" if choice == "now" else "something I saw earlier", "typed")
+
+    def wait_idle(self, timeout: float = 90) -> bool:
+        end = time.time() + timeout
+        while self.busy and time.time() < end:
+            time.sleep(0.2)
+        return not self.busy
 
     def _jim(self):
         if self._jimmy is None:
@@ -284,16 +360,43 @@ class Asker:
         item.update(text=f"{now['frame']['title']}\n{text}"[:4000], day="Now", time="")
         return [item]
 
-    def _run(self, question: str, source: str) -> None:
+    def _run(self, question: str, source: str, force: tuple[str, str] | None = None) -> None:
+        try:
+            self._answer(question, source, force)
+        finally:
+            self.busy -= 1
+
+    def _answer(self, question: str, source: str, force: tuple[str, str] | None) -> None:
         with self._lock:                                # one answer at a time
             self._n += 1
             aid = f"{int(time.time())}-{self._n}"
             now = now_ms()
             last = self._conversation(now)
-            mode, query = route(question, last, now)
+            mode, query = force or route(question, last, now)
+            if mode == "show":
+                # "Show me the best match": open evidence already on screen, no new search.
+                words = question.lower().split()
+                idx = next((_ORDINAL[w] for w in words if w in _ORDINAL), 0)
+                if idx < len(self.last_evidence):
+                    self.publish({"type": "open_evidence", "index": idx})
+                    if source == "voice" and self.speak:
+                        self.speak("Here it is.")
+                return
             history = [{"q": t["q"], "a": t["a"]} for t in self.turns[-2:]]
             self.publish({"type": "answer_start", "id": aid, "question": question, "source": source,
                           "mode": mode, "history": history})
+            if mode == "clarify":
+                # D28: can't tell the screen now from a screen captured earlier: ask.
+                self.pending = {"q": question, "asked": (self.pending or {}).get("asked", 0) + 1, "ts": now}
+                self.listen_until = now_ms() + config.CLARIFY_WAIT_S * 1000
+                self.publish({"type": "answer_evidence", "id": aid, "mode": "clarify", "evidence": [],
+                              "window": None, "terms": [], "days": []})
+                self.publish({"type": "answer_delta", "id": aid, "text": CLARIFY_Q})
+                self.publish({"type": "answer_end", "id": aid, "text": CLARIFY_Q, "awaiting": True})
+                self.publish({"type": "listening", "prompt": "listening… now, or earlier?"})
+                if source == "voice" and self.speak:
+                    self.speak(CLARIFY_Q)
+                return
             try:
                 if mode == "chat":
                     items, label, terms = [], None, []
@@ -301,6 +404,7 @@ class Asker:
                     items, label, terms = self._screen_evidence(), "now", []
                 else:
                     items, label, terms = gather_evidence(self.store, query)
+                self.last_evidence = items
                 days = sorted({e["day"] for e in items})
                 self.publish({"type": "answer_evidence", "id": aid, "mode": mode, "evidence": items,
                               "window": label, "terms": terms, "days": days})
@@ -315,7 +419,10 @@ class Asker:
                     self.publish({"type": "answer_delta", "id": aid, "text": text})
                 else:
                     text = ""
-                    for piece in jim.ask_stream(question, session=self.session,
+                    # The screen changes: a screen answer gets no history, and joins none,
+                    # or the last screen's answer gets repeated for this one (D29).
+                    session = f"screen-{aid}" if mode == "screen" else self.session
+                    for piece in jim.ask_stream(question, session=session,
                                                 snippets=to_snippets(items), instructions=style):
                         text += piece
                         self.publish({"type": "answer_delta", "id": aid, "text": piece})

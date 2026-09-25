@@ -153,6 +153,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--no-thumbs", action="store_true")
     r.add_argument("--no-cards", action="store_true", help="capture only, no trigger gate")
     r.add_argument("--no-overlay", action="store_true", help="console only, no on-screen overlay")
+    r.add_argument("--demo", nargs="?", const="default", default=None,
+                   help="play a scripted walkthrough for a screen recording (optionally your own script file)")
     r.add_argument("--db", default=None)
 
     s = sub.add_parser("search", help="full-text search screen and speech")
@@ -191,7 +193,7 @@ def main(argv: list[str] | None = None) -> int:
         from .bus import ContextBus
         bus = ContextBus(db_path=db, monitor=a.monitor,
                          audio=not a.no_audio, thumbs=not a.no_thumbs, cards=not a.no_cards,
-                         overlay=not a.no_overlay)
+                         overlay=not a.no_overlay, demo=a.demo)
         counters = bus.run(duration_s=a.seconds)
         print(json.dumps(counters.as_dict(), indent=2))
         return 0

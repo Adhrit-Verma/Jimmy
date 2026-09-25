@@ -129,3 +129,4 @@ VOICE_MAX_CHARS = 320        # read at most this much: the first sentences that 
 VOICE_RATE = 1               # SAPI speaking rate, -10..10
 VOICE_VOLUME = 100           # 0..100
 CONVO_S = 180                # questions this close together are one conversation (D27)
+CLARIFY_WAIT_S = 20          # after Jimmy asks "now, or earlier?", wait this long for the reply (D28)

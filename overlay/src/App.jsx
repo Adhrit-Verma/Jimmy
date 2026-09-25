@@ -45,7 +45,7 @@ function PillButton({ onClick, label, children }) {
   );
 }
 
-function Pill({ state, mood, typing, setTyping }) {
+function Pill({ state, mood, prompt, typing, setTyping }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const input = useRef(null);
@@ -64,7 +64,7 @@ function Pill({ state, mood, typing, setTyping }) {
     done();
   };
   const status = paused ? `paused · ${minutesLeft(state.paused_until)}`
-    : mood === "listening" ? "listening… ask your question"
+    : mood === "listening" ? (prompt || "listening… ask your question")
     : mood === "thinking" ? "thinking…"
     : "listening";
   const dot = paused ? "bg-amber-400" : mood ? "bg-sky-400" : "bg-emerald-400";
@@ -175,6 +175,8 @@ export default function App() {
   const [cards, setCards] = useState([]);
   const [answer, setAnswer] = useState(null);
   const [mood, setMood] = useState(null);      // "listening" | "thinking" | null
+  const [prompt, setPrompt] = useState(null);  // what the pill says while listening (D28)
+  const [openIndex, setOpenIndex] = useState(null);
   const [typing, setTyping] = useState(false);
   const hideTimer = useRef(null);
 
@@ -192,11 +194,15 @@ export default function App() {
       if (ev.type === "focus-ask") setTyping(true);
       if (ev.type === "listening") {
         setMood("listening");
-        setTimeout(() => setMood((m) => (m === "listening" ? null : m)), 9000);
+        setPrompt(ev.prompt || null);
+        setTimeout(() => setMood((m) => (m === "listening" ? null : m)), ev.prompt ? 20000 : 9000);
       }
+      if (ev.type === "open_evidence") setOpenIndex(ev.index);
+      if (ev.type === "close_evidence") setOpenIndex(null);
       if (ev.type === "answer_start") {
         clearTimeout(hideTimer.current);
         setMood("thinking");
+        setOpenIndex(null);
         setAnswer({ id: ev.id, question: ev.question, source: ev.source, mode: ev.mode || "recall",
                     history: ev.history || [], status: "searching", evidence: [], text: "" });
       }
@@ -206,7 +212,7 @@ export default function App() {
                        terms: ev.terms, days: ev.days, window: ev.window }));
       if (ev.type === "answer_delta") same((a) => ({ ...a, status: "answering", text: a.text + ev.text }));
       if (ev.type === "answer_end" || ev.type === "answer_error") {
-        setMood(null);
+        if (!ev.awaiting) setMood(null);   // a question back keeps the pill listening
         same((a) => ({ ...a, status: ev.type === "answer_end" ? "done" : "error", error: ev.error }));
         clearTimeout(hideTimer.current);
         hideTimer.current = setTimeout(() => setAnswer(null), ANSWER_MS);
@@ -218,13 +224,14 @@ export default function App() {
 
   return (
     <>
-      <Pill state={state} mood={mood} typing={typing} setTyping={setTyping} />
+      <Pill state={state} mood={mood} prompt={prompt} typing={typing} setTyping={setTyping} />
       <div
         onMouseEnter={() => clearTimeout(hideTimer.current)}
         onMouseLeave={() => { if (answer?.status === "done") hideTimer.current = setTimeout(() => setAnswer(null), ANSWER_MS); }}
       >
         <Guard resetKey={answer?.id} onError={() => bridge?.pointerOverUi(false)}>
-          <AnimatePresence>{answer && <Answer key={answer.id} answer={answer} onClose={closeAnswer} />}</AnimatePresence>
+          <AnimatePresence>{answer && <Answer key={answer.id} answer={answer} onClose={closeAnswer}
+            openIndex={openIndex} onCloseEvidence={() => setOpenIndex(null)} />}</AnimatePresence>
         </Guard>
       </div>
       {!answer && (

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Maximize2, Mic, MonitorSmartphone, Search, Sparkles, Volume2, VolumeX, X } from "lucide-react";
+import { History, Maximize2, Mic, MonitorSmartphone, Search, Sparkles, Volume2, VolumeX, X } from "lucide-react";
 import { useThumb } from "./Timeline.jsx";
 
 // D25/D27: a question answered where you are. Three shapes:
@@ -142,7 +142,8 @@ function ScreenNow({ answer, onOpen }) {
 function Reply({ answer, onClose }) {
   const busy = answer.status === "searching" || answer.status === "answering";
   const n = answer.evidence?.length || 0;
-  const foot = answer.mode === "chat" ? "Conversation"
+  const foot = answer.mode === "clarify" ? "Just say it, or pick one"
+    : answer.mode === "chat" ? "Conversation"
     : answer.mode === "screen" ? (n ? "From the window you're on" : "")
     : n ? `Based on ${n} moment${n === 1 ? "" : "s"} on the left` : busy ? "…" : "No matching moments";
   return (
@@ -185,6 +186,20 @@ function Reply({ answer, onClose }) {
               {answer.text}
               {answer.status === "answering" && <span className="ml-0.5 inline-block h-4 w-[2px] translate-y-0.5 animate-pulse bg-neutral-300" />}
             </motion.p>
+          )}
+          {answer.mode === "clarify" && answer.status === "done" && (
+            // D28: Jimmy asked back. Answer by voice, or pick one.
+            <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
+              className="mt-3 flex flex-wrap gap-2">
+              <button onClick={() => bridge?.api("clarify", { choice: "now" })}
+                className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-[13px] text-neutral-100 hover:bg-white/15">
+                <MonitorSmartphone size={13} /> On my screen now
+              </button>
+              <button onClick={() => bridge?.api("clarify", { choice: "earlier" })}
+                className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-[13px] text-neutral-100 hover:bg-white/15">
+                <History size={13} /> Something from earlier
+              </button>
+            </motion.div>
           )}
         </div>
       </div>
@@ -233,14 +248,23 @@ function Lightbox({ item, onClose }) {
   );
 }
 
-export default function Answer({ answer, onClose }) {
+export default function Answer({ answer, onClose, openIndex, onCloseEvidence }) {
   const [open, setOpen] = useState(null);
+  // "Jimmy, show me the best match" (and the demo) open evidence from outside.
+  useEffect(() => {
+    if (openIndex == null) {
+      setOpen(null);
+    } else if (answer.evidence?.[openIndex]) {
+      setOpen(answer.evidence[openIndex]);
+    }
+  }, [openIndex, answer.evidence]);
+  const close = () => { setOpen(null); onCloseEvidence?.(); };
   return (
     <>
       {answer.mode === "screen" && <ScreenNow answer={answer} onOpen={setOpen} />}
       {answer.mode === "recall" && <Evidence answer={answer} onOpen={setOpen} />}
       <Reply answer={answer} onClose={onClose} />
-      <AnimatePresence>{open && <Lightbox key="lb" item={open} onClose={() => setOpen(null)} />}</AnimatePresence>
+      <AnimatePresence>{open && <Lightbox key="lb" item={open} onClose={close} />}</AnimatePresence>
     </>
   );
 }

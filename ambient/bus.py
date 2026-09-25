@@ -72,7 +72,7 @@ class Counters:
 class ContextBus:
     def __init__(self, db_path: str | Path | None = None, monitor: int | None = None,
                  audio: bool = True, thumbs: bool = True, cards: bool = True,
-                 overlay: bool = True):
+                 overlay: bool = True, demo: str | None = None):
         self.store = Store(db_path or config.DB_PATH)
         self.exclusions = Exclusions(config.EXCLUSIONS_FILE)
         self.faces = FaceStage()
@@ -88,6 +88,7 @@ class ContextBus:
         self._audio = None
         self.gate = self._make_gate() if cards else None
         self.want_overlay = overlay
+        self.demo = demo            # D28: a script to play for screen recordings
         self.paused_until = 0          # epoch ms; the overlay's "pause for 2 hours"
         self._api = None
         self._overlay_proc = None
@@ -306,6 +307,7 @@ class ContextBus:
                                 if str(b.get("q", "")).strip() else None,
                                 "post_stop-voice": lambda b: self._voice and self._voice.stop(),
                                 "post_quit": lambda b: self.stop_running(),
+                                "post_clarify": lambda b: self._asker.choose(str(b.get("choice", ""))),
                                 **timeline_hooks(self.store)}).start()
         self._asker = Asker(self.store, self._api.publish,
                             speak=self._voice.say if self._voice else None,
@@ -388,6 +390,10 @@ class ContextBus:
             except Exception as exc:  # the overlay is optional; capture must go on
                 print(f"[overlay] disabled: {type(exc).__name__}: {exc}")
         threading.Thread(target=self._index_loop, daemon=True, name="indexer").start()
+        if self.demo and self._api:
+            from . import demo
+            script = None if self.demo == "default" else Path(self.demo).read_text(encoding="utf-8")
+            threading.Thread(target=demo.run, args=(self, script), daemon=True, name="demo").start()
 
         if self.want_audio:
             from .audio import AudioPipeline
