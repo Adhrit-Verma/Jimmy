@@ -160,7 +160,14 @@ Jimmy knows what kind of question you're asking:
 
 **It's a conversation.** Within a few minutes of a question, follow up
 naturally: after the McKinsey question, *"Jimmy, and when does it close?"* gets
-"Monday, October 5th, 11:59 pm".
+"Monday, October 5th, 11:59 pm". *"Jimmy, show me the best match"* (or "open
+the second one") opens that screenshot big.
+
+**If it can't tell what you mean, it asks.** *"Jimmy, what's this?"* could be
+your screen now or something from earlier, so Jimmy asks *"Do you mean what's
+on your screen right now, or something you saw earlier?"* and waits 20 seconds.
+Just answer (*"the one on my screen"*, *"the one from Friday"*), no "Jimmy"
+needed, or click one of the two buttons.
 
 - Saying just **"Jimmy"** works too: pause, then ask.
 - **To type instead:** hover the pill and click **Ask**, or press
@@ -169,6 +176,26 @@ naturally: after the McKinsey question, *"Jimmy, and when does it close?"* gets
 
 Nothing extra to install: speech recognition is the Whisper model already
 listening, and the voice is Windows' own.
+
+### Recording a demo
+
+```powershell
+.\.venv\Scripts\python.exe -m ambient run --demo
+```
+
+Once the overlay is up, it walks through these steps. Everything is real except
+that the questions are typed in for you, and it's spoken aloud (about 3 minutes):
+1. a card;
+2. a chat;
+3. the McKinsey question;
+4. the screenshot big;
+5. a follow-up;
+6. *"what's this?"*, with Jimmy asking back;
+7. *"what can you do?"*.
+
+Switch to the window you want described before it gets to *"what's this?"*.
+To run your own script: `--demo my_script.txt`. The format is at the top of
+`ambient/demo.py`.
 
 ### Stopping Jimmy
 
@@ -238,7 +265,7 @@ ollama pull qwen2.5:3b
 .\.venv\Scripts\python.exe tests\test_stage2.py    # 14 checks, mocked network
 .\.venv\Scripts\python.exe tests\test_stage3.py    # 11 checks, no network
 .\.venv\Scripts\python.exe tests\test_stage4.py    # 5 checks, overlay
-.\.venv\Scripts\python.exe tests\test_stage5.py    # 10 checks, recall + voice
+.\.venv\Scripts\python.exe tests\test_stage5.py    # 13 checks, recall + voice + ask-back
 ```
 
 OpenCV prints `net_impl_backend ... Targets are not supported` on import. Harmless.

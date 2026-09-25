@@ -948,3 +948,85 @@ a conversational reply · the consulting application → McKinsey, Fri 2:09 pm �
 - Existing thumbnails stay 640 px.
 - The lightbox's Esc key needs focus the overlay doesn't take; clicking closes it.
 - The lightbox wasn't exercised by an automated snapshot (it needs a click).
+
+### D28 — Now or earlier? Jimmy asks back, and waits
+
+**Asked:** "does Jimmy know the difference between my current screen and the
+screen it captured that day? If it's confused, it should ask me back and wait
+for my reply."
+
+**Before:** it didn't. "What's this?" went to recall or screen by keyword luck,
+and "what was on my screen?" searched the past without saying so.
+
+**Now:**
+- **The router can say "I'm not sure".** A new `clarify` mode for three cases:
+  - a screen word with past tense and no time ("what was on my screen?", "that
+    page I was reading");
+  - a bare deictic ("what's this?", "tell me about that");
+  - "what's this?" and nothing more, even mid-conversation. "This" points at
+    what's in front of you, so a recall conversation doesn't make it a
+    follow-up. The exception is when the last turn was about the screen.
+
+  Anything carrying a time ("…at 3pm yesterday") is still recall; "what's on my
+  screen" and "what is this page" are still screen.
+- **Asking back:**
+  - Jimmy says "Do you mean what's on your screen right now, or something you
+    saw earlier?" as a normal answer panel, with two buttons.
+  - The pill stays listening ("listening… now, or earlier?") for
+    `CLARIFY_WAIT_S` = 20 s, and **the reply needs no wake word**.
+  - `interpret()` reads the reply: now/currently/on my screen → screen; a
+    time/day or "earlier" → recall.
+  - Unclear → it asks once more, then assumes earlier. Silence → it drops the
+    question, and later stray speech is not taken as an answer.
+  - A new wake-worded question cancels the pending one.
+- **"Show me the best match" / "open the second one"** opens that evidence big
+  (`open_evidence`), with no new search. Voice-only users can finally see the
+  lightbox.
+- **Demo mode** (`ambient run --demo [script.txt]`, `ambient/demo.py`): a
+  scripted walkthrough for screen recordings. Only the questions are scripted;
+  capture, search, the model and the voice all run for real. The script is one
+  step per line: `say:` / `reply:` / `card:` / `show:` / `close` / `wait:`.
+- **The LLM now has 3 attempts, not 2.** The dry runs hit "empty twice" 3 times
+  in ~10 answers on 2026-09-25; empties now come in runs.
+
+**Verified:**
+- Snapshots on real data: "what's this?" shows the ask-back panel with the pill
+  listening. "The one on my screen right now" gives the screen answer with the
+  large current screenshot.
+- The full default demo script dry-ran end to end against the real DB and
+  model.
+
+**Known limits:**
+- The rules are English-only; Hinglish replies fall through to "assume earlier".
+- `screen_now` needs the foreground window captured once this run, so switch to
+  it a second or two before asking.
+
+### D29 — A screen answer never comes from the history
+
+**Reported:** after the demo, "what's on my screen" (with the Claude app in
+front) answered "the Jimmy project in Visual Studio Code, 14 pending changes…",
+while the screenshot beside it showed Claude.
+
+**Cause:**
+- The demo's earlier screen answer (correct at the time, since VS Code was in
+  front) sat in the conversation history.
+- The new evidence was thin: UI Automation reads only the Claude app's sidebar,
+  about 1.5k characters, and none of its chat.
+- With little to go on, the model repeated its last screen answer word for word.
+
+**Fix:**
+- A screen answer runs in a one-off session: no history in, and its answer
+  doesn't feed later turns.
+- `SCREEN_STYLE` says to use only the current context and, when it's thin, to
+  name the app and window and say it can't read the main content.
+- Replayed on the same poisoned conversation: "You are looking at the Claude
+  app window…", twice.
+
+**Trade-off:** a chat-style follow-up to a screen answer ("what does that mean?")
+no longer sees that answer. It still gets the current screen as evidence.
+Correct beats continuous here; the screen moves on.
+
+**Known limit:** the model reads text, not pixels. Windows whose content UIA
+can't reach (the Claude app's chat, canvases, video) get a "can't read it"
+answer, not a description. Sending the screenshot to a vision model would fix
+that; not in scope yet.

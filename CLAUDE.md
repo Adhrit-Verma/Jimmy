@@ -71,6 +71,7 @@ cd C:\Code\Jimmy
 ```
 
 `ambient run` runs the gate live and opens the overlay (`--no-cards`, `--no-overlay`).
+`ambient run --demo` plays a scripted walkthrough for a screen recording (D28; `ambient/demo.py`).
 
 ```powershell
 cd overlay; npm install; npm run build   # once, and after any change under overlay/src
@@ -79,7 +80,7 @@ cd overlay; npm install; npm run build   # once, and after any change under over
 .\.venv\Scripts\python.exe tests\test_stage4.py   # 5 checks: API, pause, window flags, effect bodies
 .\.venv\Scripts\python.exe -m ambient index       # backfill meaning-search vectors (bge-m3)
 .\.venv\Scripts\python.exe -m ambient search "consulting application on Friday"   # keywords + meaning
-.\.venv\Scripts\python.exe tests\test_stage5.py   # 10 checks: recall, voice ask, router, commands, self-exclusion
+.\.venv\Scripts\python.exe tests\test_stage5.py   # 13 checks: recall, voice ask, router, clarify, commands, self-exclusion, demo
 ```
 
 Timeline window: pill → **Timeline**, or **Ctrl+Alt+T**. Snapshot it on real data
@@ -117,7 +118,8 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `tests/test_stage1.py` | stage 1 check. Assert-based, no pytest. |
 | `ambient/gate.py` | Stage 3 Tier 1: moments, RECALL/FOCUS rules, hard limits, `replay()`. No LLM. |
 | `jimmy/cards.py` | Stage 3 Tier 2: typed questions to the local model (default) or cloud; code writes the ≤7-word card. |
-| `ambient/ask.py` | D25/D27: wake word, `route()` (chat / screen / recall + follow-ups), evidence, `Asker` (conversation, overlay events), `Voice` (SAPI). |
+| `ambient/ask.py` | D25/D27/D28: wake word, `route()` (chat / screen / recall / clarify / show + follow-ups), `interpret()`, evidence, `Asker` (conversation, ask-back, overlay events), `Voice` (SAPI). |
+| `ambient/demo.py` | D28: `ambient run --demo`, scripted questions through the real Asker, for screen recordings. |
 | `overlay/src/Answer.jsx` | the answer view: evidence left (best match focused), streamed answer right. |
 | `ambient/recall.py` | Stage 5: chunk + index (bge-m3), meaning search, hybrid (RRF) with furniture filter, timeline API reads. |
 | `overlay/src/Timeline.jsx` | the timeline window: day nav, search, preview, minute scrub strip. |
@@ -215,7 +217,7 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   ~2.5 s, same answers. `nemotron-3.5-lightning` (the first pick) took **159 s**
   and leaked its reasoning as plain text. Don't switch models without measuring.
 - **The hosted model sometimes returns 200 with an empty answer** (1 in 5 in the
-  benchmark). `LLM` retries once, then raises.
+  benchmark), and on 2026-09-25 came in runs. `LLM` makes 3 attempts, then raises.
 
 ---
 
@@ -264,6 +266,8 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
 - **Commands to Jimmy are not captured speech.** "Jimmy, …" is stored as
   `source = 'command'` and excluded from search, speech and indexing. Otherwise a
   question answers itself (D27).
+- **Screen answers must not see the chat history.** The screen changes; with thin
+  evidence the model repeated the previous screen's answer verbatim (D29).
 - **A capture window spans an app, not a page.** For "this page", filter by the
   current title (`Store.window_content(window_id, title)`).
 - **Jimmy must never capture itself.** With its timeline open, capture re-recorded

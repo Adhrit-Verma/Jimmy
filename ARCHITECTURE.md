@@ -44,7 +44,7 @@ the product and deserves to be built against real captured data.
 
 | Module | Responsibility | Notable choice |
 |---|---|---|
-| `jimmy/llm.py` | the only LLM client | one reused httpx client (warm connection); streams; strips `<think>`; retries once, never mid-stream |
+| `jimmy/llm.py` | the only LLM client | one reused httpx client (warm connection); streams; strips `<think>`; 3 attempts, never retries mid-stream |
 | `jimmy/memory.py` | remembered facts + chat turns | its own SQLite file so capture retention can never prune memory; `fts_query` quotes every term |
 | `jimmy/core.py` | `Jimmy.ask`, prompt, plugin seam | a plugin is just `name` + `context()` + `tools`; no discovery, since there is one |
 | `ambient/plugin.py` | captures → snippets | turns "yesterday", "on Tuesday", "last 20 min" into a time window; never creates the capture DB |
@@ -243,6 +243,9 @@ no network access.
      Jimmy.ask_stream(question, snippets = the same evidence)   # cloud LLM, one client
      spoken question? → Voice.say(first sentences)   # Windows SAPI; mic paused meanwhile
  overlay: Answer.jsx, evidence left (best match focused) + answer right; cards hidden meanwhile
+ unclear ("what's this?") → clarify: ask back, pending + 20 s listen, no wake word needed (D28)
+   spoken reply / button (POST /clarify) → interpret → screen or recall, forced
+ ambient run --demo → demo.run thread → the same Asker.hear, scripted (D28)
 ```
 
 ## Boundaries for later stages
