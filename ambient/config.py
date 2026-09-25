@@ -96,11 +96,22 @@ AVG_LOGPROB_MIN = -1.0       # drop a decoded segment the model is this unsure o
 # `ambient replay` against the <= 10 cards/hour GO gate, not by intuition.
 MOMENT_MIN_S = 60            # a moment shorter than this ends without a RECALL look
 MOMENT_MIN_CHARS = 200       # ...or with less new text + speech than this
-RECALL_MIN_AGE_S = 30 * 60   # the earlier thing must be at least this old
+# The earlier moment must be a different sitting (D22). At 30 min, most false
+# RECALLs were "the same chat you had open minutes ago", which the blind judges
+# rejected as nothing to recall.
+RECALL_MIN_AGE_S = 2 * 3600
 RECALL_TERMS = 6             # distinctive words taken from a moment
 RECALL_MAX_TERM_SHARE = 0.03  # a word in > 3 % of all text blocks is not distinctive
 RECALL_MIN_SHARED = 2        # distinctive words an earlier hit must share
+# A line seen in this many capture windows is screen furniture (sidebar, friend
+# list, own name, buttons), not content, and is ignored for RECALL (D22). The
+# blind judges rejected all 21 RECALL candidates; every false card rested on it.
+PERSISTENT_LINE_WINDOWS = 3
 FOCUS_DRIFT_S = 10 * 60      # off-intent this long -> a FOCUS candidate
+# General tools serve any intent, so being in them never counts as drift (D22):
+# the judges rejected FOCUS cards fired while the user was in Claude.
+FOCUS_NEUTRAL_APPS = {"claude.exe", "code.exe", "windowsterminal.exe", "powershell.exe",
+                      "cmd.exe", "explorer.exe", "searchhost.exe"}
 FOCUS_REPEAT_S = 45 * 60     # after a FOCUS card, no more FOCUS for this long: one nudge, not nagging
 MAX_CARDS_PER_HOUR = 4       # hard cap, rolling hour (the spec's gate is <= 10)
 MIN_CARD_GAP_S = 10 * 60     # never two cards closer than this

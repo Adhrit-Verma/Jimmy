@@ -59,7 +59,10 @@ FOCUS_Q = """<intent>
 <now>
 {now}
 </now>
-Question: is what the user is doing now related to their stated intent?
+Question: is what the user is doing now CLEARLY unrelated to their stated intent?
+General tools (an AI assistant like Claude, a terminal, a code editor, a browser
+new tab) can serve any intent: if you can't tell from what's shown, it is related.
+Answer "related": false only when it is clearly unrelated.
 Reply with JSON only: {{"related": true or false, "why": "<short>"}}"""
 
 
@@ -104,6 +107,13 @@ def recall_line(thing: str, ev: dict, now_ts: int) -> str | None:
         return None
     if thing.lower() not in f"{ev.get('where', '')} {ev.get('text', '')}".lower():
         return None
+    # A date or a number is not a thing: "Same Jun 13, 2026 as Tue 14:58" passed
+    # both models (D22). Require a real word that isn't a month.
+    months = {"jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "sept", "oct",
+              "nov", "dec", "january", "february", "march", "april", "june", "july",
+              "august", "september", "october", "november", "december"}
+    if not any(len(w) >= 3 and w not in months for w in re.findall(r"[a-z]+", thing.lower())):
+        return None
     # Being in the same app isn't the same thing: replay produced "Same Claude as
     # Tue 15:00" because the Claude app was open both times.
     app = ev.get("where", "").split(" — ")[0].lower().removesuffix(".exe")
@@ -117,9 +127,11 @@ class CardEngine:
     at once, qwen2.5 3B/7B chose silence even when their own reason said "unrelated";
     asked one yes/no question, they answer it."""
 
-    def __init__(self, llm: LLM, thinking: bool | None = None):
+    def __init__(self, llm: LLM, thinking: bool | None = None,
+                 verifier: "CardEngine | None" = None):
         self.llm = llm
         self.thinking = thinking   # None: the endpoint's default (cloud: config.THINKING)
+        self.verifier = verifier   # must also say "same" before a RECALL is shown
         self.calls = 0
 
     def ask(self, prompt: str, key: str) -> dict | None:
@@ -161,9 +173,17 @@ class CardEngine:
                 if not ans or ans.get("same") is not True:
                     continue
                 line = recall_line(str(ans.get("thing", "")), ev, cand.ts)
-                if line:
-                    why = str(ans.get("why", ""))[:200]
-                    return Card("RECALL", cand.ts, line, why, cand.evidence, cand.key), why
+                if not line:
+                    continue
+                if self.verifier is not None:
+                    # D22: the local 3B said "same" far too easily (RECALL precision 0
+                    # against blind judges). A yes needs a second, stronger opinion;
+                    # an unreachable verifier means silence.
+                    v = self.verifier.ask(RECALL_Q.format(now=cand.now[:1500], earlier=_fmt(ev)), "same")
+                    if not v or v.get("same") is not True:
+                        continue
+                why = str(ans.get("why", ""))[:200]
+                return Card("RECALL", cand.ts, line, why, cand.evidence, cand.key), why
             return None, "no earlier item is the same concrete thing"
         except LLMError as exc:
             return None, f"llm error: {exc}"
@@ -174,4 +194,5 @@ def default_engine() -> CardEngine:
     default, the cloud model with thinking when CARD_ENGINE = "cloud"."""
     if config.CARD_ENGINE == "cloud":
         return CardEngine(LLM(), thinking=config.CARD_THINKING)
-    return CardEngine(local_llm())
+    verifier = CardEngine(LLM(), thinking=config.CARD_THINKING) if config.RECALL_VERIFY == "cloud" else None
+    return CardEngine(local_llm(), verifier=verifier)

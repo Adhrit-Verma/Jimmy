@@ -218,6 +218,21 @@ class Store:
         with self._lock:
             return [dict(r) for r in self.conn.execute(sql, (since_ms, until_ms, since_ms, until_ms))]
 
+    def block_text(self, ref: int) -> str:
+        """Full text behind a search hit's `ref` (> 0: a text block, < 0: speech)."""
+        sql = ("SELECT text FROM text_blocks WHERE id = ?" if ref > 0
+               else "SELECT text FROM audio_segments WHERE id = ?")
+        with self._lock:
+            row = self.conn.execute(sql, (abs(ref),)).fetchone()
+        return row[0] if row else ""
+
+    def blocks_before(self, until_ms: int) -> list[tuple[str, str]]:
+        """(window_id, text) of every text block captured before `until_ms`."""
+        with self._lock:
+            return [(r[0], r[1]) for r in self.conn.execute(
+                "SELECT f.window_id, t.text FROM text_blocks t JOIN frames f ON f.id = t.frame_id "
+                "WHERE f.ts < ?", (until_ms,))]
+
     def frame_times(self, since_ms: int, until_ms: int) -> list[int]:
         """Timestamps of every captured frame in a window, oldest first."""
         with self._lock:

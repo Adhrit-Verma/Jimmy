@@ -49,3 +49,6 @@ FOCUS_INTENT_MAX_H = 8       # a stated focus older than this has expired
 LOCAL_BASE_URL = os.environ.get("JIMMY_LOCAL_URL") or "http://localhost:11434/v1"
 LOCAL_MODEL = os.environ.get("JIMMY_LOCAL_MODEL") or "qwen2.5:3b"
 CARD_ENGINE = os.environ.get("JIMMY_CARD_ENGINE") or "local"   # "local" | "cloud"
+# RECALL needs two yeses (D22): the local model filters, the cloud confirms. Only
+# the few local yeses leave the laptop. "none" = local only (lower precision).
+RECALL_VERIFY = os.environ.get("JIMMY_RECALL_VERIFY") or "cloud"

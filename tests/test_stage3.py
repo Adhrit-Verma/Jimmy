@@ -35,20 +35,20 @@ class FakeEngine:
 def history_store(filler: int = 80) -> Store:
     """90 min of filler, plus one earlier moment about a distinctive topic."""
     s = Store(":memory:")
-    w = s.open_window(ts=T0 - 200 * MIN)
+    w = s.open_window(ts=T0 - 400 * MIN)
     for i in range(filler):   # enough blocks that the topic words are rare (< 3 %)
-        f = s.add_frame(w, "chrome.exe", f"page {i}", ts=T0 - 190 * MIN + i * 10_000)
+        f = s.add_frame(w, "chrome.exe", f"page {i}", ts=T0 - 390 * MIN + i * 10_000)
         s.add_text(f, "uia", f"weather lunch playlist garden {i} holiday football recipe")
-    old = s.open_window(ts=T0 - 100 * MIN)
-    f = s.add_frame(old, "ms-teams.exe", "Chat | Priya", ts=T0 - 95 * MIN)
+    old = s.open_window(ts=T0 - 200 * MIN)   # > 2 h: a different sitting
+    f = s.add_frame(old, "ms-teams.exe", "Chat | Priya", ts=T0 - 195 * MIN)
     s.add_text(f, "uia", "the kubernetes ingress certificate expired again on staging")
     return s
 
 
-def feed_moment(g: Gate, start: int, app="Code.exe", title="ingress.yaml - infra", window="w-now"):
+def feed_moment(g: Gate, start: int, app="Code.exe", title="ingress.yaml - infra", window="w-now",
+                text="renewing the kubernetes ingress certificate for staging " * 5):
     for i in range(5):   # 4 minutes in one window, plenty of text
-        g.observe_frame(start + i * MIN, app, title, window,
-                        "renewing the kubernetes ingress certificate for staging " * 5 if i == 0 else "")
+        g.observe_frame(start + i * MIN, app, title, window, text if i == 0 else "")
     g.observe_frame(start + 5 * MIN, "explorer.exe", "Downloads", "w-other", "")  # moment ends
 
 
@@ -98,6 +98,27 @@ def test_recall_fires_after_a_moment_and_only_on_the_past():
     print("ok  recall after a moment, past only")
 
 
+def test_screen_furniture_is_not_content():
+    """D22: a line seen in 3+ windows (sidebar, friend list, own name) never makes a RECALL."""
+    s, eng = Store(":memory:"), FakeEngine()
+    side = "Sunandha UI/UX resume review"            # a chat title in an always-visible sidebar
+    for i in range(80):
+        w = s.open_window(ts=T0 - 190 * MIN + i)
+        f = s.add_frame(w, "chrome.exe", f"p{i}", ts=T0 - 190 * MIN + i * 10_000)
+        s.add_text(f, "uia", f"weather lunch playlist {i}")
+    for i in range(3):                               # the sidebar, in three earlier windows
+        w = s.open_window(ts=T0 - 120 * MIN + i)
+        f = s.add_frame(w, "claude.exe", "Claude", ts=T0 - 120 * MIN + i * MIN)
+        s.add_text(f, "uia", f"{side}\nunrelated chat body number {i} about lunch")
+    g = Gate(s, eng, history_until=T0)
+    assert len(g.line_windows[side]) == 3 and g.content(f"{side}\nreal new content") == "real new content"
+    feed_moment(g, T0, app="claude.exe", title="Claude", window="w-now",
+                text=(side + "\n") * 2 + "short")
+    assert eng.seen == [], "a moment made of sidebar lines must not produce a RECALL"
+    assert g.stats["moment_too_small"] >= 1
+    print("ok  screen furniture is not content")
+
+
 def test_small_moments_and_generic_words_do_not_fire():
     s, eng = history_store(), FakeEngine()
     g = Gate(s, eng)
@@ -111,8 +132,8 @@ def test_small_moments_and_generic_words_do_not_fire():
 def test_hard_limits():
     s, eng = history_store(filler=250), FakeEngine(speak=True)   # keep the words rare
     for i in range(3):   # three more distinct earlier topics
-        w = s.open_window(ts=T0 - 90 * MIN)
-        f = s.add_frame(w, "ms-teams.exe", f"old {i}", ts=T0 - 90 * MIN + i)
+        w = s.open_window(ts=T0 - 190 * MIN)
+        f = s.add_frame(w, "ms-teams.exe", f"old {i}", ts=T0 - 190 * MIN + i)
         s.add_text(f, "uia", "the kubernetes ingress certificate expired " + ["alpha", "beta", "gamma"][i])
     g = Gate(s, eng)
     feed_moment(g, T0)
@@ -120,7 +141,8 @@ def test_hard_limits():
     feed_moment(g, T0 + 7 * MIN, window="w2")        # 7 min later: inside the gap
     assert "blocked: too soon after the last card" in g.stats
     g.dismissed(T0 + 30 * MIN)
-    feed_moment(g, T0 + 31 * MIN, window="w3")
+    feed_moment(g, T0 + 31 * MIN, window="w3",
+                text="rotating the kubernetes ingress certificate on staging today " * 5)
     assert "blocked: cooldown after dismissal" in g.stats
     print("ok  hard limits: gap, cooldown")
 
@@ -199,6 +221,28 @@ def test_engine_end_to_end_with_mocked_llm():
     from jimmy.cards import Candidate
     assert CardEngine(LLM(key="")).decide(Candidate("RECALL", T0, "r", "now"))[0] is None, "offline: silence"
     print("ok  engine end to end (mocked)")
+
+def test_recall_needs_a_second_opinion_and_a_real_thing():
+    """D22: the local model's yes needs the verifier's yes; dates aren't things."""
+    from jimmy.cards import recall_line
+
+    def model(same):
+        def h(req):
+            return httpx.Response(200, json={"choices": [{"message": {"content":
+                json.dumps({"same": same, "thing": "ingress certificate", "why": "x"})}}]})
+        return LLM(key="k", model="m", base_url="https://llm.test/v1", transport=httpx.MockTransport(h))
+
+    for verifier_says, expect in ((True, 1), (False, 0)):
+        cards = []
+        g = Gate(history_store(), CardEngine(model(True), verifier=CardEngine(model(verifier_says))),
+                 on_card=cards.append)
+        feed_moment(g, T0)
+        assert len(cards) == expect, f"verifier said {verifier_says}: {cards}"
+
+    ev = {"ts": T0 - 3 * 24 * 60 * MIN, "where": "chrome.exe — GitHub", "text": "Joined Jun 13, 2026"}
+    assert recall_line("Jun 13, 2026", ev, T0) is None, "a date is not a thing"
+    print("ok  recall: second opinion, real things only")
+
 
 def test_replay_reports_worst_hour():
     s, eng = history_store(), FakeEngine(speak=True)

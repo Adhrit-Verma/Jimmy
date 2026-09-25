@@ -22,7 +22,7 @@ import queue
 import re
 import threading
 import time
-from collections import Counter, deque
+from collections import Counter, defaultdict, deque
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -88,8 +88,19 @@ class Gate:
     def __init__(self, store: Store, engine: CardEngine | None, memory: Memory | None = None,
                  on_card: Callable[[Card], None] | None = None,
                  on_decision: Callable[[Candidate, Card | None, str], None] | None = None,
-                 intent: str | None = None, background: bool = False):
+                 intent: str | None = None, background: bool = False,
+                 history_until: int | None = None):
         self.store, self.engine, self.memory = store, engine, memory
+        # line -> capture windows it has appeared in. A line seen in several
+        # windows is screen furniture (sidebar, friend list, own name, buttons),
+        # not content (D22). Built only from the past: live loads history up to
+        # now; replay starts empty and learns as it goes, so there's no look-ahead.
+        # ponytail: an in-memory map, fine for weeks of history; move it to a SQL
+        # table if months make start-up slow.
+        self.line_windows: dict[str, set] = defaultdict(set)
+        if history_until:
+            for wid, text in store.blocks_before(history_until):
+                self._learn_lines(wid, text)
         self.on_card = on_card or (lambda c: None)
         self.on_decision = on_decision or (lambda cand, card, why: None)
         self.intent_override = intent   # replay: pretend this intent held throughout
@@ -122,7 +133,19 @@ class Gate:
             m.last = ts
             if text:
                 m.text.append(text)
+                self._learn_lines(window_id, text)
             self._focus(ts, app, title, text)
+
+    def _learn_lines(self, window_id: str | None, text: str) -> None:
+        for line in text.split("\n"):
+            line = line.strip()
+            if line:
+                self.line_windows[line].add(window_id)
+
+    def content(self, text: str) -> str:
+        """`text` minus screen furniture: lines already seen in several windows."""
+        return "\n".join(ln for ln in (x.strip() for x in text.split("\n")) if ln and
+                         len(self.line_windows.get(ln, ())) < config.PERSISTENT_LINE_WINDOWS)
 
     def observe_speech(self, ts_start: int, ts_end: int, source: str, text: str) -> None:
         with self._lock:
@@ -151,7 +174,8 @@ class Gate:
 
     # --- rules --------------------------------------------------------------
     def _end_moment(self, m: Moment, end: int) -> None:
-        body = m.body()
+        # Only content counts: a moment of pure sidebar is not a moment (D22).
+        body = "\n".join([self.content("\n".join(m.text))] + m.speech).strip()
         if (end - m.start) / 1000 < config.MOMENT_MIN_S or len(body) < config.MOMENT_MIN_CHARS:
             self.stats["moment_too_small"] += 1
             return
@@ -186,17 +210,19 @@ class Gate:
         for h in hits:
             if exclude_window and h["window_id"] == exclude_window:
                 continue
-            hay = f"{h['title'] or ''} {h['snippet']}".lower()
-            shared = [t for t in terms if t in hay]
+            # Match on the earlier item's content only, never its furniture: the
+            # "resume" match was a chat title in an always-visible sidebar (D22).
+            body = self.content(self.store.block_text(h["ref"]))
+            shared = [t for t in terms if t in body.lower()]
             if len(stems(shared)) >= config.RECALL_MIN_SHARED and f"recall:{h['ref']}" not in self.used:
-                good.append((h, shared))
+                good.append((h, shared, body))
         if not good:
             self.stats["recall_no_match"] += 1
             return
-        h, shared = good[0]
-        evidence = [{"ts": g["ts"], "text": g["snippet"].replace("[", "").replace("]", ""),
+        h, shared, _ = good[0]
+        evidence = [{"ts": g["ts"], "text": body[:400],
                      "where": " — ".join(p for p in (g["app"], g["title"]) if p)
-                     or f"heard near {g['source']}"} for g, _ in good[:3]]
+                     or f"heard near {g['source']}"} for g, _, body in good[:3]]
         self._submit(Candidate("RECALL", ts, f"{reason}; shares {', '.join(shared)}",
                                now, evidence, f"recall:{h['ref']}"))
 
@@ -208,7 +234,7 @@ class Gate:
             self.off_since, self.focus_fired = None, False
             return
         goal = set(words(intent))
-        if goal & set(words(f"{app} {title} {text}")):
+        if app.lower() in config.FOCUS_NEUTRAL_APPS or goal & set(words(f"{app} {title} {text}")):
             self.off_since, self.focus_fired = None, False
             return
         self.off_since = self.off_since or ts
@@ -297,7 +323,7 @@ def replay(store: Store, since_ms: int, until_ms: int, engine: CardEngine | None
     """
     decisions: list[tuple[Candidate, Card | None, str]] = []
     cards: list[Card] = []
-    gate = Gate(store, engine, memory, on_card=cards.append,
+    gate = Gate(store, engine, memory, on_card=cards.append, history_until=since_ms or None,
                 on_decision=lambda c, k, w: decisions.append((c, k, w)), intent=intent)
     events = store.events(since_ms, until_ms)
     for ev in events:

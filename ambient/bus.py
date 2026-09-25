@@ -239,7 +239,7 @@ class ContextBus:
 
         self._gate_memory = Memory(jcfg.MEMORY_DB)
         return Gate(self.store, engine, self._gate_memory, on_card=on_card,
-                    on_decision=on_decision, background=True)
+                    on_decision=on_decision, background=True, history_until=now_ms())
 
     # --- run -------------------------------------------------------------
     def run(self, duration_s: float | None = None, verbose: bool = True) -> Counters:
