@@ -232,6 +232,19 @@ focusable and frameless. It reads `/timeline`, `/frame`, `/thumb` and
 `/search` through the main process like everything else; the page still has
 no network access.
 
+## Ask by voice (D25)
+
+```
+ mic → Whisper segment "Jimmy, what was …?" ─► Asker.hear (bus._on_audio; not passed to the gate)
+ pill Ask / Ctrl+Alt+Space ─► POST /ask ──────┘
+   Asker (one at a time, own thread):
+     gather_evidence: time_window + hybrid (or activity) → frames, excerpts, highlights
+     publish answer_start → answer_evidence → answer_delta… → answer_end   (SSE → overlay)
+     Jimmy.ask_stream(question, snippets = the same evidence)   # cloud LLM, one client
+     spoken question? → Voice.say(first sentences)   # Windows SAPI; mic paused meanwhile
+ overlay: Answer.jsx, evidence left (best match focused) + answer right; cards hidden meanwhile
+```
+
 ## Boundaries for later stages
 
 - **Stage 3 continues** with TIP (web search provider) and ACTION (an approval

@@ -133,6 +133,53 @@ cd overlay; npm install; npm run build
 
 `ambient run --no-overlay` keeps everything in the terminal.
 
+### Just ask: "Jimmy, …"
+
+While `ambient run` is going, **say "Jimmy," and your question**:
+
+> *"Jimmy, what was that consulting application I saw on Friday?"*
+
+The pill shows *thinking…*, then the answer appears on its own:
+- **Right: the answer**, as a short explanation: what it was, when and where,
+  and why Jimmy thinks so. It's also **read aloud**; click **Stop voice** to
+  silence it.
+- **Left: the evidence.** The actual moments, as blurred screenshots with day,
+  time, app and page title, and the relevant line with your words highlighted.
+  The best match is first and highlighted.
+
+It searches across all your days, or just the one you name ("on Tuesday",
+"yesterday afternoon", "between 2 and 3"). **Click any screenshot to see it big.**
+
+Jimmy knows what kind of question you're asking:
+- **About the past**, as above: *"Jimmy, what did I read about OAuth yesterday?"*
+- **About your screen right now**: *"Jimmy, what's on my screen?"*, *"Jimmy,
+  summarise this page."* You get a large view of the window you're on, with the
+  answer beside it.
+- **Just talking**: *"Jimmy, can you hear me?"*, *"Jimmy, what can you do?"* A
+  normal reply, no search.
+
+**It's a conversation.** Within a few minutes of a question, follow up
+naturally: after the McKinsey question, *"Jimmy, and when does it close?"* gets
+"Monday, October 5th, 11:59 pm".
+
+- Saying just **"Jimmy"** works too: pause, then ask.
+- **To type instead:** hover the pill and click **Ask**, or press
+  **Ctrl+Alt+Space**.
+- **Close an answer** with its ×; otherwise it fades after a minute.
+
+Nothing extra to install: speech recognition is the Whisper model already
+listening, and the voice is Windows' own.
+
+### Stopping Jimmy
+
+Any of these shuts it down cleanly: capture stops, the overlay closes, and
+everything is saved.
+- Hover the pill and click **Quit**.
+- Press **Ctrl+C** in the terminal running `ambient run`.
+- Closing that terminal window also stops it, but the other two are cleaner.
+
+To pause instead of stopping, use **Pause 2h** or **Ctrl+Alt+J**.
+
 ### Timeline (Stage 5)
 
 Hover the pill and click **Timeline**, or press **Ctrl+Alt+T**, to open a window
@@ -190,8 +237,8 @@ ollama pull qwen2.5:3b
 .\.venv\Scripts\python.exe tests\test_stage1.py    # 15 checks, no framework
 .\.venv\Scripts\python.exe tests\test_stage2.py    # 14 checks, mocked network
 .\.venv\Scripts\python.exe tests\test_stage3.py    # 11 checks, no network
-.\.venv\Scripts\python.exe tests\test_stage4.py    # 4 checks, overlay API
-.\.venv\Scripts\python.exe tests\test_stage5.py    # 5 checks, recall timeline
+.\.venv\Scripts\python.exe tests\test_stage4.py    # 5 checks, overlay
+.\.venv\Scripts\python.exe tests\test_stage5.py    # 10 checks, recall + voice
 ```
 
 OpenCV prints `net_impl_backend ... Targets are not supported` on import. Harmless.

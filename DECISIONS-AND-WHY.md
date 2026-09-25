@@ -815,3 +815,136 @@ heard near the mic.
 **Honest limits:** chunk text keeps furniture that later becomes furniture (only
 display filters it). Brute-force vectors are fine for weeks, not years. bge-m3,
 Whisper and qwen2.5:3b together are tight in 6 GB; Ollama unloads idle models.
+
+---
+
+### D25 — Ask by voice; the answer comes to you
+**Post-Stage 5 · 2026-09-25 · asked for by the human**
+
+The human's verdict on Stage 5's timeline was that searching by typing into a
+window defeats the point of an assistant, and the raw captured text shown there
+didn't make sense. They asked for voice questions, answers that appear on
+screen by themselves (evidence on the left, an LLM-style summary on the
+right, best match focused, across days), spoken answers if nothing extra was
+needed, and typing only as an option.
+
+**Nothing new to install.**
+- **Voice in** reuses the mic transcription that already runs. A segment
+  starting "Jimmy, …" is a question; "Jimmy" alone opens an 8 s window for the
+  next thing said. Only the mic source counts, never loopback.
+- **Voice out** is Windows' built-in SAPI via comtypes, which was already
+  installed. It's interruptible ("Stop voice", or closing the answer), and
+  reads only the first sentences that fit (≤ 320 chars).
+
+**The answer is built from exactly the evidence shown** (`Jimmy.ask_stream`
+now takes the snippets). The two panels can't disagree.
+
+**Evidence, readable instead of raw:**
+- each item has a thumbnail and a *day · time · app* caption, the page title,
+  and a one- or two-line excerpt chosen for the question's words (long
+  URLs and ids folded), with those words highlighted;
+- best match first, highlighted and scrolled into view;
+- screen furniture removed (D22/D24);
+- questions with no topic show what was on screen at the named time.
+
+**The answer's shape:** a direct answer, then when and where, then why, in at
+most 3 sentences, written to be read aloud.
+
+**The mic pauses while Jimmy speaks**, so it never transcribes itself. A
+command is not passed to the trigger gate (it's a question for Jimmy, not
+something to react to).
+
+**Bug found while building: Jimmy captured itself.** With the timeline open,
+capture recorded Jimmy's own window showing old McKinsey text, and search
+ranked that copy above the real moment (the top 3 of 6 pieces of evidence
+were "Electron · Jimmy"). Jimmy's windows (electron.exe, title starting
+"Jimmy") are now an exclusion, and the 7 self-frames already captured are
+skipped at read time. They were not deleted; the human can ask for that.
+
+**Also:** typing is pill → **Ask** or Ctrl+Alt+Space; the overlay takes focus
+only while typing and gives it back. There's a **Quit** in the pill, a clean
+shutdown the same as Ctrl-C. Answers fade after 60 s unless hovered.
+
+**Verified:** a snapshot of a real spoken question on real data; a silent test of
+SAPI start and interrupt; 8/8 stage 5 checks (wake word, listening window,
+event order, spoken-only-when-asked-aloud, self-exclusion).
+**Not verified live:** saying "Jimmy" into the actual mic. That needs the human.
+
+---
+
+### D26 — The overlay blanked on the second answer: a Promise returned from an effect
+**2026-09-25 · reported by the human: "it glitched out of existence but still working"**
+
+**Reproduced:** ask, then ask again. After the second question, the whole
+overlay (the pill too) rendered nothing, while the Python side kept answering
+and speaking.
+
+**Root cause:** `useEffect(() => best.current?.scrollIntoView(...), [items])`.
+An expression-bodied effect returns its value, and **in this Chromium
+(Electron 44) `scrollIntoView()` returns a Promise**. React took the Promise
+for a cleanup function. When the first answer was replaced, it called it:
+`destroy_ is not a function` (found with an unminified build). An uncaught
+render error unmounts the whole React root, so the pill vanished too. It was
+always the second answer, which is why it "doesn't always show up".
+
+**Fixes:**
+- Braced effect bodies, in both effects of that shape, plus a test
+  (`test_effects_never_return_a_value`) that fails on any expression-bodied
+  `useEffect` in `overlay/src`.
+- An error boundary around the answer panels and around the cards: a failing
+  panel drops alone, and the pill and everything else stay.
+
+**Found on the way: Electron's output never reached the terminal.** A GUI
+program on Windows gets no console unless its output is piped explicitly, so
+page errors were invisible (this bug included). `ambient run` now pipes
+Electron's output and relays overlay lines and errors to its terminal.
+
+**Verified:** second question 12 s after the first, and 3 s after (mid-answer):
+0 page errors, page fully rendered, the second answer on screen.
+
+---
+
+### D27 — Conversation, "what's on my screen", and large screenshots
+**2026-09-25 · from the human's review of D25 (screenshot: "can you listen to me")**
+
+**What was wrong:**
+1. Every question was treated as a search of the past. "Jimmy, can you listen
+   to me?" answered with… the moment the user had just said it.
+2. Nothing carried from one question to the next.
+3. "What's on my screen" searched history instead of looking at the screen.
+4. Screenshots were small (640 px) with no way to enlarge them.
+
+**Fixes:**
+- **A router in plain rules** (`ask.route`, deterministic and tested): *chat*
+  (greetings, "can you hear me", "what can you do", general how/what questions
+  with no past cue), *screen* ("on my screen", "summarise this page", "what am
+  I looking at"), *recall* (past tense, time phrases, bare topics). Rules, not
+  the local 3B, which D20 showed can't weigh intent reliably.
+- **Conversations:** questions within 3 min share one Jimmy session, so it sees
+  the recent turns. A short follow-up with a pronoun or "and/what about…"
+  inherits the last mode, and its search query becomes the last query plus the
+  new words: "and when does it close?" found "Applications close on Monday,
+  October 5th". The panel shows the thread.
+- **Screen mode** answers from the window in front of you: the latest frame
+  plus all text captured **for its current title** (a capture window spans a
+  whole app, i.e. every Chrome tab). It respects exclusions and never reads a
+  banking page or Jimmy itself. Shown large.
+- **Commands are never evidence:** stored as `source = 'command'` and excluded
+  from search, the speech timeline and indexing; pre-D27 commands are skipped
+  by wake-word match.
+- **Big screenshots:** new thumbnails are 1280 px (JPEG q65; ~2–3× the storage,
+  in line with the human's "give it capacity first"). Clicking any evidence
+  opens a lightbox; the thumbnail grows into place (Motion shared `layoutId`).
+  Loading placeholders while searching.
+
+**Verified on real data, a four-turn conversation:** "can you listen to me?" →
+a conversational reply · the consulting application → McKinsey, Fri 2:09 pm ·
+"and when does it close?" → Monday October 5th, 11:59 pm · "what's on my screen?"
+→ the form, with a large screenshot. No page errors.
+
+**Known limits:**
+- Screen mode describes everything seen on that page this session, not only
+  what's scrolled into view.
+- Existing thumbnails stay 640 px.
+- The lightbox's Esc key needs focus the overlay doesn't take; clicking closes it.
+- The lightbox wasn't exercised by an automated snapshot (it needs a click).

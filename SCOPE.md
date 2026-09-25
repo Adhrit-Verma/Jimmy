@@ -168,6 +168,20 @@ search, preview, minute scrub strip), and meaning search in `jimmy ask`.
 
 ---
 
+## Voice Q&A (D25) — built, and NOT built
+
+Built: "Jimmy, …" questions from the mic, the evidence + answer panels,
+spoken answers (Windows SAPI), typed Ask, Quit.
+
+| Not built | Why |
+|---|---|
+| A dedicated wake-word engine | Whisper's transcripts are enough; revisit if "Jimmy" is missed often or latency bothers. |
+| Neural / Hindi TTS voices | Windows' SAPI voices are English and robotic but need nothing installed. |
+| Follow-up questions in the panel | Each question is answered fresh (history leaked into answers before, D18). |
+| Deleting the 7 self-captured frames | Skipped at read time; deleting data needs the human's say-so. |
+
+---
+
 ## Possible future changes
 
 Ideas I'd want to make but that are **not decided**. Each needs evidence or a

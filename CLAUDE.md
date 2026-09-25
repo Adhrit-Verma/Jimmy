@@ -15,7 +15,8 @@ and what not to build*. Everything else, including this file, is downstream of i
 **Thesis:** continuous capture is commodity. The product is the gate that decides
 to stay quiet. Build for six good interruptions an evening, not for throughput.
 
-**Current state: all five stages are done.** Stage 3 (trigger gate) passed its 5-check
+**Current state: all five stages are done, plus voice Q&A (D25):** "Jimmy, …" → an
+evidence panel and a spoken answer, with no typing needed. Stage 3 (trigger gate) passed its 5-check
 list, blind-judged (D19–D22). Stage 4 is the Electron overlay (D23). Stage 5 is hybrid
 keyword + meaning recall and a timeline window (D24). Remaining work lives in
 `SCOPE.md` → Possible future changes. The Jimmy core
@@ -75,10 +76,10 @@ cd C:\Code\Jimmy
 cd overlay; npm install; npm run build   # once, and after any change under overlay/src
 .\node_modules\electron\dist\electron.exe . --demo                      # see the UI, no Python
 .\node_modules\electron\dist\electron.exe . --demo --snapshot shot.png   # render to a PNG and quit
-.\.venv\Scripts\python.exe tests\test_stage4.py   # 4 checks: API, pause, window flags
+.\.venv\Scripts\python.exe tests\test_stage4.py   # 5 checks: API, pause, window flags, effect bodies
 .\.venv\Scripts\python.exe -m ambient index       # backfill meaning-search vectors (bge-m3)
 .\.venv\Scripts\python.exe -m ambient search "consulting application on Friday"   # keywords + meaning
-.\.venv\Scripts\python.exe tests\test_stage5.py   # 5 checks, fake embeddings, no Ollama
+.\.venv\Scripts\python.exe tests\test_stage5.py   # 10 checks: recall, voice ask, router, commands, self-exclusion
 ```
 
 Timeline window: pill → **Timeline**, or **Ctrl+Alt+T**. Snapshot it on real data
@@ -116,6 +117,8 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `tests/test_stage1.py` | stage 1 check. Assert-based, no pytest. |
 | `ambient/gate.py` | Stage 3 Tier 1: moments, RECALL/FOCUS rules, hard limits, `replay()`. No LLM. |
 | `jimmy/cards.py` | Stage 3 Tier 2: typed questions to the local model (default) or cloud; code writes the ≤7-word card. |
+| `ambient/ask.py` | D25/D27: wake word, `route()` (chat / screen / recall + follow-ups), evidence, `Asker` (conversation, overlay events), `Voice` (SAPI). |
+| `overlay/src/Answer.jsx` | the answer view: evidence left (best match focused), streamed answer right. |
 | `ambient/recall.py` | Stage 5: chunk + index (bge-m3), meaning search, hybrid (RRF) with furniture filter, timeline API reads. |
 | `overlay/src/Timeline.jsx` | the timeline window: day nav, search, preview, minute scrub strip. |
 | `tests/test_stage5.py` | stage 5 check. A collision-free fake embedding; real HTTP; thumb path traversal. |
@@ -248,8 +251,25 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
 - **`npm install` may skip Electron's binary download.** If
   `overlay/node_modules/electron/dist/electron.exe` is missing, run
   `node node_modules/electron/install.js` in `overlay/`.
+- **Never write `useEffect(() => expr)`. Always use braces.** In this Chromium,
+  `scrollIntoView()` returns a Promise. Returned from an effect, React called it
+  as a cleanup and the whole overlay went blank (D26). A test now scans
+  `overlay/src` for this.
+- **Electron's console only reaches the terminal when piped.** `bus._start_overlay`
+  pipes and relays it; page errors are logged via `console-message`. To debug a
+  blank overlay, build unminified (`npx vite build --minify false`) to get real
+  error names.
 - **Motion exit animations need direct children.** A card wrapped in a plain
   `div` inside `AnimatePresence` vanishes instantly instead of sliding out.
+- **Commands to Jimmy are not captured speech.** "Jimmy, …" is stored as
+  `source = 'command'` and excluded from search, speech and indexing. Otherwise a
+  question answers itself (D27).
+- **A capture window spans an app, not a page.** For "this page", filter by the
+  current title (`Store.window_content(window_id, title)`).
+- **Jimmy must never capture itself.** With its timeline open, capture re-recorded
+  old text from Jimmy's own window and search ranked the copy first (D25).
+  `redact.is_own_window` excludes electron.exe windows titled "Jimmy…"; keep new
+  windows' titles starting with "Jimmy".
 - **Never use `hash()` in a test fixture.** It's randomised per run, and a hashed
   fake embedding collided ("mckinsey" with a word in a Google ADK line). Use a
   vocabulary dict.
