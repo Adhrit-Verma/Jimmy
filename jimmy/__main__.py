@@ -1,4 +1,4 @@
-"""CLI: python -m jimmy {chat,ask,remember,doctor}"""
+"""CLI: python -m jimmy {chat,ask,remember,focus,doctor}"""
 from __future__ import annotations
 
 import argparse
@@ -105,6 +105,21 @@ def _doctor() -> int:
             row(False, "round trip", str(exc)[:160])
         finally:
             llm.close()
+    # The local model decides cards (D20): Ollama must be up and the model pulled.
+    from .llm import local_llm
+    loc = local_llm()
+    try:
+        t = time.perf_counter()
+        out = loc.chat([{"role": "user", "content": "Reply with exactly one word: ready"}], max_tokens=10)
+        ok = out.lower().strip(" .!\"'") == "ready"
+        row(ok, "local model", f"{config.LOCAL_MODEL} via Ollama: {time.perf_counter() - t:.1f}s -> {out[:30]!r}"
+            f" (card engine: {config.CARD_ENGINE})")
+    except Exception as exc:
+        row(config.CARD_ENGINE != "local", "local model",
+            f"{config.LOCAL_MODEL} unreachable ({str(exc)[:80]}). Start Ollama and "
+            f"`ollama pull {config.LOCAL_MODEL}`" + ("" if config.CARD_ENGINE == "local" else " (unused)"))
+    finally:
+        loc.close()
     row(config.AMBIENT_DB.exists(), "captures",
         f"{config.AMBIENT_DB}" + ("" if config.AMBIENT_DB.exists() else " missing: run `python -m ambient run`"))
     row(True, "memory", str(config.MEMORY_DB))
@@ -126,6 +141,9 @@ def main(argv: list[str] | None = None) -> int:
     r = sub.add_parser("remember", help="keep a fact in Jimmy's memory")
     r.add_argument("fact")
     sub.add_parser("doctor", help="check the key, model, endpoint and data")
+    f = sub.add_parser("focus", help="say what you mean to be doing (FOCUS cards), or show it")
+    f.add_argument("intent", nargs="?")
+    f.add_argument("--clear", action="store_true")
     args = ap.parse_args(argv)
 
     if args.cmd == "chat":
@@ -137,6 +155,12 @@ def main(argv: list[str] | None = None) -> int:
     from .llm import LLMError
     jim = Jimmy.default()
     try:
+        if args.cmd == "focus":
+            if args.clear or args.intent:
+                jim.memory.set_intent(None if args.clear else args.intent)
+            cur = jim.memory.current_intent(config.FOCUS_INTENT_MAX_H)
+            print(f"focus: {cur['text']}" if cur else "no current focus")
+            return 0
         if args.cmd == "remember":
             print("kept." if jim.remember(args.fact) else "nothing to keep.")
             return 0

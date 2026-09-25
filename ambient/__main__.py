@@ -100,7 +100,49 @@ def _doctor() -> int:
     return 0 if bad == 0 else 1
 
 
+def _replay(a) -> int:
+    """Stage 3's GO/NO-GO: <= 10 cards in any replayed hour, each defensible."""
+    from datetime import datetime
+
+    from jimmy import config as jcfg
+    from jimmy.cards import default_engine
+    from jimmy.memory import Memory
+
+    from .db import Store
+    from .gate import replay
+
+    ms = lambda s, d: int(datetime.strptime(s, "%Y-%m-%d %H:%M").timestamp() * 1000) if s else d  # noqa: E731
+    hm = lambda t: time.strftime("%a %d %H:%M", time.localtime(t / 1000)) if t else "--"  # noqa: E731
+    engine = None if a.dry else default_engine()
+    if engine and not engine.llm.configured:
+        print("no API key: running dry (Tier 1 only)")
+        engine = None
+    memory = Memory(jcfg.MEMORY_DB)
+    with Store(a.db or config.DB_PATH) as store:
+        r = replay(store, ms(a.since, 0), ms(a.until, int(time.time() * 1000)), engine, memory, a.intent)
+    memory.close()
+
+    for cand, card, why in r["decisions"]:
+        verdict = f"CARD  {card.line!r}" if card else why
+        print(f"{hm(cand.ts)}  {cand.type:6s} [{cand.reason}]\n        -> {verdict}")
+    print(f"\nreplayed {r['events']} events over {r['hours']:.2f} h of captured time")
+    for k, v in sorted(r["stats"].items()):
+        print(f"  {k:36s} {v}")
+    n, per_h = len(r["cards"]), len(r["cards"]) / r["hours"] if r["hours"] else 0.0
+    ok = r["worst_hour"] <= 10
+    print(f"\ncards: {n} ({per_h:.1f}/h); worst rolling hour: {r['worst_hour']}"
+          f"  ->  {'GO on count' if ok else 'NO-GO: tune the gate and replay'}"
+          + ("" if engine else "  (dry run: count not meaningful)"))
+    if ok and n:
+        print("The count passes. Each card still has to be one you'd defend: read them above.")
+    return 0 if ok else 1
+
+
 def main(argv: list[str] | None = None) -> int:
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # captured text on a cp1252 console
+    except Exception:
+        pass
     ap = argparse.ArgumentParser(prog="ambient", description="Jimmy ambient layer, stage 1")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
@@ -109,6 +151,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--monitor", type=int, default=None)
     r.add_argument("--no-audio", action="store_true")
     r.add_argument("--no-thumbs", action="store_true")
+    r.add_argument("--no-cards", action="store_true", help="capture only, no trigger gate")
     r.add_argument("--db", default=None)
 
     s = sub.add_parser("search", help="full-text search screen and speech")
@@ -122,7 +165,17 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("doctor", help="check every component on this machine")
 
+    rp = sub.add_parser("replay", help="run the trigger gate over stored history (Stage 3 GO gate)")
+    rp.add_argument("--since", help="'YYYY-MM-DD HH:MM' (default: all history)")
+    rp.add_argument("--until", help="'YYYY-MM-DD HH:MM' (default: now)")
+    rp.add_argument("--dry", action="store_true", help="Tier 1 only: list candidates, no cloud calls")
+    rp.add_argument("--intent", help="pretend this focus intent held throughout (tests FOCUS)")
+    rp.add_argument("--db", default=None)
+
     a = ap.parse_args(argv)
+
+    if a.cmd == "replay":
+        return _replay(a)
 
     if a.cmd == "doctor":
         return _doctor()
@@ -133,7 +186,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "run":
         from .bus import ContextBus
         bus = ContextBus(db_path=db, monitor=a.monitor,
-                         audio=not a.no_audio, thumbs=not a.no_thumbs)
+                         audio=not a.no_audio, thumbs=not a.no_thumbs, cards=not a.no_cards)
         counters = bus.run(duration_s=a.seconds)
         print(json.dumps(counters.as_dict(), indent=2))
         return 0

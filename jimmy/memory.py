@@ -107,6 +107,26 @@ class Memory:
         with self._lock:
             return [dict(r) for r in self.conn.execute(sql, (q, limit))]
 
+    # FOCUS needs a model of intent, not of the current window (AMBIENT_LAYER.md).
+    # Intent is only what the user states; Jimmy never guesses it.
+    _NO_INTENT = "(no current focus)"
+
+    def set_intent(self, text: str | None) -> None:
+        """State what you mean to be doing, or clear it with None/empty."""
+        self._write("INSERT INTO memories(ts, source, text) VALUES (?,?,?)",
+                    (int(time.time() * 1000), "intent",
+                     (text or "").strip() or self._NO_INTENT))
+
+    def current_intent(self, max_age_h: float, now_ms: int | None = None) -> dict | None:
+        now_ms = now_ms or int(time.time() * 1000)
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT ts, text FROM memories WHERE source='intent' AND ts <= ? "
+                "ORDER BY id DESC LIMIT 1", (now_ms,)).fetchone()
+        if not row or row["text"] == self._NO_INTENT or now_ms - row["ts"] > max_age_h * 3600_000:
+            return None
+        return dict(row)
+
     def add_turn(self, session: str, role: str, text: str) -> None:
         if text and text.strip():
             self._write("INSERT INTO turns(ts, session, role, text) VALUES (?,?,?,?)",

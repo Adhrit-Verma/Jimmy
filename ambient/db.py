@@ -159,13 +159,15 @@ class Store:
         sql = f"""
         SELECT 'screen' AS kind, f.ts AS ts, f.app AS app, f.title AS title,
                t.source AS source, snippet(text_fts, 0, '[', ']', '...', {n}) AS snippet,
-               bm25(text_fts) AS rank, f.thumb_path AS thumb_path
+               bm25(text_fts) AS rank, f.thumb_path AS thumb_path, f.window_id AS window_id,
+               t.id AS ref
           FROM text_fts JOIN text_blocks t ON t.id = text_fts.rowid
                         JOIN frames f ON f.id = t.frame_id
          WHERE text_fts MATCH ? AND f.ts BETWEEN ? AND ?
         UNION ALL
         SELECT 'audio', a.ts_start, NULL, NULL, a.source,
-               snippet(audio_fts, 0, '[', ']', '...', {n}), bm25(audio_fts), NULL
+               snippet(audio_fts, 0, '[', ']', '...', {n}), bm25(audio_fts), NULL, a.window_id,
+               -a.id
           FROM audio_fts JOIN audio_segments a ON a.id = audio_fts.rowid
          WHERE audio_fts MATCH ? AND a.ts_start BETWEEN ? AND ?
          ORDER BY rank LIMIT ?
@@ -181,6 +183,40 @@ class Store:
                   GROUP BY app, title ORDER BY last_ts DESC LIMIT ?"""
         with self._lock:
             return [dict(r) for r in self.conn.execute(sql, (since_ms, until_ms, limit))]
+
+    def term_share(self, term: str, until_ms: int) -> float:
+        """Fraction of text blocks before `until_ms` that contain `term` (0..1).
+
+        The gate's IDF: a word in 30 % of everything ("claude", "discord") says
+        nothing about a specific earlier moment.
+        """
+        with self._lock:
+            total = self.conn.execute(
+                "SELECT COUNT(*) FROM text_blocks t JOIN frames f ON f.id = t.frame_id "
+                "WHERE f.ts < ?", (until_ms,)).fetchone()[0]
+            if not total:
+                return 0.0
+            hits = self.conn.execute(
+                "SELECT COUNT(*) FROM text_fts JOIN text_blocks t ON t.id = text_fts.rowid "
+                "JOIN frames f ON f.id = t.frame_id WHERE text_fts MATCH ? AND f.ts < ?",
+                ('"' + term.replace('"', "") + '"', until_ms)).fetchone()[0]
+        return hits / total
+
+    def events(self, since_ms: int, until_ms: int) -> list[dict]:
+        """Frames (with the new text they stored) and speech, in time order: the
+        stream the gate sees live, reconstructed for replay."""
+        sql = """
+        SELECT 'frame' AS kind, f.ts AS ts, f.ts AS ts_end, f.app AS app, f.title AS title,
+               f.window_id AS window_id, NULL AS source,
+               COALESCE((SELECT group_concat(t.text, char(10)) FROM text_blocks t
+                          WHERE t.frame_id = f.id), '') AS text
+          FROM frames f WHERE f.ts BETWEEN ? AND ?
+        UNION ALL
+        SELECT 'speech', a.ts_start, a.ts_end, NULL, NULL, a.window_id, a.source, a.text
+          FROM audio_segments a WHERE a.ts_end BETWEEN ? AND ?
+        ORDER BY ts_end"""
+        with self._lock:
+            return [dict(r) for r in self.conn.execute(sql, (since_ms, until_ms, since_ms, until_ms))]
 
     def frame_times(self, since_ms: int, until_ms: int) -> list[int]:
         """Timestamps of every captured frame in a window, oldest first."""

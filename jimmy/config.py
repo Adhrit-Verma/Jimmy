@@ -35,3 +35,17 @@ SNIPPET_TOKENS = 48
 MEMORY_HITS = 5
 DEFAULT_LOOKBACK_H = 2       # "what was I doing" with no time words -> the last 2 hours
 COVERAGE_GAP_MIN = 5         # capture gaps at least this long are named in the context as unknown
+
+# --- card engine, Tier 2 (Stage 3, D19) ------------------------------------
+CARD_MAX_WORDS = 7           # the spec: "never more than seven words"
+CARD_THINKING = True         # cards aren't latency-bound; let the model reason (D17)
+CARD_MAX_TOKENS = 2500       # thinking writes reasoning into the reply; 400 ran out before the JSON
+FOCUS_INTENT_MAX_H = 8       # a stated focus older than this has expired
+
+# --- local model via Ollama (D20) ------------------------------------------
+# Same OpenAI-compatible client, second endpoint. Card decisions run here by
+# default: private (screen text stays on the laptop), free, and immune to the
+# free tier's 503 "overloaded". Chat answers still use the cloud model.
+LOCAL_BASE_URL = os.environ.get("JIMMY_LOCAL_URL") or "http://localhost:11434/v1"
+LOCAL_MODEL = os.environ.get("JIMMY_LOCAL_MODEL") or "qwen2.5:3b"
+CARD_ENGINE = os.environ.get("JIMMY_CARD_ENGINE") or "local"   # "local" | "cloud"

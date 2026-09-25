@@ -236,7 +236,7 @@ class Transcriber:
             return ""
 
         audio = pcm.astype(np.float32) / 32768.0
-        segs, _ = self.model.transcribe(audio, language="en", beam_size=1,
+        segs, _ = self.model.transcribe(audio, language=config.WHISPER_LANGUAGE, beam_size=1,
                                         vad_filter=False, condition_on_previous_text=False)
         kept = [s.text.strip() for s in segs
                 if getattr(s, "no_speech_prob", 0.0) <= config.NO_SPEECH_MAX

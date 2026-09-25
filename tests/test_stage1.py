@@ -326,7 +326,7 @@ def test_mic_pauses_on_sensitive_surface_unless_call():
     b = ContextBus.__new__(ContextBus)
     b.store, b.faces, b.counters, b._open, b.window_id = Store(":memory:"), FaceStage(), Counters(), {}, None
     b.exclusions, b.source, b.want_thumbs = Exclusions(), FakeSource(), False
-    b._sensitive_key, b._sensitive_reason, b._audio = None, "", FakeAudio()
+    b._sensitive_key, b._sensitive_reason, b._audio, b.gate = None, "", FakeAudio(), None
 
     page = {"title": "Account - Chrome", "url": "https://netbanking.hdfcbank.com/"}
     call = {"on": False}

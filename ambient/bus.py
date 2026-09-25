@@ -70,7 +70,7 @@ class Counters:
 
 class ContextBus:
     def __init__(self, db_path: str | Path | None = None, monitor: int | None = None,
-                 audio: bool = True, thumbs: bool = True):
+                 audio: bool = True, thumbs: bool = True, cards: bool = True):
         self.store = Store(db_path or config.DB_PATH)
         self.exclusions = Exclusions(config.EXCLUSIONS_FILE)
         self.faces = FaceStage()
@@ -84,6 +84,7 @@ class ContextBus:
         self._sensitive_reason = ""
         self._running = False
         self._audio = None
+        self.gate = self._make_gate() if cards else None
 
     # --- capture windows -------------------------------------------------
     def _expire_windows(self, now: float, ts: int, keep: str | None = None) -> None:
@@ -192,12 +193,17 @@ class ContextBus:
         frame_id = self.store.add_frame(w.id, aw.app, aw.title, thumb, face_count, ts)
 
         # The frame row is always written (it's the timeline); text only if new.
-        if self.store.add_text(frame_id, "uia", new_lines(wt.text, w.seen_lines)):
+        fresh = new_lines(wt.text, w.seen_lines)
+        if self.store.add_text(frame_id, "uia", fresh):
             c.text_blocks += 1
         if len(wt.text) < config.UIA_MIN_CHARS:
             text = screen.ocr(blurred)  # blurred, so OCR can never read a face
-            if self.store.add_text(frame_id, "ocr", new_lines(text, w.seen_lines)):
+            ocr_new = new_lines(text, w.seen_lines)
+            if self.store.add_text(frame_id, "ocr", ocr_new):
                 c.ocr_blocks += 1
+                fresh = "\n".join(p for p in (fresh, ocr_new) if p)
+        if self.gate:
+            self.gate.observe_frame(ts, aw.app, aw.title, w.id, fresh)
 
         c.frames += 1
         w.last_sig = sig
@@ -207,6 +213,33 @@ class ContextBus:
     def _on_audio(self, ts_start: int, ts_end: int, source: str, text: str) -> None:
         self.store.add_audio(ts_start, ts_end, source, text, window_id=self.window_id)
         self.counters.audio_segments += 1
+        if self.gate:
+            self.gate.observe_speech(ts_start, ts_end, source, text)
+
+    # --- trigger gate (Stage 3) ------------------------------------------
+    def _make_gate(self):
+        """Tier 1 here, Tier 2 in a worker thread so a cloud call never delays a tick.
+        Cards go to the console and the `cards` table; there is no UI until Stage 4."""
+        from jimmy import config as jcfg
+        from jimmy.cards import default_engine
+        from jimmy.memory import Memory
+
+        from .gate import Gate
+        engine = default_engine()
+        if not engine.llm.configured:
+            engine = None                      # Tier 1 still runs and logs candidates
+
+        def on_card(card):
+            self.store.add_card(card.type, card.line, card.evidence, card.ts)
+            print(f"\n[card] {card.type}: {card.line}   ({card.why})\n")
+
+        def on_decision(cand, card, why):
+            if card is None:
+                print(f"[gate] {cand.type} candidate ({cand.reason}) -> {why}")
+
+        self._gate_memory = Memory(jcfg.MEMORY_DB)
+        return Gate(self.store, engine, self._gate_memory, on_card=on_card,
+                    on_decision=on_decision, background=True)
 
     # --- run -------------------------------------------------------------
     def run(self, duration_s: float | None = None, verbose: bool = True) -> Counters:
@@ -266,6 +299,10 @@ class ContextBus:
             if verbose and self._audio.errors:
                 for e in self._audio.errors[-5:]:
                     print(f"[audio] {e}")
+        if self.gate:
+            self.gate.flush(now_ms())
+            self.gate.close()
+            self._gate_memory.close()
         for w in self._open.values():
             self.store.close_window(w.id)
             self.faces.close_window(w.id)

@@ -203,7 +203,7 @@ class AmbientPlugin:
                 where = " — ".join(p for p in (h["app"], h["title"]) if p)
                 out.append(Snippet(h["ts"], f"screen · {where}", _clean(h["snippet"])))
             else:
-                out.append(Snippet(h["ts"], f"speech · {h['source']}", _clean(h["snippet"])))
+                out.append(Snippet(h["ts"], f"heard near {h['source']}", _clean(h["snippet"])))
 
         # A named time, or nothing matched by keyword: say what was going on then.
         if window or not out:
@@ -220,7 +220,7 @@ class AmbientPlugin:
                         f"{a['frames']} captures")
                 out.append(Snippet(a["last_ts"], "activity", f"{where} ({seen})"))
             for s in store.speech(a_since, a_until):
-                out.append(Snippet(s["ts_start"], f"speech · {s['source']}", s["text"]))
+                out.append(Snippet(s["ts_start"], f"heard near {s['source']}", s["text"]))
         return out
 
     def close(self) -> None:

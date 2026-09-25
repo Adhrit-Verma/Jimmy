@@ -52,6 +52,9 @@ Rules:
   it out. An error message on screen is something they saw, not something they did.
 - "activity" lines give when a window was first and last seen, not how long it was
   used. Don't describe them as continuous use.
+- "heard near mic" lines are what the microphone picked up: the user, other
+  people in the room, or a video or call playing from the speakers. Don't say
+  "you said" unless the context makes it clear it was the user; say "was heard".
 - A "coverage" line lists stretches with no captures. Say nothing is known about
   those stretches; never fill them in.
 - Earlier messages in this chat may be about other times or topics. Facts about

@@ -75,10 +75,14 @@ VAD_FRAME_MS = 30            # WebRTC VAD accepts 10, 20 or 30 only
 VAD_SILENCE_MS = 700         # trailing silence that closes a segment
 SEG_MIN_MS = 400             # shorter than this is a cough, not a sentence
 SEG_MAX_MS = 20000           # force a cut so one monologue cannot grow unbounded
-WHISPER_MODEL = "distil-small.en"
+# Multilingual (D19): the human speaks English and Hindi/Hinglish near the laptop,
+# and the English-only distil-small.en garbled it. Measured: ~1 GB VRAM, 4 s of
+# English in 0.6 s, English output identical. Hindi comes out in Devanagari.
+WHISPER_MODEL = "large-v3-turbo"
+WHISPER_LANGUAGE: str | None = None   # None = detect per segment; "en" to force English
 WHISPER_DEVICE = "cuda"
 WHISPER_COMPUTE = "int8"
-WHISPER_FALLBACK_MODEL = "small.en"
+WHISPER_FALLBACK_MODEL = "small"   # multilingual too
 
 # Whisper invents text when handed non-speech: measured here, silence decoded as
 # "you" and white noise as "Thanks." VAD lets some of that through, so the
@@ -86,3 +90,19 @@ WHISPER_FALLBACK_MODEL = "small.en"
 MIN_SEGMENT_RMS = 120.0      # int16 RMS; below this the segment is never decoded
 NO_SPEECH_MAX = 0.6          # drop a decoded segment above this no-speech probability
 AVG_LOGPROB_MIN = -1.0       # drop a decoded segment the model is this unsure of
+
+# --- trigger gate, Tier 1 (Stage 3, D19) -----------------------------------
+# Local rules only: no LLM. Every value here is a first guess, tuned by
+# `ambient replay` against the <= 10 cards/hour GO gate, not by intuition.
+MOMENT_MIN_S = 60            # a moment shorter than this ends without a RECALL look
+MOMENT_MIN_CHARS = 200       # ...or with less new text + speech than this
+RECALL_MIN_AGE_S = 30 * 60   # the earlier thing must be at least this old
+RECALL_TERMS = 6             # distinctive words taken from a moment
+RECALL_MAX_TERM_SHARE = 0.03  # a word in > 3 % of all text blocks is not distinctive
+RECALL_MIN_SHARED = 2        # distinctive words an earlier hit must share
+FOCUS_DRIFT_S = 10 * 60      # off-intent this long -> a FOCUS candidate
+FOCUS_REPEAT_S = 45 * 60     # after a FOCUS card, no more FOCUS for this long: one nudge, not nagging
+MAX_CARDS_PER_HOUR = 4       # hard cap, rolling hour (the spec's gate is <= 10)
+MIN_CARD_GAP_S = 10 * 60     # never two cards closer than this
+MAX_CANDIDATES_PER_HOUR = 20  # cap on Tier 2 (cloud) calls, rolling hour
+DISMISS_COOLDOWN_S = 30 * 60  # after a dismissal (wired by the Stage 4 overlay)

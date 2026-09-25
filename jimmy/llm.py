@@ -97,12 +97,12 @@ class LLM:
                 timeout=httpx.Timeout(config.READ_TIMEOUT_S, connect=config.CONNECT_TIMEOUT_S))
         return self._client
 
-    def _body(self, messages, stream, max_tokens, temperature) -> dict:
+    def _body(self, messages, stream, max_tokens, temperature, thinking=None) -> dict:
         # Both spellings of the switch: NVIDIA's chat templates differ by model family.
+        think = config.THINKING if thinking is None else thinking
         return {"model": self.model, "messages": messages, "stream": stream,
                 "max_tokens": max_tokens, "temperature": temperature,
-                "chat_template_kwargs": {"enable_thinking": config.THINKING,
-                                         "thinking": config.THINKING}}
+                "chat_template_kwargs": {"enable_thinking": think, "thinking": think}}
 
     @staticmethod
     def _fail(resp: httpx.Response) -> LLMError:
@@ -119,10 +119,10 @@ class LLM:
             raise LLMError(f"no API key: set {config.API_KEY_ENV}")
 
     def chat(self, messages: list[dict], *, max_tokens: int = config.MAX_TOKENS,
-             temperature: float = config.TEMPERATURE) -> str:
-        """The whole answer at once."""
+             temperature: float = config.TEMPERATURE, thinking: bool | None = None) -> str:
+        """The whole answer at once. `thinking` overrides config.THINKING for this call."""
         self._require_key()
-        return self._once(self._body(messages, False, max_tokens, temperature))
+        return self._once(self._body(messages, False, max_tokens, temperature, thinking))
 
     def chat_stream(self, messages: list[dict], *, max_tokens: int = config.MAX_TOKENS,
                     temperature: float = config.TEMPERATURE) -> Iterator[str]:
@@ -200,3 +200,8 @@ class LLM:
         if self._client is not None:
             self._client.close()
             self._client = None
+
+
+def local_llm(model: str | None = None) -> LLM:
+    """The same client pointed at local Ollama. Ollama ignores the key."""
+    return LLM(key="ollama", model=model or config.LOCAL_MODEL, base_url=config.LOCAL_BASE_URL)
