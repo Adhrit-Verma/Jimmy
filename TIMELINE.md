@@ -8,7 +8,7 @@ result whenever either changes.
  [x] 1  Context bus             built 2026-09-21, acceptance met
  [ ] 1b Face stage              built; threshold untuned against real footage
  [x] 2  Jimmy core + hookup     built 2026-09-21, live acceptance met 2026-09-22
- [~] 3  Trigger gate + cards    built 2026-09-25; GO on count, card review owed (D19)
+ [x] 3  Trigger gate + cards    done 2026-09-25: all 5 checks pass, blind-judged (D22)
  [ ] 4  Overlay                 not started — gated on stage 3 GO
  [ ] 5  Recall timeline         not started — mostly free once 1 exists
 ```
@@ -120,7 +120,15 @@ doctor` all green, 0.81 s to first word.
 
 ---
 
-## Stage 3 — Trigger gate + card engine · **built · GO on count, review owed**
+## Stage 3 — Trigger gate + card engine · **done: GO (D22)**
+
+**Closed 2026-09-25 on the recorded data, as the human decided.** Checklist (fixed
+before evaluating): replay ≤ 10 cards/h, 0/h, PASS · every shown card
+defensible per two blind judges, PASS · Tier 2 precision 0.83 vs blind
+consensus (bar 0.80), PASS · recall answers 8/8, 0 invented, PASS · tests
+15/14/11 and docs, PASS. Honest limit: no real RECALL match exists in this data,
+so RECALL's hit rate is proven only synthetically. The history below is how it
+got there.
 
 > **GO / NO-GO:** replay one recorded hour of real screen history. It must
 > produce **≤10 cards**, and you must be willing to defend every one. If it wants

@@ -212,10 +212,11 @@ retention policy one day, and memory must not be.
 ```
 frame / speech ─► Gate (Tier 1)
   moment = one (app, title) stretch; ends when the window changes
-    ended, ≥ 60 s and ≥ 200 chars?
+    drop screen furniture: lines already seen in ≥ 3 capture windows (D22)
+    ended, ≥ 60 s and ≥ 200 chars of what's left?
       words(moment) − stopwords − GENERIC
       keep rare ones: 0 < share ≤ 3 % of text blocks BEFORE the moment start
-      Store.search(OR of up to 6, until = moment start − 30 min)
+      Store.search(OR of up to 6, until = moment start − 2 h: a different sitting)
       hit in another window, sharing ≥ 2 stems, not used before?  ─► Candidate RECALL
   speech ends in "?" (4+ words) ─► same lookup ─► Candidate RECALL
   intent stated, nothing related for 10 min, no FOCUS card for 45 min ─► Candidate FOCUS
@@ -225,9 +226,10 @@ Candidate ─► CardEngine (Tier 2): <now> + <evidence> ─► model, thinking 
 Card ─► cards(ts, type, line, evidence JSON, state='shown') + console
 ```
 
-Only Tier 2 leaves the laptop: the candidate's "now" (≤ 1,500 chars) and
-evidence (≤ 3,000 chars), about 5 to 20 times an hour. Everything before that is
-local and free.
+Tier 2 runs on the local model (D20), so card decisions stay on the laptop. The
+exception is a RECALL the local model says yes to: that one candidate's "now"
+(≤ 1,500 chars) and the matched earlier item go to the cloud model for a second
+opinion (D22). On the recorded data, that happened a few times in 1.18 h.
 
 ---
 

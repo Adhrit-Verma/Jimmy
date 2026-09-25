@@ -182,6 +182,7 @@ convincing and the detector still found the face in the saved JPEG. See D7.
                         jimmy/cards.py  CardEngine (Tier 2)
                           typed questions → local qwen2.5:3b via Ollama (default)
                             FOCUS: {"related"}   RECALL, per item: {"same", "thing"}
+                          RECALL yes → cloud model re-asks the same question (D22)
                           code writes the line: "Same <thing> as <Tue 15:02>"
                             (thing must be in the evidence; time = its timestamp)
                                                       ▼

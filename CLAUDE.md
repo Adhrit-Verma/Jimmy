@@ -15,9 +15,9 @@ and what not to build*. Everything else, including this file, is downstream of i
 **Thesis:** continuous capture is commodity. The product is the gate that decides
 to stay quiet. Build for six good interruptions an evening, not for throughput.
 
-**Current state: Stages 1–3 are built and passing.** Stage 3 (trigger gate: RECALL +
-FOCUS, D19) is GO on count in replay; the human's card review and one continuous
-recorded hour are still owed. The Jimmy core
+**Current state: Stages 1–3 are done.** Stage 3 (trigger gate: RECALL + FOCUS) passed
+its 5-check list on 2026-09-25, blind-judged by AI agents (D19–D22). Next: Stage 4
+(overlay). The Jimmy core
 (the one LLM client, memory, the plugin seam) lives in `jimmy/`, and the ambient
 layer is its first plugin (D14, D16). Stages 4–5 are not started. See `TIMELINE.md`.
 
@@ -65,7 +65,7 @@ cd C:\Code\Jimmy
 .\.venv\Scripts\python.exe -m ambient replay --dry    # Tier 1 candidates only, free
 .\.venv\Scripts\python.exe -m ambient replay          # GO/NO-GO: <= 10 cards in any hour
 .\.venv\Scripts\python.exe -m jimmy focus "finish X"  # state an intent (FOCUS cards)
-.\.venv\Scripts\python.exe tests\test_stage3.py       # 9 checks, no network
+.\.venv\Scripts\python.exe tests\test_stage3.py       # 11 checks, no network
 ```
 
 `ambient run` now runs the gate live: cards print as `[card] …` (`--no-cards` to skip).
@@ -216,6 +216,13 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   the JSON. `cards.parse` takes the last JSON object; don't lower `CARD_MAX_TOKENS`.
 - **The mic hears the room, not just the user.** Videos and calls through the
   speakers get transcribed. Never attribute "heard near mic" speech to the user.
+- **Screen furniture looks like content.** Sidebars, friend lists, your own name
+  and buttons repeat across windows and produced every false RECALL. Lines seen
+  in ≥ 3 capture windows are ignored (D22). RECALL also needs a ≥ 2 h gap and a
+  cloud second opinion.
+- **Freeze an eval set before judging it.** A script that regenerated the pool
+  on each run silently mismatched the labels (D22). Keep labelled sets read-only
+  in their own folder.
 - **Small models copy prompt examples and invent details.** qwen2.5:7b answered
   five candidates with the prompt's example line, then made up "three years
   ago". Never put concrete example outputs in a prompt; ask one yes/no question

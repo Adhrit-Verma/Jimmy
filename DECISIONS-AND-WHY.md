@@ -648,3 +648,71 @@ chat stays on the LLM. And it's a new key and account.
 **Proposed if wanted:** an optional `CARD_ENGINE = "jev"`, compared in replay
 against local 3B on agreement and calibration, sending only the candidate's
 bounded "now" and evidence (≤ 4.5k chars), never raw captures.
+
+---
+
+### D22 — Stage 3 closed on recorded data, checked by blind AI judges
+**Stage 3 · 2026-09-25 · the human's call: no new recording; finish on existing data**
+
+The human declined to record another hour and asked for Stage 3 to be finished
+on the data already captured, verified by AI agents under a time limit, strictly
+against a checklist fixed before any evaluation ran.
+
+**Replay scope:** all recorded history (1.18 h, two sessions) stands in for the
+spec's "one continuous hour". That was the human's decision.
+
+**Method:**
+- Tier 1 was loosened on purpose so it proposed weak candidates too, which
+  Tier 2 has to reject. The pool was frozen before judging.
+- Two blind judge agents (different models), who never saw the model's
+  answers, labelled every candidate; the score uses only their consensus.
+- A third agent wrote 8 recall questions with answers checked against the
+  database, asked Jimmy, and graded for invented facts.
+
+**Round 1 failed check 3** (precision 0.30; RECALL 0/5). The judges said none
+of 21 RECALL candidates deserved a card, and every false card rested on screen
+furniture or continuity:
+- own name ("Adhrit Verma");
+- a friend in the Discord sidebar;
+- a "VoiceOpen Chat" button;
+- a chat title in Claude's always-visible sidebar (this was the "resume" card
+  from D19/D20);
+- the same site opened 12 minutes earlier;
+- a date.
+
+FOCUS fired while the user was in the Claude app, which can serve any intent.
+
+**Fixes, all deterministic except one:**
+1. **Screen furniture:** a line seen in ≥ 3 capture windows is ignored for
+   moments and for matching (`PERSISTENT_LINE_WINDOWS`), learned only from the past.
+2. **A different sitting:** the earlier moment must be ≥ 2 h older
+   (`RECALL_MIN_AGE_S`, was 30 min).
+3. **Neutral apps** (Claude, VS Code, terminals, Explorer) never count as FOCUS
+   drift.
+4. **A date or number is not a thing.**
+5. **Two yeses for RECALL:** local qwen2.5:3b filters, the cloud model (thinking)
+   confirms; an unreachable verifier means silence. Only the local model's rare
+   yeses leave the laptop.
+
+A scoring bug of mine (a backup overwritten on each run, which mismatched the
+labels) was caught before use. The fixed pipeline was then judged afresh on a
+frozen set.
+
+**Stage 3 checklist:**
+
+| # | Check | Bar | Result |
+|---|---|---|---|
+| 1 | Replay cards per hour | ≤ 10 | **0/h** (no intent), **1** with an intent · PASS |
+| 2 | Every shown card defensible | both judges agree | the one card (Tue 15:22 FOCUS, Discord VC vs job intent) sits in an episode **both judges** approved · PASS |
+| 3 | Tier 2 precision, blind consensus | ≥ 0.80 | **0.83**, recall 1.00, judges agree 92 % · PASS |
+| 4 | Jimmy's recall answers | ≥ 80 %, 0 invented | **8/8 correct, 0 invented** · PASS |
+| 5 | Tests and docs | all | 15/15 · 14/14 · 11/11; docs updated · PASS |
+
+**Honest limits:**
+- **No real RECALL positive exists in this data.** The judges found none, so
+  RECALL is proven silent-when-it-should-be, but its hit rate on a real match is
+  only tested synthetically.
+- Tuesday's speech predates the multilingual model, so Hindi there is garbled
+  (the recall agent flagged one useless-but-accurate answer).
+- The judges' criteria included the neutral-tools rule, the product rule adopted
+  in fix 3.
