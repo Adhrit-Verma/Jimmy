@@ -716,3 +716,47 @@ frozen set.
   (the recall agent flagged one useless-but-accurate answer).
 - The judges' criteria included the neutral-tools rule, the product rule adopted
   in fix 3.
+
+---
+
+### D23 — Stage 4: an Electron overlay, Omi-style, on the local API
+**Stage 4 · 2026-09-25 · shell chosen by the human; the rest by me, listed for override**
+
+**Shell: Electron** (the human's pick over Tauri). It's what the spec names and
+what Omi's Windows app uses, and it runs on the Node already installed. Tauri
+would have needed the Rust toolchain (~1 GB) for a lighter window.
+
+**Look:** the widely used GitHub front-end stack the human asked for: React 19,
+Tailwind CSS 4, shadcn/ui-style surfaces, Motion (formerly Framer Motion) for
+spring animation, Lucide icons. The styling is Omi-like and minimal:
+near-black rounded surfaces with a hairline white/10 ring, Windows 11's own
+Segoe UI Variable, a pill at top-centre ("● Jimmy · listening", expanding on
+hover to "Pause 2h" / "Resume") and ≤ 3 cards at top-right (type icon, time,
+the ≤ 7-word line, a time-left bar). Cards fade after 12 s and hold while
+hovered; × dismisses.
+
+**The window:** transparent, frameless, one sheet over the primary display's
+work area; click-through (`setIgnoreMouseEvents(true, {forward})`) except while
+the pointer is over the pill or a card; `focusable: false`, so it never steals
+focus; always on top at `screen-saver` level; no taskbar entry. Per-monitor
+DPI is Electron's default.
+
+**The link, the local API the spec wanted at Stage 2 (deferred by D16):**
+`ambient/api.py`, standard library only. `127.0.0.1` on an OS-picked free
+port, and a random token per run passed to Electron **by environment only**
+(no port config, no token file). Server-Sent Events for state and cards; POST
+for pause, resume, toggle-pause and dismiss. **Only Electron's main process
+talks to it.** The page is sandboxed with context isolation, no Node, and a CSP
+of `connect-src 'none'`; it gets a three-function bridge (`preload.cjs`).
+
+**Lifecycle:** `ambient run` starts the API and launches Electron, if built;
+`--no-overlay` for console only. The overlay quits by itself ~15 s after
+capture stops. Verified live: up, connected, 0 processes left afterwards.
+
+**Controls the spec requires:** "Pause 2h" in the pill, and **Ctrl+Alt+J**
+toggles pause. Pause captures nothing, screen or audio. × on a card marks it
+`dismissed` and starts the gate's 30-min cooldown (D19's `Gate.dismissed`,
+unwired until now).
+
+**Not built:** multi-monitor (primary display only); a chat panel (chat stays
+`jimmy chat`); settings UI; auto-start with Windows; an installer.

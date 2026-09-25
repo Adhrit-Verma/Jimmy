@@ -116,9 +116,26 @@ was sent to the model** for your last question. Only that text leaves the laptop
 at most 6,000 characters, and only when a key is set. Excluded surfaces (banking,
 password managers, private windows) were never captured, so they can't be sent.
 
+### On screen (Stage 4)
+
+`ambient run` also opens a small overlay: a pill at the top of the screen
+("● Jimmy · listening") and, now and then, a card at the top right. It's
+transparent and click-through, never takes focus, and has no taskbar button.
+Hover the pill for **Pause 2h**, or press **Ctrl+Alt+J** anywhere to pause and
+resume; while paused, nothing is captured. Hover a card to keep it, click × to
+dismiss it (Jimmy then stays quiet for 30 minutes).
+
+One-time setup, needs Node:
+
+```powershell
+cd overlay; npm install; npm run build
+```
+
+`ambient run --no-overlay` keeps everything in the terminal.
+
 ### Cards (Stage 3)
 
-While `ambient run` is capturing, Jimmy occasionally prints a card of at most
+While `ambient run` is capturing, Jimmy occasionally shows a card of at most
 seven words. **RECALL** links what you just did to a concrete earlier moment
 ("Same resume review as Tuesday 15:00"). **FOCUS** nudges you back, but only if
 you've told Jimmy what you meant to do:
@@ -151,6 +168,7 @@ ollama pull qwen2.5:3b
 .\.venv\Scripts\python.exe tests\test_stage1.py    # 15 checks, no framework
 .\.venv\Scripts\python.exe tests\test_stage2.py    # 14 checks, mocked network
 .\.venv\Scripts\python.exe tests\test_stage3.py    # 11 checks, no network
+.\.venv\Scripts\python.exe tests\test_stage4.py    # 4 checks, overlay API
 ```
 
 OpenCV prints `net_impl_backend ... Targets are not supported` on import. Harmless.

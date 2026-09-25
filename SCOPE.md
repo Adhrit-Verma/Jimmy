@@ -140,6 +140,20 @@ Whisper (large-v3-turbo).
 
 ---
 
+## Stage 4 — built, and deliberately NOT built
+
+Built (D23): the Electron overlay (pill + cards, Omi-style, React + Tailwind +
+Motion + Lucide), the `127.0.0.1` API it talks through, Pause 2h, Ctrl+Alt+J,
+card dismissal wired to the gate's cooldown.
+
+| Not built | Why |
+|---|---|
+| Multi-monitor | Primary display only; enough to use and judge cards. |
+| Chat in the overlay | `jimmy chat` covers it; a panel is a separate design. |
+| Settings UI, auto-start, installer | Not in the spec's Stage 4; add when it's used daily. |
+
+---
+
 ## Possible future changes
 
 Ideas I'd want to make but that are **not decided**. Each needs evidence or a

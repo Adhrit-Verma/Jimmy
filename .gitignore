@@ -8,3 +8,8 @@ data/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+
+# Overlay build output and packages (rebuilt with npm install && npm run build)
+overlay/node_modules/
+overlay/dist/
+*.png

@@ -15,9 +15,9 @@ and what not to build*. Everything else, including this file, is downstream of i
 **Thesis:** continuous capture is commodity. The product is the gate that decides
 to stay quiet. Build for six good interruptions an evening, not for throughput.
 
-**Current state: Stages 1–3 are done.** Stage 3 (trigger gate: RECALL + FOCUS) passed
-its 5-check list on 2026-09-25, blind-judged by AI agents (D19–D22). Next: Stage 4
-(overlay). The Jimmy core
+**Current state: Stages 1–4 are done.** Stage 3 (trigger gate) passed its 5-check list,
+blind-judged (D19–D22). Stage 4 (Electron overlay: pill + cards, local API) is built
+and verified live (D23). Next: Stage 5 (recall timeline). The Jimmy core
 (the one LLM client, memory, the plugin seam) lives in `jimmy/`, and the ambient
 layer is its first plugin (D14, D16). Stages 4–5 are not started. See `TIMELINE.md`.
 
@@ -68,7 +68,14 @@ cd C:\Code\Jimmy
 .\.venv\Scripts\python.exe tests\test_stage3.py       # 11 checks, no network
 ```
 
-`ambient run` now runs the gate live: cards print as `[card] …` (`--no-cards` to skip).
+`ambient run` runs the gate live and opens the overlay (`--no-cards`, `--no-overlay`).
+
+```powershell
+cd overlay; npm install; npm run build   # once, and after any change under overlay/src
+.\node_modules\electron\dist\electron.exe . --demo                      # see the UI, no Python
+.\node_modules\electron\dist\electron.exe . --demo --snapshot shot.png   # render to a PNG and quit
+.\.venv\Scripts\python.exe tests\test_stage4.py   # 4 checks: API, pause, window flags
+```
 
 Without `NVIDIA_API_KEY`, Jimmy runs **offline**: every answer shows what retrieval
 found instead of a model reply. That is intended, not a bug. The key is read from
@@ -101,6 +108,11 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `tests/test_stage1.py` | stage 1 check. Assert-based, no pytest. |
 | `ambient/gate.py` | Stage 3 Tier 1: moments, RECALL/FOCUS rules, hard limits, `replay()`. No LLM. |
 | `jimmy/cards.py` | Stage 3 Tier 2: typed questions to the local model (default) or cloud; code writes the ≤7-word card. |
+| `ambient/api.py` | Stage 4 local API: 127.0.0.1, per-run token, SSE events, pause/resume/dismiss. Stdlib only. |
+| `overlay/main.cjs` | Electron main: the transparent click-through window, hotkey, all networking. |
+| `overlay/preload.cjs` | the page's only bridge: events in; api / pointer-over-ui out. |
+| `overlay/src/App.jsx` | the pill and cards (React + Tailwind + Motion + Lucide). |
+| `tests/test_stage4.py` | stage 4 check. Real HTTP on 127.0.0.1, no Electron needed. |
 | `tests/test_stage3.py` | stage 3 check. Fake Tier 2 + mocked LLM, no network. |
 | `tests/test_stage2.py` | stage 2 check. The real client runs against `httpx.MockTransport`. |
 | `models/` | YuNet + SFace ONNX. Committed deliberately; small and pinned. |
@@ -220,6 +232,11 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   and buttons repeat across windows and produced every false RECALL. Lines seen
   in ≥ 3 capture windows are ignored (D22). RECALL also needs a ≥ 2 h gap and a
   cloud second opinion.
+- **`npm install` may skip Electron's binary download.** If
+  `overlay/node_modules/electron/dist/electron.exe` is missing, run
+  `node node_modules/electron/install.js` in `overlay/`.
+- **Motion exit animations need direct children.** A card wrapped in a plain
+  `div` inside `AnimatePresence` vanishes instantly instead of sliding out.
 - **Freeze an eval set before judging it.** A script that regenerated the pool
   on each run silently mismatched the labels (D22). Keep labelled sets read-only
   in their own folder.

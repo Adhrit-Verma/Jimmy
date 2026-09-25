@@ -196,12 +196,29 @@ question, so replay can't see the future and tuning in replay transfers to live.
 The dependency direction holds: `ambient/gate.py` imports `jimmy.cards`, never
 `jimmy.llm`, and the engine is built by `jimmy.cards.default_engine()`.
 
+## Overlay (Stage 4)
+
+```
+ ambient run ──► OverlayAPI  127.0.0.1:<free port>, token per run (env only)
+     │             GET /events (SSE: state, card)   POST pause|resume|toggle-pause|dismiss
+     └─ spawns ──► Electron main (overlay/main.cjs): the only network client
+                     transparent, click-through, focusable:false, no taskbar, on top
+                     Ctrl+Alt+J → toggle-pause; quits ~15 s after capture stops
+                       │ IPC (preload.cjs: 3 functions)
+                       ▼
+                   page (React + Tailwind + Motion): pill top-centre, ≤ 3 cards top-right
+                     sandboxed, no Node, CSP connect-src 'none'
+```
+
+A card flows: `Gate` → `on_card` → `cards` table + `OverlayAPI.publish` → SSE →
+Electron main → IPC → the page. Dismissal flows back: × → IPC → main → POST
+`/dismiss` → `cards.state = 'dismissed'` + `Gate.dismissed()` (30-min cooldown).
+
 ## Boundaries for later stages
 
 - **Stage 3 continues** with TIP (web search provider) and ACTION (an approval
   step, never straight from model output), once RECALL/FOCUS pass the GO gate.
-- **Stage 4 (overlay)** is Electron, the first caller in another process. This
-  is where the local API on `127.0.0.1` finally gets built (D16). It must not
-  open until the Stage 3 GO gate passes.
+- **Stage 4 follow-ups:** multi-monitor, a chat panel in the overlay, auto-start
+  with Windows, an installer (D23).
 - **Stage 5 (recall timeline)** is mostly free: FTS5 is already in place, the
   thumbnails are already blurred and already on a timeline.
