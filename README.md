@@ -1,340 +1,332 @@
-# Jimmy — ambient layer
+<p align="center">
+  <img src="docs/img/hero-answer.png" alt="Jimmy answering 'what was that fellowship application I saw on Tuesday?': evidence screenshots on the left, a spoken answer on the right" width="100%">
+</p>
 
-An always-on desktop assistant for Windows 11, built as a subsystem of Jimmy.
+<h1 align="center">Jimmy</h1>
 
-> Continuous capture is commodity. The product is the gate that decides to stay
-> quiet.
+<p align="center">
+  <b>An always-on assistant for Windows 11 that remembers what you saw and heard,<br>
+  answers when you ask, and otherwise stays quiet.</b>
+</p>
 
-**Status: Stages 1 and 2 work.** It captures your screen and speech, turns them
-into searchable text, and stores nothing it shouldn't. And you can ask Jimmy about
-it in the terminal: "what was I reading yesterday?" There's no overlay yet, and
-Jimmy doesn't interrupt you yet; that's Stage 3, the part that matters most.
+<p align="center">
+  <img alt="Windows 11" src="https://img.shields.io/badge/Windows%2011-0078D6?logo=windows&logoColor=white">
+  <img alt="Python 3.12" src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white">
+  <img alt="Electron" src="https://img.shields.io/badge/overlay-Electron%20%2B%20React-47848F?logo=electron&logoColor=white">
+  <img alt="Local first" src="https://img.shields.io/badge/capture-stays%20on%20your%20laptop-2ea44f">
+  <img alt="Status" src="https://img.shields.io/badge/stages-5%20of%205%20done-8b5cf6">
+</p>
 
-| Doc | What's in it |
-|---|---|
-| [`AMBIENT_LAYER.md`](AMBIENT_LAYER.md) | the build spec — the authority |
-| [`CLAUDE.md`](CLAUDE.md) | orientation for AI sessions; verified environment facts |
-| [`ARCHITECTURE.md`](ARCHITECTURE.md) | components, threading, why each choice |
-| [`DATA-FLOW.md`](DATA-FLOW.md) | the tick path, the audio path, the schema |
-| [`DECISIONS-AND-WHY.md`](DECISIONS-AND-WHY.md) | the decision log, with evidence |
-| [`SCOPE.md`](SCOPE.md) | what's in, what's out, what's owed |
-| [`TIMELINE.md`](TIMELINE.md) | stage status and acceptance gates |
+<p align="center">
+  <a href="#talk-to-it">Talk to it</a> ·
+  <a href="#what-it-looks-like">Screenshots</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#privacy-by-construction">Privacy</a> ·
+  <a href="#project-docs">Docs</a>
+</p>
 
 ---
 
-## Setup
+> **Continuous capture is commodity. The product is the gate that decides to stay quiet.**
+> Jimmy is built for six good interruptions an evening, not for throughput.
 
-Needs Windows 11, an NVIDIA GPU, and **Python 3.12** — not 3.14, whose wheels
-don't exist for this stack yet.
+- **It remembers.** Your screen's text and what's said near the mic become one
+  searchable history, with a blurred screenshot for every moment.
+- **You just ask.** Say *"Jimmy, …"* out loud. You don't type, and you don't
+  need to know the right keywords.
+- **It shows its work.** Every answer sits beside the actual moments it came from.
+- **It knows when to shut up.** At most 4 cards an hour, never two within 10
+  minutes. Silence is the default.
+
+---
+
+## Talk to it
+
+While `ambient run` is going, say **"Jimmy,"** and then your question.
+
+| You say | Jimmy |
+|---|---|
+| *"Jimmy, what was that fellowship application I saw on Tuesday?"* | Searches Tuesday by meaning, not just words, and answers aloud. The moments it used appear on the left. |
+| *"Jimmy, and when does it close?"* | A follow-up. It remembers the conversation for a few minutes. |
+| *"Jimmy, show me the best match"* | Opens that screenshot full size. *"Open the second one"* works too. |
+| *"Jimmy, what's on my screen?"* | Describes the window in front of you, with a large view of it. |
+| *"Jimmy, what's this?"* | Can't tell if you mean **now** or **earlier**, so it asks, then waits for your answer. No wake word needed for the reply. |
+| *"Jimmy, can you hear me?"* · *"what can you do?"* | Just talks. No search. |
+
+It understands days and times: *today*, *yesterday afternoon*, *on Tuesday*,
+*between 2 and 3*, *the last 20 minutes*. Say just **"Jimmy"** and pause if you
+want to think first. To type instead, press **Ctrl + Alt + Space**.
+
+---
+
+## What it looks like
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/img/ask-back.png" alt="Jimmy asking: do you mean what's on your screen right now, or something you saw earlier?"><br>
+      <b>It asks when it isn't sure.</b> "What's this?" could mean the screen
+      now or one from last week. Answer out loud or tap a button.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/img/cards.png" alt="A RECALL card and a FOCUS card"><br>
+      <b>Cards, rarely.</b> <b>RECALL</b> links what you're doing to a concrete
+      earlier moment. <b>FOCUS</b> nudges you back, but only if you told Jimmy what
+      you meant to do.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/img/screen-now.png" alt="Jimmy describing the article on screen right now"><br>
+      <b>What's on my screen.</b> It reads the window you're on and
+      answers from that alone, never from an earlier answer.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/img/show-me.png" alt="An evidence screenshot opened full size"><br>
+      <b>See the moment.</b> "Show me the best match" (or a click) opens the
+      evidence full size.
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" valign="top">
+      <img src="docs/img/timeline.png" alt="The timeline window: search results, a preview, and a minute-by-minute strip"><br>
+      <b>The timeline</b> (<b>Ctrl + Alt + T</b>). Your day as a strip of blurred screenshots,
+      one per minute. Search it the way you remember it: <i>"fellowship deadline"</i>
+      finds the page even if those words never appeared together.
+    </td>
+  </tr>
+</table>
+
+<sub>Every screenshot above is the real overlay and the real model, run on an invented set
+of pages ("Northwind Fellowship", "Alex Rivera"), so no personal data appears.</sub>
+
+---
+
+## Quick start
+
+**You need:** Windows 11, an NVIDIA GPU, **Python 3.12** (not 3.14: the ML
+wheels don't exist there yet), Node.js, and [Ollama](https://ollama.com).
+
+**1. Install.**
 
 ```powershell
 cd C:\Code\Jimmy
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+cd overlay; npm install; npm run build; cd ..
 ```
 
-The face models in `models/` are already committed. Whisper downloads its weights
-on first run (~40 s once, then cached).
-
-**Optional — OCR.** Without the Tesseract binary, OCR is inert and canvas-rendered
-apps and video contribute no text. Normal apps are unaffected. Install it and put
-it on PATH to close that gap; no code change needed.
-
-**For Jimmy's answers — an NVIDIA API key.** Free at build.nvidia.com: sign in,
-open any model, click **Get API Key** (it starts with `nvapi-`), then in your own
-terminal:
-
-```bash
-setx NVIDIA_API_KEY "nvapi-your-key-here"
-```
-
-Without it, Jimmy still runs, in offline mode. Every answer shows what it
-*found* in your captures and memory, which is useful on its own and is exactly
-what would have been sent to the model.
-
----
-
-## Using it
-
-Start with `doctor`. It tells you what actually works on your machine rather than
-what should:
-
-```powershell
-.\.venv\Scripts\python.exe -m ambient doctor
-```
-
-```
-  ok    screen (dxgi)   1920x1080 bgr
-  ok    uia text        Code.exe | 4784 chars from 317 nodes in 231ms
-  ok    face models     models present
-  FAIL  ocr             no tesseract binary; UIA-only (canvas/video lost)
-  ok    whisper/cuda    cuda devices=1 compute=['int8', 'float16', ...]
-  ....  mic test        speak now for 3 s into 'Headset Microphone (Realtek(R) Audio)' ...
-  ok    audio (wasapi)  Headset Microphone (Realtek(R) Audio): peak 9678, hears speech-level sound
-  ok    store           C:\Code\Jimmy\data\ambient.db frames=0 text=0
-```
-
-Then capture, and search:
-
-```powershell
-.\.venv\Scripts\python.exe -m ambient run                      # until ctrl-c
-.\.venv\Scripts\python.exe -m ambient run --seconds 60 --no-audio
-.\.venv\Scripts\python.exe -m ambient search "trigger gate"
-.\.venv\Scripts\python.exe -m ambient stats
-```
-
-One query spans what you saw and what was said:
-
-```
-Mon 21 Sep 01:37  [screen/uia]  bus.py - Jimmy
-    ...the [trigger] [gate] is a cost control as much as...
-Mon 21 Sep 01:41  [audio/mic]   mic
-    ...tune the [trigger] [gate] before stage four...
-```
-
-Tunables all live in [`ambient/config.py`](ambient/config.py), each with its
-reasoning next to it. Change knobs there, not in code.
-
-### Talking to Jimmy
-
-```powershell
-.\.venv\Scripts\python.exe -m jimmy chat
-.\.venv\Scripts\python.exe -m jimmy ask "what was I reading about sqlite yesterday?"
-.\.venv\Scripts\python.exe -m jimmy remember "standup is at 10:30 on weekdays"
-.\.venv\Scripts\python.exe -m jimmy doctor
-```
-
-Jimmy understands days (*today*, *yesterday*, *this morning*, *on Tuesday*,
-*last 20 minutes*) and clock times (*between 10:40 and 11:10*, *at 3pm
-yesterday*, *after 11*, *before noon*). A question with a time but no topic
-("what was I doing this morning?") gets a timeline of the apps you had open and
-what was said. Captures are samples, not a recording, so when there's a gap
-Jimmy says nothing is known about it rather than guessing.
-
-In chat, `/remember <fact>` keeps something, and **`/context` shows exactly what
-was sent to the model** for your last question. Only that text leaves the laptop,
-at most 6,000 characters, and only when a key is set. Excluded surfaces (banking,
-password managers, private windows) were never captured, so they can't be sent.
-
-### On screen (Stage 4)
-
-`ambient run` also opens a small overlay: a pill at the top of the screen
-("● Jimmy · listening") and, now and then, a card at the top right. It's
-transparent and click-through, never takes focus, and has no taskbar button.
-Hover the pill for **Pause 2h**, or press **Ctrl+Alt+J** anywhere to pause and
-resume; while paused, nothing is captured. Hover a card to keep it, click × to
-dismiss it (Jimmy then stays quiet for 30 minutes).
-
-One-time setup, needs Node:
-
-```powershell
-cd overlay; npm install; npm run build
-```
-
-`ambient run --no-overlay` keeps everything in the terminal.
-
-### Just ask: "Jimmy, …"
-
-While `ambient run` is going, **say "Jimmy," and your question**:
-
-> *"Jimmy, what was that consulting application I saw on Friday?"*
-
-The pill shows *thinking…*, then the answer appears on its own:
-- **Right: the answer**, as a short explanation: what it was, when and where,
-  and why Jimmy thinks so. It's also **read aloud**; click **Stop voice** to
-  silence it.
-- **Left: the evidence.** The actual moments, as blurred screenshots with day,
-  time, app and page title, and the relevant line with your words highlighted.
-  The best match is first and highlighted.
-
-It searches across all your days, or just the one you name ("on Tuesday",
-"yesterday afternoon", "between 2 and 3"). **Click any screenshot to see it big.**
-
-Jimmy knows what kind of question you're asking:
-- **About the past**, as above: *"Jimmy, what did I read about OAuth yesterday?"*
-- **About your screen right now**: *"Jimmy, what's on my screen?"*, *"Jimmy,
-  summarise this page."* You get a large view of the window you're on, with the
-  answer beside it.
-- **Just talking**: *"Jimmy, can you hear me?"*, *"Jimmy, what can you do?"* A
-  normal reply, no search.
-
-**It's a conversation.** Within a few minutes of a question, follow up
-naturally: after the McKinsey question, *"Jimmy, and when does it close?"* gets
-"Monday, October 5th, 11:59 pm". *"Jimmy, show me the best match"* (or "open
-the second one") opens that screenshot big.
-
-**If it can't tell what you mean, it asks.** *"Jimmy, what's this?"* could be
-your screen now or something from earlier, so Jimmy asks *"Do you mean what's
-on your screen right now, or something you saw earlier?"* and waits 20 seconds.
-Just answer (*"the one on my screen"*, *"the one from Friday"*), no "Jimmy"
-needed, or click one of the two buttons.
-
-- Saying just **"Jimmy"** works too: pause, then ask.
-- **To type instead:** hover the pill and click **Ask**, or press
-  **Ctrl+Alt+Space**.
-- **Close an answer** with its ×; otherwise it fades after a minute.
-
-Nothing extra to install: speech recognition is the Whisper model already
-listening, and the voice is Windows' own.
-
-### Recording a demo
-
-```powershell
-.\.venv\Scripts\python.exe -m ambient run --demo
-```
-
-Once the overlay is up, it walks through these steps. Everything is real except
-that the questions are typed in for you, and it's spoken aloud (about 3 minutes):
-1. a card;
-2. a chat;
-3. the McKinsey question;
-4. the screenshot big;
-5. a follow-up;
-6. *"what's this?"*, with Jimmy asking back;
-7. *"what can you do?"*.
-
-Switch to the window you want described before it gets to *"what's this?"*.
-To run your own script: `--demo my_script.txt`. The format is at the top of
-`ambient/demo.py`.
-
-### Stopping Jimmy
-
-Any of these shuts it down cleanly: capture stops, the overlay closes, and
-everything is saved.
-- Hover the pill and click **Quit**.
-- Press **Ctrl+C** in the terminal running `ambient run`.
-- Closing that terminal window also stops it, but the other two are cleaner.
-
-To pause instead of stopping, use **Pause 2h** or **Ctrl+Alt+J**.
-
-### Timeline (Stage 5)
-
-Hover the pill and click **Timeline**, or press **Ctrl+Alt+T**, to open a window
-with your day as a strip of blurred screenshots, one per minute. Step through
-with ← and →. Each moment shows what was new on screen and anything heard
-nearby.
-
-Search it the way you remember it: *"that consulting application on Friday"*
-finds the McKinsey form without you knowing the name. Search matches meaning,
-not just words, using the local `bge-m3` model, so nothing leaves the laptop.
-
-```bash
-ollama pull bge-m3
-```
-
-```bash
-.\.venv\Scripts\python.exe -m ambient index
-```
-
-The first command is a one-time download. The second indexes history captured
-before this existed; after that, `ambient run` indexes as it goes.
-
-### Cards (Stage 3)
-
-While `ambient run` is capturing, Jimmy occasionally shows a card of at most
-seven words. **RECALL** links what you just did to a concrete earlier moment
-("Same resume review as Tuesday 15:00"). **FOCUS** nudges you back, but only if
-you've told Jimmy what you meant to do:
-
-```powershell
-.\.venv\Scripts\python.exe -m jimmy focus "finish the stage 3 gate"
-.\.venv\Scripts\python.exe -m ambient replay     # what it would have said over your history
-```
-
-Silence is the default: at most 4 cards an hour, never two within 10 minutes,
-and FOCUS nudges at most once every 45 minutes.
-
-**Card decisions run on your laptop,** through [Ollama](https://ollama.com) with
-`qwen2.5:3b`, so screen text stays on the machine. The one exception: before a
-RECALL card is shown, the cloud model double-checks it, and only those rare
-candidates leave the laptop. Set `JIMMY_RECALL_VERIFY=none` to stay fully local,
-at lower accuracy. The model only
-answers yes/no questions ("is this the same thing?"); Jimmy writes the card
-itself from words in the evidence and real timestamps, so a card can't contain
-something made up. Chat answers still use the NVIDIA model. `jimmy doctor`
-checks both.
+**2. Pull the two local models.** One decides cards; the other powers meaning search.
 
 ```bash
 ollama pull qwen2.5:3b
 ```
 
-### Checks
-
-```powershell
-.\.venv\Scripts\python.exe tests\test_stage1.py    # 15 checks, no framework
-.\.venv\Scripts\python.exe tests\test_stage2.py    # 14 checks, mocked network
-.\.venv\Scripts\python.exe tests\test_stage3.py    # 11 checks, no network
-.\.venv\Scripts\python.exe tests\test_stage4.py    # 5 checks, overlay
-.\.venv\Scripts\python.exe tests\test_stage5.py    # 13 checks, recall + voice + ask-back
+```bash
+ollama pull bge-m3
 ```
 
-OpenCV prints `net_impl_backend ... Targets are not supported` on import. Harmless.
+**3. Add a key for spoken answers** (optional). It's free at
+[build.nvidia.com](https://build.nvidia.com): open any model, click **Get API
+Key**, then:
+
+```bash
+setx NVIDIA_API_KEY "nvapi-your-key-here"
+```
+
+Without a key Jimmy still works, offline. Each answer shows what it *found*,
+which is exactly what would have been sent to the model.
+
+**4. Check, then run.**
+
+```powershell
+.\.venv\Scripts\python.exe -m ambient doctor   # what actually works on this machine
+.\.venv\Scripts\python.exe -m ambient run      # capture + overlay, until you quit
+```
+
+`doctor` asks you to speak for 3 seconds to prove the mic hears you. Whisper
+downloads its weights on the first run and caches them after that.
+
+### Everyday controls
+
+| Action | How |
+|---|---|
+| Ask | Say *"Jimmy, …"*, or **Ctrl + Alt + Space** to type |
+| Pause capture (and resume) | **Ctrl + Alt + J**, or hover the pill → **Pause 2h** |
+| Open the timeline | **Ctrl + Alt + T**, or hover the pill → **Timeline** |
+| Silence an answer | **Stop voice** on the answer panel |
+| Dismiss a card | Hover it, click **×**. Jimmy then stays quiet for 30 minutes |
+| Quit cleanly | Hover the pill → **Quit**, or **Ctrl + C** in the terminal |
+
+<details>
+<summary><b>More commands</b>: search, chat, focus, replay, demo mode</summary>
+
+```powershell
+# Search your history (keywords + meaning, within any time you name)
+.\.venv\Scripts\python.exe -m ambient search "consulting application on Friday"
+.\.venv\Scripts\python.exe -m ambient index     # backfill meaning search for older captures
+.\.venv\Scripts\python.exe -m ambient stats
+
+# Chat in the terminal
+.\.venv\Scripts\python.exe -m jimmy chat         # /context shows exactly what was sent
+.\.venv\Scripts\python.exe -m jimmy ask "what was I reading yesterday?"
+.\.venv\Scripts\python.exe -m jimmy remember "standup is at 10:30 on weekdays"
+.\.venv\Scripts\python.exe -m jimmy doctor
+
+# Cards
+.\.venv\Scripts\python.exe -m jimmy focus "finish the fellowship essay"   # enables FOCUS nudges
+.\.venv\Scripts\python.exe -m ambient replay     # what the gate would have said over your history
+
+# Variations
+.\.venv\Scripts\python.exe -m ambient run --no-overlay        # terminal only
+.\.venv\Scripts\python.exe -m ambient run --seconds 60 --no-audio
+```
+
+**Recording a demo.** `ambient run --demo` walks through a scripted tour in
+about 3 minutes, spoken aloud: a card, a chat, a question about the past, the
+screenshot opened big, a follow-up, *"what's this?"* with Jimmy asking back, and
+*"what can you do?"*. Only the questions are scripted. Capture, search, the
+model and the voice are all real. Put the window you want described in front
+before the *"what's this?"* step. To use your own script: `--demo my_script.txt`
+(the format is at the top of `ambient/demo.py`).
+
+</details>
 
 ---
 
-## What it stores — and what it refuses to
+## How it works
+
+```mermaid
+flowchart LR
+  subgraph laptop["Your laptop: capture never leaves it"]
+    direction LR
+    scr["Screen<br/>DXGI frames + UI text"] --> gate0{"Exclusions<br/>+ face blur"}
+    mic["Microphone<br/>Whisper large-v3-turbo"] --> gate0
+    gate0 --> db[("SQLite + FTS5<br/>bge-m3 vectors<br/>blurred thumbnails")]
+    db --> cards["Trigger gate<br/>rules, then qwen2.5:3b"]
+    db --> ask["Voice Q&A<br/>route: chat / screen / recall / ask back"]
+    cards --> ui["Overlay<br/>Electron + React"]
+    ask --> ui
+  end
+  ask -. "only the evidence it shows you" .-> llm[("Cloud model<br/>NVIDIA Nemotron")]
+```
+
+- **Capture is gated.** A 160×90 change detector skips about half of all ticks.
+  Text comes from UI Automation, with Chromium's accessibility tree woken up so
+  browsers and Electron apps are readable.
+- **Search is hybrid.** Keyword matches (FTS5) and meaning matches (bge-m3,
+  local) are fused, so *"consulting application"* finds a page titled
+  "McKinsey Forward".
+- **The model never writes a card.** It answers yes/no questions. Code writes
+  the card from words that exist in the evidence and real timestamps, so a card
+  can't contain anything invented.
+- **One LLM client** (`jimmy/llm.py`) serves the whole repo. Captured text only
+  reaches it inside a `<context>` block, below a rule to ignore any instructions
+  found there.
+
+The details are in [`ARCHITECTURE.md`](ARCHITECTURE.md) and [`DATA-FLOW.md`](DATA-FLOW.md).
+
+---
+
+## Privacy by construction
+
+These are absent code paths, not settings that happen to be off.
 
 | Stored | Never stored |
 |---|---|
 | Window app and title | Any raw, unblurred frame |
-| Exact UI text, OCR text | Face embeddings or any biometric template |
-| Blurred thumbnails (~26 KB) | Anything from an excluded surface |
-| Transcribed speech | Raw audio — only the transcript survives |
+| UI text and OCR text | Face embeddings or any biometric template |
+| Blurred thumbnails | Anything from an excluded surface |
+| Transcribed speech | Raw audio: only the transcript survives |
 | Face **count** per frame | Face identity, names, cross-day links |
 
-The first real hour used **2.0 MB**, almost all of it thumbnails. That's about
-0.5 GB a month at 8 hours a day. The change detector has since been made more
-sensitive, so expect somewhat more. It's all on your own disk, and there's no
-retention policy yet (see `SCOPE.md`).
-
-**Which microphone.** Capture uses the Windows default input. `ambient doctor`
-asks you to speak for 3 seconds and tells you whether it heard you. To use a
-different mic, for example the laptop's own when no headset is on, set
-`MIC_DEVICE` in `ambient/config.py` to part of its name, such as
-`"Microphone Array"`. If the mic hears nothing speech-loud for 10 minutes while
-capturing, it says so once.
-
-**Excluded surfaces are never captured at all:** password managers, banking and
-payment domains, and private/incognito windows. Add your own in
-`data\exclusions.txt`, one per line:
-
-```
-exe:mysecret.exe
-title:payroll
-url:internal\.example\.com
-```
-
-**Faces are blurred before anything is written.** The clean frame exists only as a
-local variable inside one tick. Faces are told apart *within a single capture
-window* so a moment can report how many people were present, and that memory is
-dropped when the window closes — the same person tomorrow is a new stranger. There
-is no `faces` table and no `people` table, and that absence is the design.
-
-The blur is verified against the detector, not by eye: the test re-runs face
-detection on the saved JPEG and requires zero hits.
+- **Faces are blurred before anything is written.** The clean frame exists only
+  inside one tick. The blur is verified against the detector, not by eye: a test
+  re-runs face detection on the saved JPEG and requires zero hits. There is no
+  `faces` table and no `people` table. That absence is the design.
+- **Excluded surfaces are never captured:** password managers, banking and
+  payment sites, private/incognito windows, and Jimmy's own windows. Add your own
+  in `data\exclusions.txt`, one per line:
+  ```
+  exe:mysecret.exe
+  title:payroll
+  url:internal\.example\.com
+  ```
+- **The mic pauses on sensitive screens,** so an OTP read aloud never reaches a
+  transcript. The one exception: if another app (Teams, Zoom, Meet) is using the
+  mic, recording continues so a meeting isn't lost.
+- **Recording others is off.** System audio (the far end of a call) is not
+  captured. That's a consent problem, not a feature flag.
+- **What leaves the laptop:** only the evidence shown with an answer (at most
+  6,000 characters, and only with a key set), plus the rare RECALL card
+  candidates the cloud double-checks. Set `JIMMY_RECALL_VERIFY=none` to keep
+  cards fully local.
 
 A face embedding is a biometric template under India's DPDP Act whether or not
-it's persisted. This design shrinks exposure substantially. It does not take it
-to zero.
+it's persisted. This design shrinks that exposure substantially; it does not
+take it to zero.
 
-**Recording others is off by default.** System/loopback audio is disabled
-(`CAPTURE_LOOPBACK = False`) — mic only. Recording the far end of a call is a
-consent problem, not a feature flag, and the recording indicator and per-call
-opt-out that should accompany it aren't built yet.
+<details>
+<summary><b>Storage, microphone and tuning</b></summary>
 
-**The mic pauses on sensitive surfaces.** While a password manager, banking page or
-private window is focused, audio isn't recorded, so an OTP read aloud never
-reaches a transcript. The exception is a call: if another app, such as Teams,
-Zoom or a browser tab on Meet, is using the mic, recording continues so the
-meeting isn't lost.
+- **Storage.** Measured at 25.8 MB per captured hour with 640 px thumbnails
+  (about 6 GB a month at 8 hours a day). Thumbnails are now 1280 px so they're
+  readable when opened big, which costs roughly 2–3× that. It's all on your own
+  disk, and there's no retention policy yet.
+- **Which microphone.** Capture uses the Windows default input. To pick another,
+  set `MIC_DEVICE` in `ambient/config.py` to part of its name, for example
+  `"Microphone Array"`. A quiet room can read as near-silent because of noise
+  suppression, so test by speaking during `ambient doctor`.
+- **OCR is optional.** Without the Tesseract binary, canvas-rendered apps and
+  video contribute no text. Normal apps are unaffected.
+- **Every tunable** lives in [`ambient/config.py`](ambient/config.py), with its
+  reasoning next to it.
+
+</details>
 
 ---
 
-## What's next
+## Status
 
-Stages 1 and 2 are done and checked live. Stage 3 builds the trigger gate, which
-is the actual product, and it can't ship until a replayed hour produces ten cards
-or fewer, every one defensible. That replay needs a few real hours captured on the
-current pipeline first.
+| Stage | What it delivers | |
+|---|---|:-:|
+| 1 · Capture | Screen and speech into searchable text, faces blurred, exclusions first | ✅ |
+| 2 · Jimmy core | One LLM client, memory, the plugin seam, terminal chat | ✅ |
+| 3 · Trigger gate | RECALL and FOCUS cards, blind-judged before shipping | ✅ |
+| 4 · Overlay | The pill, cards and answers: transparent, click-through, never steals focus | ✅ |
+| 5 · Recall | Hybrid keyword + meaning search and the timeline | ✅ |
+| + · Voice | "Jimmy, …", spoken answers, conversation, asking back | ✅ |
 
-Full status in [`TIMELINE.md`](TIMELINE.md).
+What's next lives in [`SCOPE.md`](SCOPE.md) → *Possible future changes*. The
+biggest one: the model reads text, not pixels, so windows that UI Automation
+can't reach (canvases, video, some apps' main panes) aren't described yet.
+
+<details>
+<summary><b>Checks</b>: 59 assert-based checks, no framework</summary>
+
+```powershell
+.\.venv\Scripts\python.exe tests\test_stage1.py    # 15 · capture, blur, store
+.\.venv\Scripts\python.exe tests\test_stage2.py    # 14 · LLM client, mocked network
+.\.venv\Scripts\python.exe tests\test_stage3.py    # 11 · trigger gate, no network
+.\.venv\Scripts\python.exe tests\test_stage4.py    #  5 · overlay API and window flags
+.\.venv\Scripts\python.exe tests\test_stage5.py    # 14 · recall, voice, ask-back, demo
+```
+
+OpenCV prints `net_impl_backend ... Targets are not supported` on import. It's harmless.
+
+</details>
+
+---
+
+## Project docs
+
+| Doc | What's in it |
+|---|---|
+| [`AMBIENT_LAYER.md`](AMBIENT_LAYER.md) | The build spec: the authority on what to build and what not to |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Components, threading, and why each choice was made |
+| [`DATA-FLOW.md`](DATA-FLOW.md) | The capture tick, the audio path, the schema |
+| [`DECISIONS-AND-WHY.md`](DECISIONS-AND-WHY.md) | Every non-obvious call, with the evidence behind it |
+| [`SCOPE.md`](SCOPE.md) | What's in, what's out, what's owed |
+| [`TIMELINE.md`](TIMELINE.md) | Stage status and acceptance gates |
+| [`CLAUDE.md`](CLAUDE.md) | Orientation for AI coding sessions; verified environment facts |

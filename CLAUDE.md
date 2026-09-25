@@ -21,7 +21,7 @@ list, blind-judged (D19–D22). Stage 4 is the Electron overlay (D23). Stage 5 i
 keyword + meaning recall and a timeline window (D24). Remaining work lives in
 `SCOPE.md` → Possible future changes. The Jimmy core
 (the one LLM client, memory, the plugin seam) lives in `jimmy/`, and the ambient
-layer is its first plugin (D14, D16). Stages 4–5 are not started. See `TIMELINE.md`.
+layer is its first plugin (D14, D16). See `TIMELINE.md`.
 
 ---
 
@@ -80,7 +80,7 @@ cd overlay; npm install; npm run build   # once, and after any change under over
 .\.venv\Scripts\python.exe tests\test_stage4.py   # 5 checks: API, pause, window flags, effect bodies
 .\.venv\Scripts\python.exe -m ambient index       # backfill meaning-search vectors (bge-m3)
 .\.venv\Scripts\python.exe -m ambient search "consulting application on Friday"   # keywords + meaning
-.\.venv\Scripts\python.exe tests\test_stage5.py   # 13 checks: recall, voice ask, router, clarify, commands, self-exclusion, demo
+.\.venv\Scripts\python.exe tests\test_stage5.py   # 14 checks: recall, voice ask, router, clarify, screen, commands, self-exclusion, demo
 ```
 
 Timeline window: pill → **Timeline**, or **Ctrl+Alt+T**. Snapshot it on real data
@@ -132,6 +132,7 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `tests/test_stage3.py` | stage 3 check. Fake Tier 2 + mocked LLM, no network. |
 | `tests/test_stage2.py` | stage 2 check. The real client runs against `httpx.MockTransport`. |
 | `models/` | YuNet + SFace ONNX. Committed deliberately; small and pinned. |
+| `docs/img/` | README screenshots: the real overlay and model on **invented** pages, never real captures (they hold personal data). |
 | `data/` | the capture DB and blurred thumbnails. Never commit. |
 
 ---

@@ -1030,3 +1030,34 @@ Correct beats continuous here; the screen moves on.
 can't reach (the Claude app's chat, canvases, video) get a "can't read it"
 answer, not a description. Sending the screenshot to a vision model would fix
 that; not in scope yet.
+
+### D30 — On screen, a revisited page is content, not furniture
+
+**Found while shooting README screenshots:** asked about an article that had
+been open in 4 separate sessions, Jimmy said it "can't read the full content",
+although every line was captured.
+
+**Cause:**
+- The furniture filter (D22) drops any line seen in ≥ 3 capture windows. A
+  page you keep returning to repeats exactly like a sidebar does, so its whole
+  body was dropped.
+- Separately, the screen context was cut to the *oldest* 3.9k characters of
+  the window, when "now" wants the newest.
+
+**Fix (screen answers only):**
+- If filtering would remove more than half the window's text, the raw text is
+  used.
+- The context keeps the newest text.
+- Test: `test_screen_keeps_a_revisited_page`.
+
+**Not fixed here: recall.** `hybrid()` and `gather_evidence()` use the same
+filter, so a page revisited in 3+ sessions can drop out of search. The obvious
+rule ("furniture = seen under ≥ 2 window titles") would bring back D22's false
+matches: the Claude app's sidebar sits under the constant title "Claude".
+Changing it needs the frozen D22 eval set, so it's tracked as its own task
+rather than guessed at.
+
+**README screenshots (`docs/img/`)** are the real overlay and model on
+invented pages, rendered by Electron into a throwaway DB
+(`JIMMY_AMBIENT_DATA` / `JIMMY_DATA`). Real captures hold personal data (an
+email address showed up in a live answer), so they never go in the repo.
