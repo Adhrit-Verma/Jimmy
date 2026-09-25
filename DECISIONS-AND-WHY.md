@@ -494,3 +494,157 @@ model's first word ~0.8 s.
 
 **Not fixed, noted:** answers from `jimmy ask` pay ~2 s of Python start-up per
 question. Chat keeps one process, so it doesn't. Relevant again at Stage 4.
+
+---
+
+### D19 — Stage 3: rules decide whether to look, the model whether to speak
+**Stage 3 · 2026-09-25 · answers from the human, one question at a time**
+
+| Question | Answer | Over |
+|---|---|---|
+| Card types first | **RECALL + FOCUS** | all four now; RECALL only |
+| Tier 1 | **local rules** | a local 3B LLM (D15 stays proposed); cloud decides all |
+| Speech languages | **English + Hindi/Hinglish** | English only |
+
+**Tier 1 (`ambient/gate.py`), no LLM:**
+- A *moment* is a stretch in one window (app + title). **RECALL is considered
+  only when a moment ends**, as the spec requires, if it lasted ≥ 60 s with
+  ≥ 200 chars. It takes up to 6 distinctive words and looks for an earlier
+  moment elsewhere, ≥ 30 min old, sharing ≥ 2 of them by 6-letter stem.
+  "Distinctive" means the word is in > 0 % and ≤ 3 % of all *earlier* text
+  blocks, and not on a small generic list.
+- A **question heard aloud** (ends in "?", 4+ words) runs the same lookup.
+- **FOCUS needs a stated intent** (`jimmy focus "…"`); Jimmy never guesses it.
+  It fires after 10 min with nothing on screen related to the intent, once per
+  drift, and never again within 45 min of a FOCUS card.
+- Hard limits before any cloud call: ≤ 4 cards per rolling hour, ≥ 10 min
+  between cards, ≤ 20 candidates/h, no repeats of an earlier item, and a 30 min
+  cooldown after a dismissal (wired at Stage 4).
+- Replay uses the same class, and every search and rarity count is bounded to
+  before the moment, so a replayed card could have fired live.
+
+**Tier 2 (`jimmy/cards.py`):** the one LLM client, thinking on (cards aren't
+latency-bound), JSON out: silence or one line of ≤ 7 words. A RECALL line must
+name the concrete earlier thing and when. Anything malformed or too long is
+silence.
+
+**Found while building, and fixed:**
+- **With thinking on, this model writes its reasoning into the reply**, and at
+  400 tokens it ran out before the JSON: 2 of 7 decisions were "unparseable".
+  Now the last JSON object is taken and the budget is 1,500.
+- **Generic words matched moments** ("open/close", "file/python",
+  "forward/enter"): 71 minutes of history is too little for rarity alone. So
+  there's a generic list plus stem-dedup ("responded/response" = 1).
+- **FOCUS nagged:** the same nudge 3× in 46 min. Now one per 45 min.
+- **A vague card fired** ("Same backend focus as Adhrit's profile") and its gap
+  blocked a better one. The prompt now requires a concrete thing and a when.
+- **The free tier returned 503 "overloaded"** in 2 of 4 replays. The card engine
+  waits 5 s and tries once more.
+- **Speech credited to the user:** "you spoke about…" came from a video playing
+  through the speakers. Snippets are now "heard near mic", with a prompt rule.
+  Not fully fixed: one answer still guessed "with someone nearby".
+
+**Whisper → `large-v3-turbo`, language auto-detect.** Measured against
+distil-small.en and small on TTS clips: English identical and perfect; turbo
++1 GB VRAM, 4 s in 0.6 s. The Hinglish test was **inconclusive**: an English TTS
+voice reading romanized Hindi was detected as English by all three. Real Hindi
+accuracy is unverified; Hindi comes out in Devanagari, so an English-word search
+won't find it.
+
+**Replay on real history (1.18 h, two sessions of 25 + 46 min):** 5 candidates,
+2 cards ("Same resume review as Tuesday 15:00", "Same Node.js backend course
+as Tue 15:00"), 3 silence, 2 held by the gap. **GO on count.** Still owed: the
+human's judgement that each card is defensible, and one continuous recorded
+hour, which the spec asks for.
+
+---
+
+### D20 — Card decisions run on a local model (Ollama); the model picks, code writes
+**Stage 3 · 2026-09-25 · asked for by the human · amends D19's Tier 2**
+
+The human asked to fix the open issues with a local model via Ollama. Ollama
+0.32.13 was already installed with qwen2.5 3B, 7B and 14B. It speaks the same
+OpenAI-compatible API, so this is **the same client class with a second
+endpoint** (`jimmy.llm.local_llm()`), not a second client. Invariant 7 holds
+in spirit: one client implementation; cloud and local are two endpoints.
+
+**The 11 real candidates from replay, through each model:**
+
+| Approach | Model | Per decision | Outcome |
+|---|---|---|---|
+| model judges + writes the line | cloud super-120b, thinking | 3–19 s | 5 cards, sensible; 1 unparseable |
+| same | qwen2.5:3b | ~0.8 s | 1 card; misses the good RECALL |
+| same | qwen2.5:7b | 2–4 s | 10 cards; **"Same error as Tuesday's Teams chat" ×5, the prompt's own example** |
+| examples removed + grounding check | qwen2.5:7b | 2–4 s | grounded words, **invented times** ("three years ago" for 3 days) |
+| model picks, code writes, multi-criteria prompt | qwen2.5:3b / 7b | 1 / 2 s | silence on ~all; 3B's own reason said "unrelated" and it still chose silence |
+| **one plain question per call, code writes** | **qwen2.5:3b** | **~1 s, 3.3 GB VRAM** | **agrees with the cloud** on every FOCUS; RECALL "Same Sunandha UI/UX resume as Tue 15:02" |
+| same | qwen2.5:7b | 2–5 s | missed that RECALL; slower |
+
+**What changed, and why each step:**
+1. **The model never writes the card.** It answers a typed question: for
+   FOCUS, `{"related": bool}`; for RECALL, per earlier item, `{"same": bool,
+   "thing": "1-3 words copied from it"}`. Code composes "Same ⟨thing⟩ as
+   ⟨Tue 15:02⟩", where the thing must occur in that evidence item and the time
+   is its real timestamp, or "Back to: ⟨intent's own words⟩". Nothing on a card
+   can be invented.
+2. **One question per call.** Asked to weigh "helpful, supported, not already
+   in mind" at once, small models defaulted to silence against their own
+   reasoning. One yes/no each, they answer correctly. Restraint now comes from
+   Tier 1's limits, not from the model's mood.
+3. **The app name is not a thing.** "Same Claude as Tue 15:00" was dropped:
+   same app ≠ same thing. Checked in code and in the prompt.
+4. **qwen2.5:3b is the default** (`LOCAL_MODEL`): best agreement, fastest,
+   fits beside Whisper turbo (~1 GB). `CARD_ENGINE = "cloud"` switches back to
+   super-120b with thinking. Chat answers stay on the cloud model.
+
+**What this fixes:** screen text no longer leaves the laptop for card
+decisions; free-tier 503s and empty answers no longer affect cards; invented
+words and times are impossible by construction.
+
+**What it doesn't fix:** speech attribution (the mic hears videos). That needs
+diarization, not a bigger model. Real Hindi accuracy is still unverified.
+
+**Final replay (1.18 h, local 3B):** 5 candidates → **1 card**, "Same Sunandha
+UI/UX resume as Tue 15:02". With a stated intent: +2 FOCUS "Back to: build the
+Jimmy stage 3", then held by the 45-min rule. GO on count; review owed (D19).
+
+Ollama unloads an idle model after ~5 min, so the first card after a pause
+takes ~10 s to load. Fine for cards, which aren't latency-bound, and it frees
+VRAM when idle.
+
+---
+
+### D21 — Jev (TypeSafe AI): where it would fit, and what it would cost
+**Stage 3+ · 2026-09-25 · PROPOSED: needs the human's decision and an API key**
+
+Jev (TypeSafe AI, early access 2026-09-15) is a "System One" model: state +
+typed questions in, typed answers with **calibrated probabilities** out, in
+one pass. Primitives: *Noul* (yes/no → probability), *Choice* (option +
+per-option probabilities + confidence), *Score*. Several questions per request,
+at `POST https://api.typesafe.ai/v1/systemone`. Hosted only. TypeSafe says it
+doesn't train on customer data; zero retention is enterprise-only.
+
+**D20 already shaped Tier 2 the way Jev works:** typed questions in, decisions
+out, code writes the words. Jev would slot in behind `CardEngine` as a third
+endpoint, with no other change.
+
+**Where it would help, most useful first:**
+1. **Tier 2 as calibrated probabilities.** `same` and `related` become
+   P(yes). One threshold (e.g. speak at P ≥ 0.8) replaces prompt tuning, and
+   the ≤ 10 cards/hour GO gate gets tuned by moving a number in replay.
+2. **Batched evidence reranking.** One request scores all earlier items for
+   "same thing?" instead of 3 sequential local calls.
+3. **Speech attribution.** A Choice (user / someone in the room / media
+   playback) per segment, with confidence, so low-confidence speech is never
+   credited to the user.
+4. **Memory confidence.** Grade remembered facts, as the open-source
+   `jevmory` does.
+
+**Costs and risks:** screen text would leave the laptop again, to a third
+party (D20 just brought card decisions home). It's early access, with no
+published latency, rate limits or processing region. It can't write text, so
+chat stays on the LLM. And it's a new key and account.
+
+**Proposed if wanted:** an optional `CARD_ENGINE = "jev"`, compared in replay
+against local 3B on agreement and calibration, sending only the candidate's
+bounded "now" and evidence (≤ 4.5k chars), never raw captures.

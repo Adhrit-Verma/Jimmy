@@ -122,6 +122,24 @@ are why the flag is off, not merely a nice-to-have alongside it.
 
 ---
 
+## Stage 3 — built, and deliberately NOT built
+
+Built (D19): Tier 1 local rules (moments, RECALL on moment end and on questions
+heard aloud, FOCUS on stated intent, hard limits), Tier 2 cloud decision (≤ 7
+words), live console cards, `ambient replay`, `jimmy focus`, and multilingual
+Whisper (large-v3-turbo).
+
+| Not built | Why |
+|---|---|
+| TIP cards | Need a web search provider; the human chose to add it after the gate passes. |
+| ACTION cards | Need an approval flow; non-negotiable 1. After the gate passes. |
+| A local LLM in Tier 1 | Tier 1 stays rules. The local model (D20) is Tier 2 only. |
+| Jev (TypeSafe AI) | Proposed (D21): calibrated Tier 2 probabilities, but hosted-only, early access, and screen text would leave the laptop. Needs the human's call and a key. |
+| Dismissing a card | No UI yet. `Gate.dismissed()` exists; Stage 4's overlay calls it. |
+| Telling the user's voice from the room | The mic hears videos and calls; needs diarization. |
+
+---
+
 ## Possible future changes
 
 Ideas I'd want to make but that are **not decided**. Each needs evidence or a

@@ -165,12 +165,40 @@ convincing and the detector still found the face in the saved JPEG. See D7.
 
 ---
 
+## Trigger gate (Stage 3)
+
+```
+ bus.tick ── captured frame (app, title, new lines) ──┐
+ audio worker ── transcribed speech ──────────────────┤
+                                                      ▼
+                        ambient/gate.py  Gate (Tier 1, local rules, no LLM)
+                          moment ends → RECALL lookup (past only, rare words)
+                          question heard → RECALL lookup
+                          stated intent + 10 min drift → FOCUS
+                          hard limits: 4/h, 10-min gap, 20 candidates/h, no repeats
+                                                      │ Candidate
+                                          queue(32) → worker thread "gate-tier2"
+                                                      ▼
+                        jimmy/cards.py  CardEngine (Tier 2)
+                          typed questions → local qwen2.5:3b via Ollama (default)
+                            FOCUS: {"related"}   RECALL, per item: {"same", "thing"}
+                          code writes the line: "Same <thing> as <Tue 15:02>"
+                            (thing must be in the evidence; time = its timestamp)
+                                                      ▼
+                        console "[card] …"  +  cards table
+```
+
+Tier 2 runs on its own thread so a cloud call (1–3 s, longer with thinking) never
+delays a capture tick. `ambient replay` drives the *same* `Gate` from
+`Store.events()` synchronously. Every lookup is bounded to before the moment in
+question, so replay can't see the future and tuning in replay transfers to live.
+The dependency direction holds: `ambient/gate.py` imports `jimmy.cards`, never
+`jimmy.llm`, and the engine is built by `jimmy.cards.default_engine()`.
+
 ## Boundaries for later stages
 
-- **Stage 3 (trigger gate)** runs inside the ambient process, reads the store,
-  asks `Jimmy.ask` (or a leaner sibling) for a card, and writes `cards`. The
-  table already exists and is unused; that is the seam. Actions go through an
-  approval step, never straight from model output.
+- **Stage 3 continues** with TIP (web search provider) and ACTION (an approval
+  step, never straight from model output), once RECALL/FOCUS pass the GO gate.
 - **Stage 4 (overlay)** is Electron, the first caller in another process. This
   is where the local API on `127.0.0.1` finally gets built (D16). It must not
   open until the Stage 3 GO gate passes.

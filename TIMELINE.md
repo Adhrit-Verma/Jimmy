@@ -8,7 +8,7 @@ result whenever either changes.
  [x] 1  Context bus             built 2026-09-21, acceptance met
  [ ] 1b Face stage              built; threshold untuned against real footage
  [x] 2  Jimmy core + hookup     built 2026-09-21, live acceptance met 2026-09-22
- [ ] 3  Trigger gate + cards    not started — this is the product
+ [~] 3  Trigger gate + cards    built 2026-09-25; GO on count, card review owed (D19)
  [ ] 4  Overlay                 not started — gated on stage 3 GO
  [ ] 5  Recall timeline         not started — mostly free once 1 exists
 ```
@@ -120,23 +120,30 @@ doctor` all green, 0.81 s to first word.
 
 ---
 
-## Stage 3 — Trigger gate + card engine · **not started · this is the product**
-
-Spend the most time here. Ships to a console log, no UI.
-
-Tier 1 is local rules plus a small model deciding whether anything changed enough
-to be worth speaking, with a hard rate limit, a cooldown after dismissal, and no
-repeats in a session. Tier 2 turns a surviving delta into silence or exactly one
-card: `TIP`, `FOCUS`, `ACTION` or `RECALL`.
-
-The `cards` table already exists and is unused — that is the seam.
+## Stage 3 — Trigger gate + card engine · **built · GO on count, review owed**
 
 > **GO / NO-GO:** replay one recorded hour of real screen history. It must
 > produce **≤10 cards**, and you must be willing to defend every one. If it wants
 > to fire more, tune the gate and replay. **Do not proceed to Stage 4.**
 
-Stage 1 makes this replay possible: an hour of real history is now recordable and
-queryable, which is exactly what the gate has to be tuned against.
+Built 2026-09-25 (D19): RECALL + FOCUS, Tier 1 local rules (`ambient/gate.py`),
+Tier 2 the cloud model (`jimmy/cards.py`), live in `ambient run` (console +
+`cards` table) and in `ambient replay`. TIP (web search) and ACTION (approval
+flow) come after the gate passes.
+
+**Replay, 1.18 h of real history (two sessions, 25 + 46 min), local qwen2.5:3b
+deciding (D20):** 5 candidates → **1 card**, "Same Sunandha UI/UX resume as Tue
+15:02". Worst hour: 1. **GO on count.** With a stated intent: 2 FOCUS nudges,
+then the 45-min hold. (The earlier cloud-written cards are superseded: code now
+writes every card from the evidence.)
+
+**Still owed before the GO is real:**
+1. The human reads those cards and says whether each is defensible.
+2. One *continuous* recorded hour, as the spec asks (the longest so far is 46 min).
+3. A replay with a real stated intent (`jimmy focus`), so FOCUS is judged on
+   real behaviour. The FOCUS replay so far used a made-up intent.
+
+**Verification:** 9/9 in `tests\test_stage3.py`; Stages 1 and 2 still 15/15, 14/14.
 
 ---
 

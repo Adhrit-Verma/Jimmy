@@ -207,6 +207,30 @@ retention policy one day, and memory must not be.
 
 ---
 
+## The trigger gate (Stage 3)
+
+```
+frame / speech ─► Gate (Tier 1)
+  moment = one (app, title) stretch; ends when the window changes
+    ended, ≥ 60 s and ≥ 200 chars?
+      words(moment) − stopwords − GENERIC
+      keep rare ones: 0 < share ≤ 3 % of text blocks BEFORE the moment start
+      Store.search(OR of up to 6, until = moment start − 30 min)
+      hit in another window, sharing ≥ 2 stems, not used before?  ─► Candidate RECALL
+  speech ends in "?" (4+ words) ─► same lookup ─► Candidate RECALL
+  intent stated, nothing related for 10 min, no FOCUS card for 45 min ─► Candidate FOCUS
+  limits: cooldown · ≤ 4 cards/h · ≥ 10 min gap · no repeat · ≤ 20 candidates/h
+Candidate ─► CardEngine (Tier 2): <now> + <evidence> ─► model, thinking on
+  reply ─► last JSON {"speak", "line", "why"} ─► line ≤ 7 words? ─► Card
+Card ─► cards(ts, type, line, evidence JSON, state='shown') + console
+```
+
+Only Tier 2 leaves the laptop: the candidate's "now" (≤ 1,500 chars) and
+evidence (≤ 3,000 chars), about 5 to 20 times an hour. Everything before that is
+local and free.
+
+---
+
 ## Ephemerality, concretely
 
 A face embedding is a biometric template under India's DPDP Act whether or not it

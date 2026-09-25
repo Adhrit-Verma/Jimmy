@@ -116,11 +116,38 @@ was sent to the model** for your last question. Only that text leaves the laptop
 at most 6,000 characters, and only when a key is set. Excluded surfaces (banking,
 password managers, private windows) were never captured, so they can't be sent.
 
+### Cards (Stage 3)
+
+While `ambient run` is capturing, Jimmy occasionally prints a card of at most
+seven words. **RECALL** links what you just did to a concrete earlier moment
+("Same resume review as Tuesday 15:00"). **FOCUS** nudges you back, but only if
+you've told Jimmy what you meant to do:
+
+```powershell
+.\.venv\Scripts\python.exe -m jimmy focus "finish the stage 3 gate"
+.\.venv\Scripts\python.exe -m ambient replay     # what it would have said over your history
+```
+
+Silence is the default: at most 4 cards an hour, never two within 10 minutes,
+and FOCUS nudges at most once every 45 minutes.
+
+**Card decisions run on your laptop,** through [Ollama](https://ollama.com) with
+`qwen2.5:3b`, so screen text never leaves the machine for them. The model only
+answers yes/no questions ("is this the same thing?"); Jimmy writes the card
+itself from words in the evidence and real timestamps, so a card can't contain
+something made up. Chat answers still use the NVIDIA model. `jimmy doctor`
+checks both.
+
+```bash
+ollama pull qwen2.5:3b
+```
+
 ### Checks
 
 ```powershell
 .\.venv\Scripts\python.exe tests\test_stage1.py    # 15 checks, no framework
 .\.venv\Scripts\python.exe tests\test_stage2.py    # 14 checks, mocked network
+.\.venv\Scripts\python.exe tests\test_stage3.py    # 9 checks, no network
 ```
 
 OpenCV prints `net_impl_backend ... Targets are not supported` on import. Harmless.

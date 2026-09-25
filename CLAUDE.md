@@ -15,10 +15,11 @@ and what not to build*. Everything else, including this file, is downstream of i
 **Thesis:** continuous capture is commodity. The product is the gate that decides
 to stay quiet. Build for six good interruptions an evening, not for throughput.
 
-**Current state: Stages 1 and 2 are built and passing, and Stage 2's live acceptance
-is met** (real key, real captures, 2026-09-22). The Jimmy core
+**Current state: Stages 1–3 are built and passing.** Stage 3 (trigger gate: RECALL +
+FOCUS, D19) is GO on count in replay; the human's card review and one continuous
+recorded hour are still owed. The Jimmy core
 (the one LLM client, memory, the plugin seam) lives in `jimmy/`, and the ambient
-layer is its first plugin (D14, D16). Stages 3–5 are not started. See `TIMELINE.md`.
+layer is its first plugin (D14, D16). Stages 4–5 are not started. See `TIMELINE.md`.
 
 ---
 
@@ -60,7 +61,14 @@ cd C:\Code\Jimmy
 .\.venv\Scripts\python.exe -m jimmy ask "what was I reading yesterday?"
 .\.venv\Scripts\python.exe -m jimmy remember "standup is at 10:30"
 .\.venv\Scripts\python.exe tests\test_stage2.py       # 14 checks, mocked network
+
+.\.venv\Scripts\python.exe -m ambient replay --dry    # Tier 1 candidates only, free
+.\.venv\Scripts\python.exe -m ambient replay          # GO/NO-GO: <= 10 cards in any hour
+.\.venv\Scripts\python.exe -m jimmy focus "finish X"  # state an intent (FOCUS cards)
+.\.venv\Scripts\python.exe tests\test_stage3.py       # 9 checks, no network
 ```
+
+`ambient run` now runs the gate live: cards print as `[card] …` (`--no-cards` to skip).
 
 Without `NVIDIA_API_KEY`, Jimmy runs **offline**: every answer shows what retrieval
 found instead of a model reply. That is intended, not a bug. The key is read from
@@ -91,6 +99,9 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `jimmy/core.py` | `Jimmy.ask` (whole answer: `str`) and `Jimmy.ask_stream` (`Iterator[str]`): gather from memory + plugins → bounded context → LLM. The prompt lives here. |
 | `jimmy/__main__.py` | CLI: `chat`, `ask`, `remember`, `doctor`. |
 | `tests/test_stage1.py` | stage 1 check. Assert-based, no pytest. |
+| `ambient/gate.py` | Stage 3 Tier 1: moments, RECALL/FOCUS rules, hard limits, `replay()`. No LLM. |
+| `jimmy/cards.py` | Stage 3 Tier 2: typed questions to the local model (default) or cloud; code writes the ≤7-word card. |
+| `tests/test_stage3.py` | stage 3 check. Fake Tier 2 + mocked LLM, no network. |
 | `tests/test_stage2.py` | stage 2 check. The real client runs against `httpx.MockTransport`. |
 | `models/` | YuNet + SFace ONNX. Committed deliberately; small and pinned. |
 | `data/` | the capture DB and blurred thumbnails. Never commit. |
@@ -116,10 +127,14 @@ setting that defaults to off.
    surfaces without checking them against `Exclusions` is a regression.
 7. **One LLM client: `jimmy/llm.py`.** Nothing in `ambient/` may import an HTTP
    library or construct an `LLM`. `test_only_one_llm_client` scans the source.
+   It has two endpoints: the cloud (NVIDIA) for chat, and local Ollama
+   (`local_llm()`) for card decisions (D20).
 8. **Captured text is untrusted data.** It reaches the model only inside
    `<context>`, below a rule telling it to ignore instructions found there. A web
    page saying "ignore previous instructions" is exactly what gets captured. This
    matters most once Stage 3 gives Jimmy actions.
+9. **A model never writes a card.** It answers typed questions; `jimmy/cards.py`
+   composes the line from words that exist in the evidence and real timestamps.
 
 ---
 
@@ -156,6 +171,13 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   suppression gates it. **Near-silence doesn't mean a dead mic.** Test by speaking
   during `ambient doctor`. The laptop mic is "Microphone Array (AMD)"; choose it
   with `MIC_DEVICE` in `ambient/config.py`.
+- **Storage with the D18 gate:** 25.8 MB/h (~6.2 GB/month at 8 h/day), ~49 % of
+  ticks skipped. Replay of 1.18 h real history: 5 candidates → 2 cards (D19).
+- **Whisper is `large-v3-turbo`** (multilingual, auto-detect): ~1 GB VRAM, 4 s of
+  audio in 0.6 s. Real Hindi accuracy is unverified (D19).
+- **Ollama 0.32.13 is installed** with qwen2.5:3b / 7b / 14b. **qwen2.5:3b decides
+  cards** (D20): ~1 s per question, 3.3 GB VRAM, ~10 s cold load (idle unload
+  after ~5 min). 7B was slower and worse; 14B doesn't fit in VRAM.
 - **NVIDIA endpoint** `https://integrate.api.nvidia.com/v1` lists its models
   **without a key**, but **listed ≠ usable by this account**: several listed
   models return 404 "not found for account" or never answer. Only a round trip
@@ -190,6 +212,16 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   `--session` per question, or you're testing the history, not retrieval.
 - **A change gate can look fine and miss text.** Test gates against a
   one-message chat scroll on a dark theme, not against random noise.
+- **With thinking on, the model writes its reasoning into the reply text**, before
+  the JSON. `cards.parse` takes the last JSON object; don't lower `CARD_MAX_TOKENS`.
+- **The mic hears the room, not just the user.** Videos and calls through the
+  speakers get transcribed. Never attribute "heard near mic" speech to the user.
+- **Small models copy prompt examples and invent details.** qwen2.5:7b answered
+  five candidates with the prompt's example line, then made up "three years
+  ago". Never put concrete example outputs in a prompt; ask one yes/no question
+  per call; let code write anything the user sees (D20).
+- **Escaping in shell heredocs mangles backslashes** (`\t` became a tab). Edit
+  docs with Windows paths using the Edit tool, not a heredoc'd script.
 - Our own recording process shows up in Windows' mic-in-use registry. Anything
   asking "is someone else on the mic" must skip `sys.executable` /
   `sys._base_executable`, as `audio.other_app_using_mic` does.
