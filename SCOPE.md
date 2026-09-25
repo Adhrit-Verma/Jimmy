@@ -154,6 +154,20 @@ card dismissal wired to the gate's cooldown.
 
 ---
 
+## Stage 5 — built, and deliberately NOT built
+
+Built (D24): hybrid keyword + meaning search (bge-m3, local), a background
+indexer, `ambient index` / `ambient search`, the timeline window (day nav,
+search, preview, minute scrub strip), and meaning search in `jimmy ask`.
+
+| Not built | Why |
+|---|---|
+| An ANN / sqlite-vec index | Brute force is fine for weeks of captures; switch when a month-wide query is slow. |
+| Retention / pruning | Still owed (see above); it must prune embeddings with their captures. |
+| Clicking a timeline moment to "ask Jimmy about it" | A natural next step; chat stays `jimmy chat` for now. |
+
+---
+
 ## Possible future changes
 
 Ideas I'd want to make but that are **not decided**. Each needs evidence or a
@@ -163,9 +177,8 @@ human call before it moves into a stage. When one is adopted, log it in
 **Performance and feel** (from D15):
 - **Local 3B LLM as the Tier 1 gate.** Benchmark tokens/s and card quality on the
   4050 first. Adopt only if a short card lands in < 1 s beside Whisper.
-- **Local embedding model + vector index** for RAG (e.g. `sqlite-vec` in the same
-  SQLite, so there's no second database). Stage 2 shipped without it (D16); the
-  spec puts it in Stage 5. Pull it forward only if keyword recall misses.
+- **A vector index** (`sqlite-vec` or ANN) instead of brute force, once history
+  spans months (embeddings themselves shipped in Stage 5, D24).
 - **Thinking on, per call, for heavy jobs.** Chat runs with thinking off (~1 s
   vs ~2.5 s, D17). Syntheses like "summarise my week" or `ACTION` planning may
   earn the extra 1.5 s. Measure on real questions first.

@@ -114,7 +114,17 @@ cards(id INT PK, ts INT, type TEXT, line TEXT, evidence TEXT, state TEXT)
 **There is no `faces` table and no `people` table.** That absence is the design,
 and `tests/test_stage1.py` asserts it.
 
-`cards` is created but unused — it is the seam Stage 3 writes into.
+`cards` holds every card shown (Stage 3); `state` becomes `dismissed` when × is
+clicked in the overlay (Stage 4).
+
+```sql
+embeddings(id INT PK, ref INT /* > 0 text_blocks.id, < 0 -audio_segments.id */,
+           ts INT, model TEXT, chunk TEXT /* <= 800 chars */, vec BLOB /* float32, unit length */)
+```
+
+Stage 5 (D24): a background thread embeds new captures every 60 s with local
+bge-m3; `ambient index` backfills. Pruning captures must prune their
+embeddings too.
 
 Timestamps are epoch **milliseconds** throughout.
 

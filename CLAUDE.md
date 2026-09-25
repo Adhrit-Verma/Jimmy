@@ -15,9 +15,10 @@ and what not to build*. Everything else, including this file, is downstream of i
 **Thesis:** continuous capture is commodity. The product is the gate that decides
 to stay quiet. Build for six good interruptions an evening, not for throughput.
 
-**Current state: Stages 1–4 are done.** Stage 3 (trigger gate) passed its 5-check list,
-blind-judged (D19–D22). Stage 4 (Electron overlay: pill + cards, local API) is built
-and verified live (D23). Next: Stage 5 (recall timeline). The Jimmy core
+**Current state: all five stages are done.** Stage 3 (trigger gate) passed its 5-check
+list, blind-judged (D19–D22). Stage 4 is the Electron overlay (D23). Stage 5 is hybrid
+keyword + meaning recall and a timeline window (D24). Remaining work lives in
+`SCOPE.md` → Possible future changes. The Jimmy core
 (the one LLM client, memory, the plugin seam) lives in `jimmy/`, and the ambient
 layer is its first plugin (D14, D16). Stages 4–5 are not started. See `TIMELINE.md`.
 
@@ -75,7 +76,14 @@ cd overlay; npm install; npm run build   # once, and after any change under over
 .\node_modules\electron\dist\electron.exe . --demo                      # see the UI, no Python
 .\node_modules\electron\dist\electron.exe . --demo --snapshot shot.png   # render to a PNG and quit
 .\.venv\Scripts\python.exe tests\test_stage4.py   # 4 checks: API, pause, window flags
+.\.venv\Scripts\python.exe -m ambient index       # backfill meaning-search vectors (bge-m3)
+.\.venv\Scripts\python.exe -m ambient search "consulting application on Friday"   # keywords + meaning
+.\.venv\Scripts\python.exe tests\test_stage5.py   # 5 checks, fake embeddings, no Ollama
 ```
+
+Timeline window: pill → **Timeline**, or **Ctrl+Alt+T**. Snapshot it on real data
+by serving the API (see `tests/test_stage5.py` for the hooks) and running
+`electron . --timeline --snapshot shot.png`.
 
 Without `NVIDIA_API_KEY`, Jimmy runs **offline**: every answer shows what retrieval
 found instead of a model reply. That is intended, not a bug. The key is read from
@@ -108,6 +116,9 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `tests/test_stage1.py` | stage 1 check. Assert-based, no pytest. |
 | `ambient/gate.py` | Stage 3 Tier 1: moments, RECALL/FOCUS rules, hard limits, `replay()`. No LLM. |
 | `jimmy/cards.py` | Stage 3 Tier 2: typed questions to the local model (default) or cloud; code writes the ≤7-word card. |
+| `ambient/recall.py` | Stage 5: chunk + index (bge-m3), meaning search, hybrid (RRF) with furniture filter, timeline API reads. |
+| `overlay/src/Timeline.jsx` | the timeline window: day nav, search, preview, minute scrub strip. |
+| `tests/test_stage5.py` | stage 5 check. A collision-free fake embedding; real HTTP; thumb path traversal. |
 | `ambient/api.py` | Stage 4 local API: 127.0.0.1, per-run token, SSE events, pause/resume/dismiss. Stdlib only. |
 | `overlay/main.cjs` | Electron main: the transparent click-through window, hotkey, all networking. |
 | `overlay/preload.cjs` | the page's only bridge: events in; api / pointer-over-ui out. |
@@ -190,6 +201,8 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
 - **Ollama 0.32.13 is installed** with qwen2.5:3b / 7b / 14b. **qwen2.5:3b decides
   cards** (D20): ~1 s per question, 3.3 GB VRAM, ~10 s cold load (idle unload
   after ~5 min). 7B was slower and worse; 14B doesn't fit in VRAM.
+- **bge-m3 (Ollama)**: 1024-d vectors; warm load 5.8 s; 32 chunks ≈ 4 s; ~2.5 min
+  of indexing per captured hour. Needs its own long timeout: first use loads 1.2 GB.
 - **NVIDIA endpoint** `https://integrate.api.nvidia.com/v1` lists its models
   **without a key**, but **listed ≠ usable by this account**: several listed
   models return 404 "not found for account" or never answer. Only a round trip
@@ -237,6 +250,9 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   `node node_modules/electron/install.js` in `overlay/`.
 - **Motion exit animations need direct children.** A card wrapped in a plain
   `div` inside `AnimatePresence` vanishes instantly instead of sliding out.
+- **Never use `hash()` in a test fixture.** It's randomised per run, and a hashed
+  fake embedding collided ("mckinsey" with a word in a Google ADK line). Use a
+  vocabulary dict.
 - **Freeze an eval set before judging it.** A script that regenerated the pool
   on each run silently mismatched the labels (D22). Keep labelled sets read-only
   in their own folder.

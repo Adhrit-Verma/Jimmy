@@ -760,3 +760,58 @@ unwired until now).
 
 **Not built:** multi-monitor (primary display only); a chat panel (chat stays
 `jimmy chat`); settings UI; auto-start with Windows; an installer.
+
+---
+
+### D24 — Stage 5: hybrid recall and a timeline window
+**Stage 5 · 2026-09-25 · UI and model chosen by the human**
+
+| Question | Answer | Over |
+|---|---|---|
+| Where the timeline opens | **an overlay window** (pill button, Ctrl+Alt+T) | a browser page; terminal only |
+| Embedding model | **bge-m3** (multilingual, ~1.2 GB, local via Ollama) | embeddinggemma; nomic-embed-text |
+
+**Search = keywords + meaning.** FTS5 (exact words) and bge-m3 vectors (1024-d,
+cosine, brute force in numpy) are merged by reciprocal-rank fusion, bounded by
+the same time phrases Jimmy already parses. The embedding call lives in the
+core's one client (`jimmy.core.embed`); `ambient/recall.py` only stores and
+compares. Text never leaves the laptop for this. If the model is down, search
+falls back to keywords (tested).
+
+**Indexing:** new text and speech is split into ≤ 800-char chunks on line
+boundaries and embedded by a background thread every 60 s during `ambient
+run`; `ambient index` backfills. Measured: the 1.18 h history became 1,004
+chunks in ~3 min (~2.5 min per captured hour); warm load 5.8 s; 32 chunks in
+~4 s. The first call ever timed out at the chat client's 60 s, so embeddings get
+their own 300 s timeout.
+
+**Screen furniture again.** The first timeline search listed Claude's sidebar
+chat list three times and Chrome's "Address and search bar". Search results
+now drop lines seen in ≥ 3 capture windows (the same rule as the gate, D22) and
+collapse duplicates. "Consulting firm application on Friday" then returned the
+McKinsey form for all top 6.
+
+**Meaning search is used only when a question has a topic.** "What was I doing
+on Tuesday" has none, so meaning search would return arbitrary nearest text;
+the activity timeline answers it instead.
+
+**The window:** frameless, dark, focusable, the same React/Tailwind/Motion look:
+- day navigation;
+- a search box (with a `#timeline?q=` deep link);
+- a big blurred preview with what was new on screen and speech heard within
+  2 min;
+- a scrub strip with one thumbnail per minute (← → step frame by frame);
+- a results list that jumps to the moment.
+
+Thumbnails reach the page as data URLs through Electron's main process;
+`/thumb` refuses any path outside the thumbnail folder (tested with `../`).
+
+**Acceptance: met.** "What was that consulting program application I saw on
+Friday?" → *"the McKinsey.org Forward program application form in Chrome around
+14:09 … applications close on Monday, October 5th."* The question never said
+McKinsey. "Someone explaining some agent toolkit" → Google ADK, attributed as
+heard near the mic.
+
+**Honest limits:** chunk text keeps furniture that later becomes furniture (only
+display filters it). Brute-force vectors are fine for weeks, not years. bge-m3,
+Whisper and qwen2.5:3b together are tight in 6 GB; Ollama unloads idle models.

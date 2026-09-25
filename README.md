@@ -133,6 +133,28 @@ cd overlay; npm install; npm run build
 
 `ambient run --no-overlay` keeps everything in the terminal.
 
+### Timeline (Stage 5)
+
+Hover the pill and click **Timeline**, or press **Ctrl+Alt+T**, to open a window
+with your day as a strip of blurred screenshots, one per minute. Step through
+with ← and →. Each moment shows what was new on screen and anything heard
+nearby.
+
+Search it the way you remember it: *"that consulting application on Friday"*
+finds the McKinsey form without you knowing the name. Search matches meaning,
+not just words, using the local `bge-m3` model, so nothing leaves the laptop.
+
+```bash
+ollama pull bge-m3
+```
+
+```bash
+.\.venv\Scripts\python.exe -m ambient index
+```
+
+The first command is a one-time download. The second indexes history captured
+before this existed; after that, `ambient run` indexes as it goes.
+
 ### Cards (Stage 3)
 
 While `ambient run` is capturing, Jimmy occasionally shows a card of at most
@@ -169,6 +191,7 @@ ollama pull qwen2.5:3b
 .\.venv\Scripts\python.exe tests\test_stage2.py    # 14 checks, mocked network
 .\.venv\Scripts\python.exe tests\test_stage3.py    # 11 checks, no network
 .\.venv\Scripts\python.exe tests\test_stage4.py    # 4 checks, overlay API
+.\.venv\Scripts\python.exe tests\test_stage5.py    # 5 checks, recall timeline
 ```
 
 OpenCV prints `net_impl_backend ... Targets are not supported` on import. Harmless.

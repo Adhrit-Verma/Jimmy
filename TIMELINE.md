@@ -10,7 +10,7 @@ result whenever either changes.
  [x] 2  Jimmy core + hookup     built 2026-09-21, live acceptance met 2026-09-22
  [x] 3  Trigger gate + cards    done 2026-09-25: all 5 checks pass, blind-judged (D22)
  [x] 4  Overlay                 built 2026-09-25: Electron pill + cards, pause, hotkey (D23)
- [ ] 5  Recall timeline         not started — mostly free once 1 exists
+ [x] 5  Recall timeline         done 2026-09-25: hybrid search + timeline window, acceptance met (D24)
 ```
 
 ---

@@ -214,6 +214,24 @@ A card flows: `Gate` → `on_card` → `cards` table + `OverlayAPI.publish` → 
 Electron main → IPC → the page. Dismissal flows back: × → IPC → main → POST
 `/dismiss` → `cards.state = 'dismissed'` + `Gate.dismissed()` (30-min cooldown).
 
+## Recall timeline (Stage 5)
+
+```
+ capture ──► text_blocks / audio_segments
+               │ every 60 s (indexer thread) / `ambient index`
+               ▼
+            chunks (≤ 800 chars) ──► jimmy.core.embed ──► Ollama bge-m3 ──► embeddings table
+ query ──► time_window + hybrid():  FTS5 rank ─┐
+                                    cosine rank ─┴► RRF ─► drop furniture, dedupe ─► results
+                                    (no model? keywords only)
+ used by: jimmy ask (AmbientPlugin), `ambient search`, the timeline window (/search)
+```
+
+The timeline window is a second Electron window (same bundle, `#timeline`),
+focusable and frameless. It reads `/timeline`, `/frame`, `/thumb` and
+`/search` through the main process like everything else; the page still has
+no network access.
+
 ## Boundaries for later stages
 
 - **Stage 3 continues** with TIP (web search provider) and ACTION (an approval
