@@ -1383,3 +1383,78 @@ conversation on record. `tests\eval_tools.py` measures the cloud model's tool
 pick live: **34/34 right** (20 English, 14 Hindi), median 0.6 s, slowest
 6.7 s. It also showed the reminder tool's "when" arrives as "5" or "10 minutes
 from now" with Hindi text; the English sentence the model returns is now used.
+
+
+### D38 — Performance, with no feature or accuracy given up
+
+**How it was decided.** A four-member roundtable, each reading the code under one
+lens (CPU/GPU hot path, perceived speed, the long run, red team), plus
+measurements on this machine. Independent agreement across lenses decided the
+list; the red team's "do not touch without evidence" list decided what stayed out.
+Every change was then checked for equivalence: 43 read paths (search, snippets,
+meaning search, nearest frame, furniture, word rarity, insights, the gate's line
+map) on a frozen copy of the real DB, before and after. All identical, except
+meaning-search scores differing below 1e-5 (float summation order); ranks and
+results are the same in all 240 results.
+
+**The biggest find: `localhost`.** On Windows "localhost" tries IPv6 first;
+Ollama listens on IPv4, so every new connection waited ~2.4 s. Meaning search
+built a new connection per query: 2.8 s before any evidence appeared, on every
+recall question. Now 127.0.0.1, one kept-open client per embedding model, and
+Ollama's own endpoint with `keep_alive` 60 min (it unloaded bge-m3 after 5 idle
+minutes, costing ~6 s on the next question). **hybrid search: 2.83 s -> 0.50 s.**
+A new local-model connection: ~2.4 s -> 0.54 s (cards, deadlines).
+
+**Answers:** the cloud client kept its connection only 5 s (httpx's default), so
+nearly every question paid a TLS handshake; now 120 s, and the connection is
+opened while evidence is gathered. "Thinking" shows the moment a question
+arrives (before a tool pick or search). Speech starts at the first finished
+sentence instead of after the last word (it says exactly what it said before,
+tested on whole and 7-character pieces). The mic is back 0.25 s after Jimmy
+stops speaking, with the tick's own checks (paused, locked, sensitive), instead
+of up to 2 s later. Models are warmed at start-up.
+
+**CPU:** OpenCV's default 16-thread pool spent 3x the CPU on the tiny face
+networks (YuNet 640 px: 65 ms CPU vs 20 ms single-threaded); the hot-path
+reviewer measured the webcam thread and that pool at ~85 % of Jimmy's CPU.
+`CV_THREADS = 1`. The webcam is asked for 5 fps instead of 30 (it was decoding
+30 to read 4). With a remembered face, the identity verdict of a face that hasn't
+moved is reused for 0.5 s (only the yes/no; never a vector). UI Automation: the
+node's type comes from its wrapper class instead of a second cross-process call
+(134 ms per 800 nodes, a third of the 0.6 s budget; 800/800 identical), so busy
+windows lose less text. The overlay's idle dot no longer pulses forever (the
+pulse was composited 60 times a second); the curtain icon is still.
+
+**Long run:**
+- Meaning search reads vectors a page at a time (2,048) in the same order and
+  fetches text only for the winners: at 28,402 vectors, peak memory 265 MB ->
+  26 MB, time 1.17 s -> 0.88 s. The old way would have needed ~9 GB at a year.
+- `furniture()` is incremental (only blocks since the last refresh).
+- The gate counts text blocks once per moment, not once per word.
+- The nearest frame to a speech segment comes from two index lookups, not a
+  sort of every frame.
+- Indexing starts from the newest embedded id, not a scan of all history (no gaps
+  existed below it on the real data).
+- Snippets are made only for the rows that make the cut.
+- `PRAGMA optimize` on close.
+- The day list is cached until a new frame arrives.
+- Thumbnails are Huffman-optimised, progressive JPEG: -9.5 % on 80 real ones,
+  decoded pixels identical.
+
+**Privacy, paid for by the savings:** faces are now found at 1280 px, the
+thumbnail's own size (they were found at 640 px, so a face too small to find
+there could be legible in a 1280 px thumbnail). ~94 ms CPU per captured frame.
+
+**Corrected numbers:** 1280 px thumbnails average ~80-88 KB, so at 8 h a day
+capture writes ~90-250 GB a year, not the 25.8 MB/h measured with 640 px ones.
+
+**Not done, needs evidence or the owner's call:** WebP thumbnails (-28 %, changes
+pixels: needs a blind legibility check and the blur re-detection test on WebP);
+float16/int8 vectors or an approximate index (99.75 % / 99.5 % top-k overlap:
+small recall change; brute force will reach seconds per whole-history question
+somewhere past month 6); a SQL table for line counts (D22's precision rests on
+it: needs replay equivalence); UI Automation root caching (stale elements);
+moving indexing to quieter moments (needs a power trace); polling the cursor
+instead of forwarding every mouse move to the overlay (0.3 % of a core idle,
+5-10 % while the mouse moves); capture rate, change gate, Whisper model, face
+detection skipping, thumbnail size: never without recordings (red team).

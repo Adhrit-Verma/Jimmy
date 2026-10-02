@@ -237,14 +237,20 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   with `MIC_DEVICE` in `ambient/config.py`.
 - **Storage with the D18 gate:** 25.8 MB/h (~6.2 GB/month at 8 h/day), ~49 % of
   ticks skipped. Replay of 1.18 h real history: 5 candidates → 2 cards (D19).
+  **That was with 640 px thumbnails.** At 1280 px (D27) they average ~80–88 KB, so
+  ~30–85 MB per active hour, ~90–250 GB a year at 8 h/day (D38).
 - **Whisper is `large-v3-turbo`**, restricted to English and Hindi (D36): ~1 GB VRAM,
   4 s of audio in 0.6 s. Real Hindi accuracy is unverified (D19). Hindi requests
   are understood via one model call that also returns the English.
 - **Ollama 0.32.13 is installed** with qwen2.5:3b / 7b / 14b. **qwen2.5:3b decides
   cards** (D20): ~1 s per question, 3.3 GB VRAM, ~10 s cold load (idle unload
   after ~5 min). 7B was slower and worse; 14B doesn't fit in VRAM.
-- **bge-m3 (Ollama)**: 1024-d vectors; warm load 5.8 s; 32 chunks ≈ 4 s; ~2.5 min
-  of indexing per captured hour. Needs its own long timeout: first use loads 1.2 GB.
+- **bge-m3 (Ollama)**: 1024-d vectors; warm load 5.8 s. Via 127.0.0.1 with a kept
+  connection: ~0.4–0.5 s per call (Ollama's fixed cost), 32 chunks in 1.1 s; hybrid
+  search 0.5 s (D38; the old "32 chunks ≈ 4 s" included the localhost delay).
+  Kept loaded 60 min (`EMBED_KEEP_ALIVE`). Needs its own long timeout: first use loads 1.2 GB.
+- **OpenCV single-threaded is cheaper here** (D38): YuNet 640 px 20 ms CPU vs 65 ms on
+  the default 16 threads; 1280 px 94 ms. SFace ~50 ms a face.
 - **NVIDIA endpoint** `https://integrate.api.nvidia.com/v1` lists its models
   **without a key**, but **listed ≠ usable by this account**: several listed
   models return 404 "not found for account" or never answer. Only a round trip
@@ -335,6 +341,14 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   be a whole-phrase match; "just talking about lunch" once became a filter.
 - **The curtain is drawn by the overlay window**, so a capture under it would
   store the curtain: `bus.tick` returns "curtained" before reading the screen.
+- **Never point at `localhost` on Windows** (D38). It tries IPv6 first and Ollama
+  listens on IPv4: ~2.4 s on every new connection. Use 127.0.0.1, and keep
+  clients open (httpx closes idle ones after 5 s unless `keepalive_expiry` says otherwise).
+- **`(first, *gen)` reads the whole generator** (D38): it made paged vector
+  search load every page at once. Use `itertools.chain([first], gen)`.
+- **Optimise against a frozen copy of the real DB, before and after.** D38's
+  equivalence script compared 43 read paths; keep doing that for anything in
+  `db.py` or `recall.py`.
 - **`cards.parse` reads flat JSON only.** Tool picks are nested (`"args": {...}`);
   use `ask._json_obj`. The cloud model also puts `reason` beside `args`.
 - **The heredoc trap bites code too**: a `\\b` in a heredoc'd Python edit became a

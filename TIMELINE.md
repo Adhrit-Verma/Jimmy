@@ -16,6 +16,7 @@ result whenever either changes.
  [x] +  First-session fixes     built 2026-10-02: routing, tool use, ask-back, scroll, volume, declutter (D35)
  [x] +  English and Hindi only  built 2026-10-02 (D36)
  [x] +  Remember my face        built 2026-10-02: guided capture, DPAPI template, spec amended (D37)
+ [x] +  Performance             done 2026-10-02: roundtable + equivalence checks; search 2.8 s -> 0.5 s (D38)
 ```
 
 ---

@@ -109,6 +109,10 @@ every screen reader charges.
 
 ## Threading
 
+D38: OpenCV runs single-threaded (`CV_THREADS`, set in `ContextBus.__init__`):
+its default pool of 16 threads cost 3x the CPU on these small networks.
+
+
 ```
 main thread ──► bus.run() ──► tick() every 2s
                                  └─ Win32 + UIA + DXGI + cv2 + SQLite write

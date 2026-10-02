@@ -232,6 +232,26 @@ no personal identifiers read aloud, quieter remembered voice, a compact idle pil
 
 ---
 
+## Performance (D38) — done, and NOT done
+
+Done with equivalence checks: 127.0.0.1 and kept-open local clients, bge-m3 kept
+loaded, a 120 s cloud connection opened during evidence gathering, early
+"thinking", speech per sentence, quick mic return, single-threaded OpenCV, 5 fps
+webcam, identity reuse for steady faces, cheaper UI Automation walk, no idle
+animation, paged meaning search, incremental furniture, cheaper history queries,
+optimised JPEG, face detection at thumbnail size.
+
+| Not done | Why / what it needs |
+|---|---|
+| WebP thumbnails (-28 %) | Changes pixels: a blind legibility check at 1280 px and the blur re-detection test on WebP first. |
+| float16/int8 vectors, an approximate index | Small recall change (99.5-99.75 % top-k); needed somewhere past month 6 for whole-history questions. Owner's call. |
+| A SQL table for line counts (furniture + gate) | D22's precision depends on it: replay must show identical candidates first. |
+| Caching UI Automation roots | Stale elements; needs an A/B on woken windows. |
+| Cursor polling instead of mouse-move forwarding | The remaining overlay cost (0.3 % idle, 5-10 % while the mouse moves). |
+| Capture rate, change gate, Whisper size, skipping face detection | Never without recordings (red team, D18/D19/D5). |
+
+---
+
 ## Possible future changes
 
 Ideas I'd want to make but that are **not decided**. Each needs evidence or a
