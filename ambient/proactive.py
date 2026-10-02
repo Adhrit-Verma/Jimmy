@@ -333,14 +333,15 @@ class Proactive:
             if card:
                 self.show("RESUME", *card)
 
-    def tick(self, now: int, app: str = "", title: str = "") -> None:
+    def tick(self, now: int, app: str = "", title: str = "", quiet: bool = False) -> None:
+        """`quiet` (D39): you're away and Jimmy rests: reminders and timers only."""
         if self.memory is not None:
             for r in self.memory.due_reminders(now, f"{insights.app_name(app)} {title}" if app else None):
                 self.memory.set_reminder_state(r["id"], "done")
                 self.show("REMIND", words(r["text"], 10), {"why": "you asked"})
                 if self.say:
-                    self.say(f"Reminder: {r['text']}")
-        if not self._due("minute", 60, now):
+                    self.say(f"Time's up: {r['text']}." if r["text"].endswith("timer") else f"Reminder: {r['text']}")
+        if quiet or not self._due("minute", 60, now):
             return
         if card := recap_card(self.store, now):
             self.show("RECAP", *card)

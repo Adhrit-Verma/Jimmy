@@ -505,6 +505,81 @@ class Store:
         return {"words": words, "faces": faces, "speech": {"segments": segs, "ms": speech_ms},
                 "commands": commands, "cards": cards}
 
+    # --- D39: forgetting a span, and giving the space back -----------------
+    _SPAN = {"frames": "ts", "audio_segments": "ts_start", "cards": "ts", "deadlines": "seen_ts"}
+
+    def _thumb(self, rel: str) -> Path:
+        p = Path(rel)
+        return p if p.is_absolute() else Path(self.path).parent / p
+
+    def measure(self, since_ms: int, until_ms: int) -> dict:
+        """What forget() would delete: screenshots, lines heard, and their disk bytes."""
+        with self._lock:
+            frames = self.conn.execute("SELECT COUNT(*) FROM frames WHERE ts >= ? AND ts < ?",
+                                       (since_ms, until_ms)).fetchone()[0]
+            speech = self.conn.execute("SELECT COUNT(*) FROM audio_segments WHERE ts_start >= ? AND ts_start < ?",
+                                       (since_ms, until_ms)).fetchone()[0]
+            thumbs = [r[0] for r in self.conn.execute(
+                "SELECT thumb_path FROM frames WHERE ts >= ? AND ts < ? AND thumb_path IS NOT NULL",
+                (since_ms, until_ms))]
+        size = 0
+        for rel in thumbs:
+            try:
+                size += self._thumb(rel).stat().st_size
+            except OSError:
+                pass
+        return {"frames": frames, "speech": speech, "bytes": size}
+
+    def forget(self, since_ms: int, until_ms: int) -> dict:
+        """Delete everything captured in [since, until): screenshots and their text,
+        speech, cards, meaning-search vectors, deadlines seen then, capture windows
+        left empty. Only after the user said yes (the Asker asks). Windows still
+        open are kept, so capture can go on writing to them."""
+        out: dict = {}
+        with self._lock:
+            c, span = self.conn, (since_ms, until_ms)
+            thumbs = [r[0] for r in c.execute(
+                "SELECT thumb_path FROM frames WHERE ts >= ? AND ts < ? AND thumb_path IS NOT NULL", span)]
+            # Vectors by the ids they point at: ids can be reused once the rows are gone.
+            c.execute("DELETE FROM embeddings WHERE (ref > 0 AND ref IN (SELECT t.id FROM text_blocks t "
+                      "JOIN frames f ON f.id = t.frame_id WHERE f.ts >= ? AND f.ts < ?)) OR (ref < 0 AND -ref IN "
+                      "(SELECT id FROM audio_segments WHERE ts_start >= ? AND ts_start < ?))", span + span)
+            c.execute("DELETE FROM text_blocks WHERE frame_id IN (SELECT id FROM frames WHERE ts >= ? AND ts < ?)",
+                      span)   # explicitly, so the FTS triggers run
+            for tbl, col in self._SPAN.items():
+                out[tbl] = c.execute(f"DELETE FROM {tbl} WHERE {col} >= ? AND {col} < ?", span).rowcount
+            c.execute("DELETE FROM capture_windows WHERE closed_at IS NOT NULL AND opened_at >= ? AND opened_at < ? "
+                      "AND id NOT IN (SELECT window_id FROM frames WHERE window_id IS NOT NULL) "
+                      "AND id NOT IN (SELECT window_id FROM audio_segments WHERE window_id IS NOT NULL)", span)
+            c.commit()
+        for rel in thumbs:
+            p = self._thumb(rel)
+            p.unlink(missing_ok=True)
+            try:
+                p.parent.rmdir()                # the day's folder, once it's empty
+            except OSError:
+                pass
+        return out
+
+    def size(self) -> int:
+        if self.path == ":memory:":
+            return 0
+        return sum(Path(self.path + ext).stat().st_size for ext in ("", "-wal") if Path(self.path + ext).exists())
+
+    def compact(self) -> tuple[int, int]:
+        """Give deleted space back to the disk and merge the search indexes (D39).
+        (bytes before, after). Seconds on a big database; writers wait meanwhile."""
+        before = self.size()
+        with self._lock:
+            self.conn.commit()
+            for _, fts in INDEXED:
+                self.conn.execute(f"INSERT INTO {fts}({fts}) VALUES ('optimize')")
+            self.conn.commit()
+            self.conn.execute("VACUUM")
+            self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            self.conn.execute("PRAGMA optimize")
+        return before, self.size()
+
     def stats(self) -> dict:
         tables = ("capture_windows", "frames", "text_blocks", "audio_segments", "cards")
         with self._lock:

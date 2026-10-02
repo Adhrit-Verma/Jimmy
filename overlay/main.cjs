@@ -168,7 +168,9 @@ function demo() {
     { kind: "RECALL", line: "Same Sunandha UI/UX resume as Tue 15:02" },
     { kind: "FOCUS", line: "Back to: apply for jobs and review" },
   ];
-  send({ type: "state", paused: false, paused_until: 0, cards: true });
+  send({ type: "state", paused: false, paused_until: 0, cards: true,
+         timers: [{ id: 1, text: "check the oven, 10 min timer", due: Date.now() + 9 * 60_000 + 42_000 }] });
+  send({ type: "presence", state: "present", curtain: false, contact: true });   // D39: looking at Jimmy
   let i = 0;
   const next = () => send({ type: "card", id: ++i, ts: Date.now(), ...lines[(i - 1) % lines.length] });
   setTimeout(next, 600);

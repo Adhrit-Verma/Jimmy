@@ -153,8 +153,9 @@ class ContextBus:
             return "enrolling"
         if getattr(self, "_curtain", False):
             # D34: the curtain covers the screen, so a capture would store the curtain.
-            # Audio goes on: "Jimmy, …" from across the room should still work.
-            self._apply_audio_policy(sensitive=False)
+            # D39: and if it's down because you left, Jimmy rests: the mic pauses too
+            # (unless a call is on). A curtain you drew yourself keeps listening.
+            self._apply_audio_policy(sensitive=self.dormant(), why="you're away")
             return "curtained"
         status = self._tick()
         sensitive = status == "excluded"
@@ -282,7 +283,7 @@ class ContextBus:
     def _on_audio(self, ts_start: int, ts_end: int, source: str, text: str) -> None:
         # "Jimmy, …" is a question for Jimmy: stored as a command, never evidence
         # (D27: "can you listen to me" once answered with itself), and not for the gate.
-        command = bool(self._asker and self._asker.hear(ts_end, source, text))
+        command = bool(self._asker and self._asker.hear(ts_end, source, text, ts_start))
         self.store.add_audio(ts_start, ts_end, "command" if command else source, text,
                              window_id=self.window_id)
         self.counters.audio_segments += 1
@@ -346,9 +347,18 @@ class ContextBus:
     def _on_presence(self, info: dict) -> None:
         old = self._presence
         self._presence = info
-        if (old.get("state"), old.get("looking_away")) != (info.get("state"), info.get("looking_away")):
+        if old.get("state") != info.get("state"):
             print(f"[presence] {info['state']}{' (' + info['why'] + ')' if info.get('why') else ''}")
             self._refresh_curtain(force=True)
+        elif old.get("contact") != info.get("contact"):
+            self._publish_presence()           # D39: the pill shows when Jimmy sees you looking
+
+    def dormant(self) -> bool:
+        """D39: the curtain is down because you left (or someone else sat down), so
+        Jimmy rests: no capture, no listening, no indexing, no cards of its own.
+        Presence keeps looking for you; reminders and timers still ring."""
+        return bool(getattr(self, "_curtain", False) and not getattr(self, "_manual_curtain", False)
+                    and (getattr(self, "_presence", None) or {}).get("state") in ("away", "stranger"))
 
     def curtain_now(self) -> bool:
         presence = getattr(self, "_presence", None) or {}
@@ -362,7 +372,7 @@ class ContextBus:
         if st == "watched":
             mode = config.CURTAIN_WHEN_WATCHED
             return mode == "always" or (mode == "sensitive" and self._sensitive)
-        return bool(presence.get("looking_away"))
+        return False                            # D39: where you look never curtains; leaving does
 
     def _on_enrol(self, ev: dict) -> None:
         """The guided capture's progress (D37): to the overlay every frame, to your ears
@@ -407,20 +417,81 @@ class ContextBus:
         if on == getattr(self, "_curtain", False) and not force:
             return
         self._curtain = on
+        rest = self.dormant()
+        if rest != (getattr(self, "_dormant_since", None) is not None):
+            self._dormant_since = time.monotonic() if rest else None
+            print("[bus] resting while you're away: capture, listening, indexing paused" if rest
+                  else "[bus] awake")
+            if not rest and getattr(self, "_audio", None):
+                self._apply_audio_policy(sensitive=getattr(self, "_sensitive", False))   # at once
+        self._publish_presence()
+
+    def _publish_presence(self) -> None:
         if getattr(self, "_api", None):
             self._api.publish({"type": "presence", "state": self._presence.get("state"),
                                "watched": self._presence.get("state") == "watched",
-                               "curtain": on, "manual": self._manual_curtain,
+                               "curtain": self._curtain, "manual": self._manual_curtain,
+                               "contact": bool(self._presence.get("contact") and self._eyes_on()),
                                "why": self._presence.get("why", "")})
+
+    def _eyes_on(self) -> bool:
+        """D39: talking to Jimmy by looking at the screen, unless you said "name only"."""
+        mem = self._intent_memory()
+        return (mem.setting("eye_contact", "1" if config.EYE_CONTACT_ASKS else "0") == "1") if mem \
+            else config.EYE_CONTACT_ASKS
+
+    def set_eye_mode(self, on: bool) -> None:
+        mem = self._intent_memory()
+        if mem:
+            mem.set_setting("eye_contact", int(on))
+        self._publish_presence()
+
+    def forget(self, since: int, until: int, label: str) -> str:
+        """D39: "delete everything from September", after your yes. Captures, the
+        pictures on disk, and Jimmy's chat turns from then; then the space comes back."""
+        n = self.store.measure(since, until)
+        self.store.forget(since, until)
+        mem = self._intent_memory()
+        if mem:
+            mem.forget_turns(since, until)
+        before, after = self.store.compact()
+        print(f"[db] forgot {label}: {n['frames']} frames, {n['speech']} lines; "
+              f"database {before / 1e6:.1f} -> {after / 1e6:.1f} MB, pictures -{n['bytes'] / 1e6:.0f} MB")
+        return f"Deleted {label}: freed {(n['bytes'] + max(0, before - after)) / 1e6:,.0f} MB."
+
+    def _maybe_compact(self) -> None:
+        """D39: tidy the database while you're away, at most once a day."""
+        since = getattr(self, "_dormant_since", None)
+        mem = self._intent_memory()
+        if (not since or not mem or getattr(self, "_compacting", False)
+                or time.monotonic() - since < config.COMPACT_AFTER_AWAY_S
+                or now_ms() - int(float(mem.setting("last_compact", 0))) < config.COMPACT_EVERY_H * 3600_000):
+            return
+        self._compacting = True
+
+        def go():
+            try:
+                before, after = self.store.compact()
+                mem.set_setting("last_compact", now_ms())
+                print(f"[db] compacted while you were away: {before / 1e6:.1f} -> {after / 1e6:.1f} MB")
+            except Exception as exc:
+                print(f"[db] compact: {type(exc).__name__}: {exc}")
+            finally:
+                self._compacting = False
+        threading.Thread(target=go, daemon=True, name="compact").start()
 
     # --- overlay (Stage 4) ------------------------------------------------
     def overlay_state(self) -> dict:
         from jimmy import config as jcfg
         paused = now_ms() < self.paused_until
         mem = self._intent_memory()
+        soon = now_ms() + config.TIMER_SHOW_S * 1000
         return {"paused": paused, "paused_until": self.paused_until if paused else 0,
                 "cards": self.gate is not None,
                 "focus": mem.current_intent(jcfg.FOCUS_INTENT_MAX_H) if mem else None,
+                # D39: timers and reminders due soon count down on the pill
+                "timers": [{"id": r["id"], "text": r["text"], "due": r["due_ts"]} for r in mem.reminders()
+                           if r["due_ts"] and r["due_ts"] <= soon][:2] if mem else [],
                 **({"curtain": self._curtain, "presence": self._presence.get("state"),
                     "owner": bool(self._presence_obj and self._presence_obj.owner.known)}
                    if getattr(self, "_presence_obj", None) or getattr(self, "_manual_curtain", False) else {})}
@@ -460,6 +531,7 @@ class ContextBus:
             print("[overlay] not built: cd overlay && npm install && npm run build")
             return
         from .ask import Asker, Voice
+        from .audio import other_app_using_mic
         from .recall import timeline_hooks
         self._voice = Voice(on_start=self._voice_started, on_end=self._voice_ended) \
             if config.VOICE_ANSWERS else None
@@ -493,6 +565,17 @@ class ContextBus:
                                      "state": self.overlay_state, "curtain": self.set_curtain,
                                      "remind": lambda what, due, app: mem.add_reminder(what, due, app),
                                      "reminders": lambda: mem.reminders(),
+                                     "cancel_reminder": lambda rid: mem.set_reminder_state(rid, "cancelled"),
+                                     # D39: what the camera saw while a line was said; delete a span
+                                     "spoke": lambda a, b: self._presence_obj.spoke(a, b) if self._presence_obj else None,
+                                     "facing": lambda a, b: (self._presence_obj.facing_during(a, b)
+                                                             if self._presence_obj else None),
+                                     "eye_contact": lambda a, b: bool(self._presence_obj
+                                                                      and self._presence_obj.eye_contact(a, b)),
+                                     "eyes_on": self._eyes_on, "eye_mode": self.set_eye_mode,
+                                     "on_call": other_app_using_mic,
+                                     "voice_on": lambda: bool(self._voice and not self._voice.muted),
+                                     "measure": self.store.measure, "forget": self.forget,
                                      "unremind": lambda: mem.set_reminder_state(None, "cancelled"),
                                      "open_file": os.startfile,
                                      "volume": lambda word: self.set_volume(word, mem),
@@ -554,6 +637,8 @@ class ContextBus:
 
     def _voice_ended(self) -> None:
         self._speaking = False
+        if getattr(self, "_asker", None):
+            self._asker.voice_done()        # D39: go on without the name for a few seconds
         # D38: the mic came back at the next tick, up to 2 s later, and a quick "next"
         # or a reply to Jimmy's question was lost. Back in 0.25 s (the room's echo of
         # the voice has died by then), with the same checks a tick makes.
@@ -608,6 +693,8 @@ class ContextBus:
                 if not self._running:
                     return
                 time.sleep(1)
+            if self.dormant():
+                continue                     # D39: resting while you're away; nothing new anyway
             try:
                 index(self.store, limit=200)
             except LLMError:
@@ -663,9 +750,12 @@ class ContextBus:
                 t0 = time.monotonic()
                 try:
                     status = self.tick()
+                    rest = status == "curtained" and self.dormant()
                     if self._proactive and status != "paused":
                         seen = getattr(self, "_last_seen", None) or ("", "")
-                        self._proactive.tick(now_ms(), *seen)
+                        self._proactive.tick(now_ms(), *seen, quiet=rest)   # D39: away: reminders only
+                    if rest:
+                        self._maybe_compact()
                 except Exception as exc:
                     status = f"error:{type(exc).__name__}:{exc}"
                 if verbose and (status.startswith("error") or time.monotonic() - last_report > 10):

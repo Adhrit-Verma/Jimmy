@@ -131,19 +131,16 @@ def test_capture_end_to_end():
 
 
 def test_tracker_with_a_remembered_face():
-    t = Tracker()
-    assert t.update(0, 1, True, False, owner=True)[0] == "present"
-    t.update(1, 1, True, False, owner=False, strangers=1)
-    assert t.update(1.5, 1, True, False, owner=False, strangers=1)[0] == "present", "one bad frame isn't a stranger"
-    assert t.update(1 + config.STRANGER_S, 1, True, False, owner=False, strangers=1)[0] == "stranger"
-    t.update(5, 1, True, False, owner=True)
-    assert t.update(5.01 + config.RETURN_S, 1, True, False, owner=True)[0] == "present", "you're back"
-    t.update(9, 2, True, False, owner=True, strangers=1)
-    assert t.update(9 + config.WATCHED_S, 2, True, False, owner=True, strangers=1)[0] == "watched"
-    t2 = Tracker()
-    t2.update(0, 1, False, False, owner=False, strangers=0)
-    assert t2.update(9, 1, False, False, owner=False)[0] == "present", "a turned head isn't judged"
-    print("ok  tracker: you, a stranger (after 2 s), you and someone, turned heads not judged")
+    t = Tracker()                     # D39: who the face is, is judged per track (tests/test_stage9.py)
+    assert t.update(0, True) == "present"
+    t.update(1, False, stranger=True)
+    assert t.update(1.5, False, stranger=True) == "present", "not yet STRANGER_S: not a stranger"
+    assert t.update(1 + config.STRANGER_S, False, stranger=True) == "stranger"
+    t.update(5, True)
+    assert t.update(5.01 + config.RETURN_S, True) == "present", "you're back"
+    t.update(9, True, others=1)
+    assert t.update(9 + config.WATCHED_S, True, others=1) == "watched"
+    print("ok  tracker: you, a stranger (after 2 s), you and someone")
 
 
 def test_detector_on_a_drawn_face():

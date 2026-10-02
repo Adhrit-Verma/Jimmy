@@ -2,7 +2,7 @@ import { Component, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   BarChart3, Bell, CalendarClock, Check, Clock, ExternalLink, Eye, EyeOff, Globe, History, Lightbulb, MessageCircle,
-  MonitorSmartphone, MoveRight, Pause, Play, Power, RotateCcw, ScanFace, ShieldCheck, Target, X,
+  MonitorSmartphone, MoveRight, Pause, Play, Power, RotateCcw, ScanFace, ShieldCheck, Target, Timer, Trash2, X,
 } from "lucide-react";
 import Answer from "./Answer.jsx";
 
@@ -34,6 +34,7 @@ const FLASH_ICON = {
   close_ui: X, copy_screen: Check, volume: MessageCircle, presence: Eye, enrol: ScanFace, unenrol: ScanFace,
   pause: Pause, resume: Play, focus: Target, unfocus: Target, open: ExternalLink, show: X, nav: MoveRight,
   remind: Bell, reminders: Bell, unremind: Bell, curtain: EyeOff, uncurtain: Eye, open_url: Globe,
+  timer: Timer, timers: Timer, untimer: Timer, forget: Trash2, eyes: Eye,
 };
 
 // D32: every kind of card, and how long it stays if you don't touch it.
@@ -85,7 +86,32 @@ function Equalizer() {
   );
 }
 
-function Pill({ state, mood, prompt, typing, setTyping, flash, recent, onAsk, answerOpen, watched, curtain }) {
+// D39: timers (and reminders due within the hour) count down on the pill, so they're
+// in view whatever window you're in. Gone a few seconds after they ring.
+function Timers({ timers }) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!timers.length) return undefined;
+    const t = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [timers.length]);
+  return timers.filter((t) => t.due - Date.now() > -5000).map((t) => {
+    const left = Math.max(0, Math.round((t.due - Date.now()) / 1000));
+    const h = Math.floor(left / 3600), m = Math.floor((left % 3600) / 60), s = String(left % 60).padStart(2, "0");
+    const clock = h ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
+    const label = t.text.endsWith("timer") ? t.text.split(", ").slice(0, -1).join(", ") : t.text;
+    return (
+      <span key={t.id} title={t.text}
+        className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] tabular-nums
+          ${left <= 10 ? "bg-rose-400/20 text-rose-100" : "bg-amber-400/15 text-amber-100"}`}>
+        <Timer size={11} className="shrink-0" /> {clock}
+        {label && <span className="max-w-[150px] truncate text-amber-200/70">{label}</span>}
+      </span>
+    );
+  });
+}
+
+function Pill({ state, mood, prompt, typing, setTyping, flash, recent, onAsk, answerOpen, watched, curtain, contact }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(-1);
@@ -137,7 +163,8 @@ function Pill({ state, mood, prompt, typing, setTyping, flash, recent, onAsk, an
   const dot = curtain ? "bg-neutral-500" : paused ? "bg-amber-400" : mood ? "bg-sky-400" : "bg-emerald-400";
   // D35: idle, the pill is just a dot, so it doesn't sit on other apps' tab bars and
   // title bars. Anything happening (or your pointer) brings the whole pill back.
-  const compact = !open && !typing && !flash && !mood && !watched && !answerOpen;
+  const timers = (state.timers || []).filter((t) => t.due - Date.now() > -5000);
+  const compact = !open && !typing && !flash && !mood && !watched && !answerOpen && !timers.length;
   const FlashIcon = flash ? FLASH_ICON[flash.icon] || Check : null;
 
   return (
@@ -150,7 +177,10 @@ function Pill({ state, mood, prompt, typing, setTyping, flash, recent, onAsk, an
         className={`pointer-events-auto flex items-center gap-2 rounded-full text-[12px] ${surface}
           ${compact ? "h-4 px-1.5 opacity-70" : "h-8 px-3"} ${mood === "listening" ? "ring-sky-400/40" : ""}`}
       >
-        {mood === "listening" ? <Equalizer /> : (
+        {mood === "listening" ? <Equalizer /> : contact && !curtain && !paused ? (
+          // D39: Jimmy sees you looking at the screen: just ask, no name needed
+          <span title="I see you looking: just ask" className="flex"><Eye size={compact ? 9 : 12} className="text-sky-300" /></span>
+        ) : (
           <span className="relative flex size-2">
             {!paused && mood && <span className="absolute inline-flex size-full animate-ping rounded-full bg-sky-400/60" />}
             <span className={`relative inline-flex size-2 rounded-full ${dot}`} />
@@ -183,6 +213,7 @@ function Pill({ state, mood, prompt, typing, setTyping, flash, recent, onAsk, an
             <Eye size={11} /> Someone's looking · panels hidden
           </span>
         )}
+        {!typing && <Timers timers={timers} />}
         {state.focus && !typing && !flash && !curtain && !watched && !compact && (
           <span title={`Focus: ${state.focus.text}`}
             className="flex max-w-[220px] items-center gap-1 rounded-full bg-violet-400/10 px-2 py-0.5 text-[11.5px] text-violet-200">
@@ -544,7 +575,7 @@ export default function App() {
       if (ev.type === "listening") {
         setMood("listening");
         setPrompt(ev.prompt || null);
-        setTimeout(() => setMood((m) => (m === "listening" ? null : m)), ev.prompt ? 20000 : 9000);
+        setTimeout(() => setMood((m) => (m === "listening" ? null : m)), ev.ms || (ev.prompt ? 20000 : 9000));
       }
       if (ev.type === "open_evidence") { waiting.current = 0; unthink(); setOpenIndex(ev.index); }
       if (ev.type === "close_evidence") setOpenIndex(null);
@@ -587,7 +618,8 @@ export default function App() {
       <AnimatePresence>{enrol && !presence.curtain && <EnrolPanel key="enrol" e={enrol} />}</AnimatePresence>
       <div className="relative z-[110]">
         <Pill state={state} mood={mood} prompt={prompt} typing={typing} setTyping={setTyping}
-          flash={flash} recent={recent} onAsk={ask} answerOpen={!!answer} watched={watched} curtain={presence.curtain} />
+          flash={flash} recent={recent} onAsk={ask} answerOpen={!!answer} watched={watched} curtain={presence.curtain}
+          contact={!!presence.contact} />
       </div>
       {!watched && !presence.curtain && <>
       <div

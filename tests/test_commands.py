@@ -117,6 +117,24 @@ MATRIX = [
     ("Jimmy what was I doing an hour ago", "recall", None, None),
     ("Jimmy how does OAuth work", "chat", None, None), ("Jimmy thanks", "chat", None, None),
     ("Jimmy who are you", "chat", None, None), ("Jimmy what can you do", "chat", None, None),
+    # D39: timers, forgetting a span, talking without the name; and the wake word mid-sentence
+    ("Jimmy set a timer for 5 minutes", "command", "timer", "set a timer for 5 minutes"),
+    ("Jimmy 10 minute timer", "command", "timer", "10 minute timer"),
+    ("Jimmy start a timer for 30 seconds", "command", "timer", "start a timer for 30 seconds"),
+    ("Jimmy cancel the timer", "command", "untimer", None), ("Jimmy stop the timer", "command", "untimer", None),
+    ("Jimmy how much time is left", "command", "timers", None),
+    ("Jimmy delete everything from September", "command", "forget", "everything from September"),
+    ("Jimmy delete my data from 1 to 15 September", "command", "forget", "my data from 1 to 15 September"),
+    ("Jimmy forget today", "command", "forget", "today"),
+    ("Jimmy erase the last hour", "command", "forget", "the last hour"),
+    ("Jimmy delete the email from yesterday", "recall", None, None),     # not a forget: the tool pick says no
+    ("Jimmy clear everything", "command", "close_ui", None),             # the UI, as before
+    ("Jimmy only answer to your name", "command", "eyes", "only answer to your name"),
+    ("Jimmy listen without your name", "command", "eyes", "listen without your name"),
+    ("okay hey jimmy what's on my screen", "screen", None, None),
+    ("One second, Jimmy turn on privacy curtain.", "command", "curtain", None),
+    ("take it jimmy what's on my screen", "screen", None, None),
+    ("Chime, can you tell me last time I used Discord?", "stats", None, None),
 ]
 
 # Unknown instructions: these go to the model's tool pick (they start like an instruction).

@@ -210,6 +210,14 @@ def main(argv: list[str] | None = None) -> int:
     dl.add_argument("--dry", action="store_true", help="with --scan: list date lines only, no model, nothing saved")
     dl.add_argument("--db", default=None)
 
+    fg = sub.add_parser("forget", help='delete a span of captures, e.g. "September" (D39); asks first')
+    fg.add_argument("when", help='"September", "1 to 15 September", "older than 30 days", "today", "everything"')
+    fg.add_argument("--yes", action="store_true", help="don't ask")
+    fg.add_argument("--db", default=None)
+
+    cp = sub.add_parser("compact", help="give deleted space back and tidy the search index (D39)")
+    cp.add_argument("--db", default=None)
+
     a = ap.parse_args(argv)
 
     if a.cmd == "replay":
@@ -264,6 +272,33 @@ def main(argv: list[str] | None = None) -> int:
                 total += n
                 print(f"  embedded {total} chunks ({time.time() - t0:.0f}s)", flush=True)
         print(f"index up to date: {total} new chunks in {time.time() - t0:.1f}s")
+        return 0
+
+    if a.cmd in ("forget", "compact"):
+        with Store(db) as store:
+            if a.cmd == "forget":
+                from .plugin import date_range
+                w = date_range(a.when, int(time.time() * 1000))
+                if not w:
+                    print(f"no dates in {a.when!r}: try \"September\", \"1 to 15 September\", \"today\"")
+                    return 1
+                n = store.measure(w[0], w[1])
+                fmt = lambda ms: time.strftime("%Y-%m-%d %H:%M", time.localtime(ms / 1000))  # noqa: E731
+                print(f"{w[2]}: {fmt(w[0])} to {fmt(w[1])}: {n['frames']} screenshots, "
+                      f"{n['speech']} lines heard, {n['bytes'] / 1e6:.0f} MB of pictures")
+                if not (n["frames"] or n["speech"]):
+                    return 0
+                if not a.yes and input("Delete for good? [y/N] ").strip().lower() not in ("y", "yes"):
+                    print("kept")
+                    return 1
+                print(json.dumps(store.forget(w[0], w[1])))
+                from jimmy import config as jcfg
+                from jimmy.memory import Memory
+                mem = Memory(jcfg.MEMORY_DB)
+                mem.forget_turns(w[0], w[1])
+                mem.close()
+            before, after = store.compact()
+            print(f"database {before / 1e6:.1f} MB -> {after / 1e6:.1f} MB")
         return 0
 
     if a.cmd == "stats":

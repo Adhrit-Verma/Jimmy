@@ -1,17 +1,26 @@
-"""Presence from your own webcam, for the privacy curtain (D34, D37).
+"""Presence from your own webcam, for the privacy curtain (D34, D37, D39).
 
-It counts faces and reads which way the nearest one is turned. Two modes:
+It finds your face once, marks where you are, and follows that place (D39): a
+turned head, looking down or away keeps you "present"; only leaving the picture
+brings the curtain, within AWAY_S. While you're away it looks every few seconds,
+or at once when the picture moves. Two modes:
 
 - **Nothing remembered** (the default): it recognises no one. "present" is any
-  one face at the screen.
+  one face that sat down facing the screen, followed from then on.
 - **"Jimmy, remember my face"** (D37, the one exception to non-negotiable 2,
   made by the human on 2026-10-02): a guided capture turns *your* face into a
   template: a few SFace vectors, no image, stored encrypted with Windows DPAPI
   so only your Windows account can read it. Then "present" means you, and
-  someone else alone at the screen is "stranger". Every other face's vector
-  exists for one comparison inside one loop iteration and is dropped: never
-  stored, never logged, never compared with anything but your template.
+  someone else alone at the screen is "stranger". A new face is judged when it
+  appears and re-checked now and then, not every frame. Every other face's
+  vector exists for one comparison inside one loop iteration and is dropped:
+  never stored, never logged, never compared with anything but your template.
   "Jimmy, forget my face" deletes the template.
+
+D39, for talking to Jimmy without its name: for *your* face only, whether you're
+looking at the screen (head pose and irises against where you usually look,
+learnt as you work) and whether your lips are moving. Kept as per-frame yes/no
+values for two minutes, in RAM, so a spoken line can be checked against them.
 
 States: present / away / watched (you and someone else) / stranger / off.
 Nothing here is ever serialised; no frame outlives its tick.
@@ -21,6 +30,7 @@ from __future__ import annotations
 import base64
 import threading
 import time
+from collections import deque
 from pathlib import Path
 from typing import Callable
 
@@ -38,16 +48,17 @@ def yaw_of(row) -> float:
     return (nx - (lx + rx) / 2) / eye if eye >= 2 else 9.0
 
 
-def facing(row) -> bool:
-    """Is a YuNet face turned toward the screen? The nose sits between the eyes when
-    you face the camera and swings out when you turn away.
-    ponytail: head pose, not gaze; a plain webcam reads where eyes point poorly."""
+def pitch_of(row) -> float:
+    """Head tilt from YuNet's landmarks: nose below the eyes, in eye-distances (~0.5 level)."""
     ry, ly, ny = float(row[5]), float(row[7]), float(row[9])
     eye = abs(float(row[6]) - float(row[4]))
-    if eye < 2:
-        return False
-    pitch = (ny - (ly + ry) / 2) / eye
-    return abs(yaw_of(row)) < 0.35 and 0.15 < pitch < 1.3
+    return (ny - (ly + ry) / 2) / eye if eye >= 2 else 9.0
+
+
+def facing(row) -> bool:
+    """Is a YuNet face turned toward the screen? The nose sits between the eyes when
+    you face the camera and swings out when you turn away."""
+    return abs(yaw_of(row)) < 0.35 and 0.15 < pitch_of(row) < 1.3
 
 
 # --- your face, remembered (D37) ---------------------------------------------
@@ -206,30 +217,18 @@ class Enrolment:
 # --- presence --------------------------------------------------------------------
 
 class Tracker:
-    """Per-frame observations -> a steady state, with hysteresis so a blink, a
-    turned head or one bad frame doesn't flap the curtain."""
+    """Per-frame observations -> a steady state, with hysteresis (D39).
+
+    `you`: your face, or the place it was followed to, is in the picture this frame.
+    Where you look doesn't matter: only leaving the picture brings the curtain."""
 
     def __init__(self):
         self.state = "present"
-        self._cond, self._since = "one", 0.0
-        self._turned_since: float | None = None
+        self._cond, self._since = "you", 0.0
 
-    def update(self, t: float, n: int, is_facing: bool, dark: bool,
-               owner: bool | None = None, strangers: int = 0) -> tuple[str, bool]:
-        """`owner`: None = no face remembered (any face counts); True/False = your
-        remembered face is / isn't among the faces turned to the screen."""
-        if dark:
-            cond = "dark"
-        elif n == 0:
-            cond = "none"
-        elif owner is False and strangers:
-            cond = "stranger"                    # someone at the screen, and it isn't you
-        elif n > 1:
-            cond = "many"
-        elif owner or (owner is None and is_facing):
-            cond = "one"
-        else:
-            cond = "turned"
+    def update(self, t: float, you: bool, others: int = 0, dark: bool = False, stranger: bool = False) -> str:
+        cond = ("dark" if dark else ("many" if others else "you") if you
+                else "stranger" if stranger else "none")
         if cond != self._cond:
             self._cond, self._since = cond, t
         held = t - self._since
@@ -241,14 +240,9 @@ class Tracker:
             self.state = "stranger"
         elif cond == "many" and held >= config.WATCHED_S:
             self.state = "watched"
-        elif cond == "one" and held >= config.RETURN_S:
+        elif cond == "you" and held >= config.RETURN_S:
             self.state = "present"
-        elif cond == "turned" and self.state == "watched" and held >= config.RETURN_S:
-            self.state = "present"          # the other person left; you're looking down
-        self._turned_since = (self._turned_since or t) if cond == "turned" else None
-        looking_away = bool(config.LOOK_AWAY_S and self._turned_since
-                            and t - self._turned_since >= config.LOOK_AWAY_S)
-        return self.state, looking_away
+        return self.state
 
 
 def _iou(a, b) -> float:
@@ -260,13 +254,146 @@ def _iou(a, b) -> float:
     return inter / (aw * ah + bw * bh - inter + 1e-9)
 
 
-def _same_faces(verdict: dict, boxes: list, t: float) -> bool:
-    """Is the last identity verdict still about these faces? Same count, each box
-    overlapping its old place by half or more, and no older than PRESENCE_REID_S."""
-    old = verdict["boxes"]
-    if t - verdict["at"] > config.PRESENCE_REID_S or len(old) != len(boxes) or not boxes:
-        return False
-    return all(max(_iou(b, o) for o in old) >= 0.5 for b in boxes)
+def _near(face, box) -> bool:
+    """The same face as the followed box: overlapping, or its centre close (a quick move)."""
+    x, y, w, h = (float(v) for v in face[:4])
+    bx, by, bw, bh = box
+    return _iou(face[:4], box) >= 0.3 or np.hypot(x + w / 2 - bx - bw / 2, y + h / 2 - by - bh / 2) <= 0.6 * bw
+
+
+_Q = 0.25          # template matching runs on a quarter-size picture (160x120)
+
+
+def _region(box, W: float, H: float) -> tuple[int, int, int, int]:
+    """Head and shoulders around a face box, clipped to the picture, in quarter-size pixels."""
+    x, y, w, h = box
+    return (max(0, int((x - 0.6 * w) * _Q)), max(0, int((y - 0.4 * h) * _Q)),
+            min(int(W * _Q), int((x + 1.6 * w) * _Q) + 1), min(int(H * _Q), int((y + 2.0 * h) * _Q) + 1))
+
+
+class Follow:
+    """Where you are in the picture (D39). Marked from a face the detector found;
+    when it loses the face (head turned, looking down, a hand in the way), the
+    head-and-shoulders patch around it is found again nearby by template matching.
+    The patch is refreshed only from a real detection, so it can't learn the empty
+    chair, and with no face at all for BLIND_MAX_S it is no longer trusted.
+    RAM only; it dies with the track."""
+
+    def __init__(self, row, q: np.ndarray, t: float):
+        self.owner: bool | None = None      # with a remembered face: you / not you / not judged yet
+        self.tries, self.checked, self.misses = 0, -1e9, 0
+        self.mouth: np.ndarray | None = None
+        self.mouth_t = -1e9
+        self.saw(row, q, t)
+
+    def __getstate__(self):
+        raise TypeError("a face track is ephemeral by design and must never be serialised")
+
+    def __reduce__(self):
+        raise TypeError("a face track is ephemeral by design and must never be serialised")
+
+    def saw(self, row, q: np.ndarray, t: float) -> None:
+        self.box = [float(v) for v in row[:4]]
+        self.seen = self.alive = t
+        x0, y0, x1, y1 = self.at = _region(self.box, q.shape[1] / _Q, q.shape[0] / _Q)
+        self.patch = q[y0:y1, x0:x1].copy()
+
+    def find(self, q: np.ndarray, t: float) -> float:
+        """Your patch near where it was: the match, 0..1. Found -> the box moves with it."""
+        if t - self.seen > config.BLIND_MAX_S:
+            return 0.0
+        x0, y0, x1, y1 = self.at
+        ph, pw = self.patch.shape
+        if pw < 4 or ph < 4 or float(self.patch.std()) < 2:
+            return 0.0
+        m = max(2, int(0.6 * self.box[2] * _Q))
+        H, W = q.shape
+        ax0, ay0 = max(0, x0 - m), max(0, y0 - m)
+        area = q[ay0:min(H, y1 + m), ax0:min(W, x1 + m)]
+        if area.shape[0] < ph or area.shape[1] < pw:
+            return 0.0
+        _, score, _, (lx, ly) = cv2.minMaxLoc(cv2.matchTemplate(area, self.patch, cv2.TM_CCOEFF_NORMED))
+        score = float(score) if np.isfinite(score) else 0.0
+        if score >= config.FOLLOW_MIN:
+            dx, dy = ax0 + lx - x0, ay0 + ly - y0
+            self.at = (x0 + dx, y0 + dy, x1 + dx, y1 + dy)
+            self.box[0] += dx / _Q
+            self.box[1] += dy / _Q
+            self.alive = t
+        return score
+
+
+# --- talking to Jimmy without its name (D39) ----------------------------------------
+
+def irises(gray: np.ndarray, row) -> tuple[float, float] | None:
+    """Where the irises sit relative to YuNet's eye points, in eye-distances: the
+    darkest fifth of a small box round each eye, weighted by darkness, both eyes
+    averaged. ponytail: a plain webcam and no gaze model; good for "at the screen
+    or not", not for which word you're reading."""
+    rx, ry, lx, ly = (float(v) for v in row[4:8])
+    d = abs(lx - rx)
+    if d < config.GAZE_MIN_EYES:
+        return None
+    H, W = gray.shape
+    out = []
+    for ex, ey in ((rx, ry), (lx, ly)):
+        x0, x1 = int(ex - 0.22 * d), int(ex + 0.22 * d) + 1
+        y0, y1 = int(ey - 0.12 * d), int(ey + 0.12 * d) + 1
+        if x0 < 0 or y0 < 0 or x1 > W or y1 > H:
+            return None
+        c = cv2.GaussianBlur(gray[y0:y1, x0:x1], (3, 3), 0).astype(np.float32)
+        wgt = np.clip(np.percentile(c, 20) + 1 - c, 0, None)
+        s = float(wgt.sum())
+        if s <= 0:
+            return None
+        ys, xs = np.mgrid[y0:y1, x0:x1]
+        out.append((float((wgt * xs).sum()) / s - ex, float((wgt * ys).sum()) / s - ey))
+    return (out[0][0] + out[1][0]) / (2 * d), (out[0][1] + out[1][1]) / (2 * d)
+
+
+def mouth_of(gray: np.ndarray, row) -> np.ndarray | None:
+    """The mouth, from YuNet's two corners, at a fixed small size and contrast, so
+    two frames compare: lips moving change it, a still face barely does."""
+    ax, ay, bx, by = (float(v) for v in row[10:14])
+    w = abs(bx - ax)
+    if w < 10:
+        return None
+    cx, cy = (ax + bx) / 2, (ay + by) / 2
+    x0, x1, y0, y1 = int(cx - 0.75 * w), int(cx + 0.75 * w) + 1, int(cy - 0.45 * w), int(cy + 0.6 * w) + 1
+    H, W = gray.shape
+    if x0 < 0 or y0 < 0 or x1 > W or y1 > H:
+        return None
+    p = cv2.resize(gray[y0:y1, x0:x1], (24, 16), interpolation=cv2.INTER_AREA).astype(np.float32)
+    return (p - p.mean()) / (p.std() + 8)
+
+
+class Gaze:
+    """Where you normally look, learnt while you work (D39): head turn, head tilt and
+    iris position while you're at the screen. Eye contact = all four inside that
+    zone; looking down at a phone or off to the side is outside it. RAM only, per
+    run; until it has learnt enough, facing the screen counts."""
+
+    def __init__(self, n: int = 600):
+        self.samples: deque = deque(maxlen=n)
+        self._zone: tuple[np.ndarray, np.ndarray] | None = None
+
+    def __getstate__(self):
+        raise TypeError("gaze calibration is ephemeral by design and must never be serialised")
+
+    def contact(self, row, eyes: tuple[float, float] | None) -> bool:
+        if not facing(row) or eyes is None:
+            return False
+        v = np.array([yaw_of(row), pitch_of(row), eyes[0], eyes[1]], dtype=np.float32)
+        self.samples.append(v)
+        if len(self.samples) < config.GAZE_LEARN_N:
+            return True
+        if self._zone is None or len(self.samples) % 20 == 0:
+            a = np.asarray(self.samples)
+            med = np.median(a, axis=0)
+            spread = np.maximum(np.median(np.abs(a - med), axis=0) * 1.4826, config.GAZE_MIN_SPREAD)
+            self._zone = (med, spread)
+        med, spread = self._zone
+        return bool(np.all(np.abs(v - med) <= config.GAZE_ZONE * spread))
 
 
 class Presence:
@@ -275,7 +402,14 @@ class Presence:
         self.on_change, self.on_enrol = on_change, on_enrol
         self.camera = config.PRESENCE_CAMERA if camera is None else camera
         self.owner = owner or OwnerFace()
-        self.info = {"state": "starting", "faces": 0, "facing": False, "looking_away": False, "why": ""}
+        self.info = {"state": "starting", "faces": 0, "facing": False, "contact": False, "why": ""}
+        self.track: Follow | None = None
+        self.last_match = 1.0
+        self.gaze = Gaze()
+        # D39: (epoch ms, eye contact, lips moving, facing) per frame of *you*, last two
+        # minutes, so a spoken line can be checked against what the camera saw. Values
+        # only; None where it couldn't tell.
+        self.history: deque = deque(maxlen=480)
         self._stop = threading.Event()
         self._enrol: Enrolment | None = None
         self._want_enrol = False
@@ -313,7 +447,27 @@ class Presence:
     def forget(self) -> str:
         known = self.owner.known
         self.owner.forget()
+        self.track = None
         return "Forgotten. Your face template is deleted." if known else "I didn't have your face."
+
+    # --- what the camera saw while something was said (D39) -----------------------
+    def _during(self, t0: int, t1: int) -> list:
+        return [h for h in list(self.history) if t0 <= h[0] <= t1]
+
+    def spoke(self, t0: int, t1: int) -> bool | None:
+        """Did your lips move while this was said (epoch ms)? None: couldn't see them."""
+        m = [h[2] for h in self._during(t0 - 300, t1 + 300) if h[2] is not None]
+        return None if len(m) < 2 else sum(m) / len(m) >= config.MOUTH_SHARE
+
+    def facing_during(self, t0: int, t1: int) -> bool | None:
+        """Were you turned to the screen while this was said? None: you weren't in view."""
+        f = [h[3] for h in self._during(t0 - 300, t1 + 300) if h[3] is not None]
+        return None if not f else sum(f) / len(f) >= 0.5
+
+    def eye_contact(self, t0: int, t1: int) -> bool:
+        """Were you looking at the screen as you started to speak?"""
+        c = [h[1] for h in self._during(t0 - 700, min(t1, t0 + 1500)) if h[1] is not None]
+        return len(c) >= 2 and sum(c) / len(c) >= 0.5
 
     def _set(self, **kw) -> None:
         new = {**self.info, **kw}
@@ -341,6 +495,7 @@ class Presence:
                                "say": "That didn't come out clearly. Let's try again with steadier light."})
                 return
             self.owner.save(e.samples)          # the only write of a face vector, anywhere (D37)
+            self.track = None                   # judge the face in front again, with the template
             self.on_enrol({"done": True, "failed": False, "progress": 1.0,
                            "say": "Got it. I'll know you now. Say \"forget my face\" any time."})
             return
@@ -355,13 +510,86 @@ class Presence:
                        "progress": e.progress, "box": box,
                        "preview": "data:image/jpeg;base64," + base64.b64encode(jpg).decode()})
 
+    def _identify(self, t: float, small: np.ndarray, strong: list, on, rec, q: np.ndarray):
+        """With your face remembered: who the followed face is. Judged when a track
+        starts and re-checked every REVERIFY_S, never every frame (D39): one bad,
+        dim frame no longer drops the curtain on you. Only the score survives a
+        comparison; the vector is gone with the line that made it (D37)."""
+        def score(f) -> float:
+            try:
+                return self.owner.match(rec.feature(rec.alignCrop(small, f)))
+            except cv2.error:
+                return 0.0
+        tr = self.track
+        if tr is not None and tr.owner is True:
+            if on is not None and facing(on) and t - tr.checked >= config.REVERIFY_S:
+                tr.checked = t
+                tr.misses = tr.misses + 1 if score(on) < config.OWNER_KEEP else 0
+                if tr.misses >= 2:
+                    tr.owner, tr.tries = False, config.ID_TRIES        # not you after all
+            return on
+        every = config.ID_EVERY_S if tr is None or tr.owner is None else 2.0
+        if not strong or (tr is not None and t - tr.checked < every):
+            return on
+        for f in sorted(strong, key=lambda f: -float(f[2]))[:3]:
+            if score(f) >= config.OWNER_MATCH:
+                if tr is None or not _near(f, tr.box):
+                    self.track = tr = Follow(f, q, t)
+                tr.owner, tr.checked = True, t
+                return f
+        if tr is None:
+            on = max(strong, key=lambda f: float(f[2]))
+            self.track = tr = Follow(on, q, t)
+        tr.checked, tr.tries = t, tr.tries + 1
+        if tr.owner is None and tr.tries >= config.ID_TRIES:
+            tr.owner = False                    # someone at the screen, and it isn't you
+        return on
+
+    def observe(self, t: float, small: np.ndarray, gray: np.ndarray, faces: list, rec, tracker: Tracker) -> str:
+        """One frame -> the state (D39). `faces`: YuNet rows scoring >= PRESENCE_KEEP_SCORE."""
+        dark = float(gray.mean()) < config.DARK_FRAME
+        q = cv2.resize(gray, (gray.shape[1] // 4, gray.shape[0] // 4), interpolation=cv2.INTER_AREA)
+        strong = [f for f in faces if float(f[14]) >= config.FACE_SCORE_THRESHOLD and facing(f)]
+        tr, on = self.track, None
+        if tr is not None:
+            close = [f for f in faces if _near(f, tr.box)]
+            if close:
+                on = max(close, key=lambda f: _iou(f[:4], tr.box))
+                tr.saw(on, q, t)
+            else:
+                self.last_match = tr.find(q, t)     # kept for the log: FOLLOW_MIN is tuned from it
+                if self.last_match < config.FOLLOW_MIN and t - tr.alive >= config.AWAY_S:
+                    self.track = tr = None          # out of the picture this long: gone
+        known = self.owner.known
+        if known and rec is not None:
+            on = self._identify(t, small, strong, on, rec, q)
+            tr = self.track
+        elif tr is None and strong:
+            on = max(strong, key=lambda f: float(f[2]))
+            self.track = tr = Follow(on, q, t)
+        alive = tr is not None and tr.alive == t
+        mine = alive and (tr.owner is True or not known)
+        others = sum(1 for f in strong if not _near(f, tr.box)) if alive else 0
+        contact = moving = looking = None
+        if mine and on is not None:
+            looking = facing(on)
+            contact = self.gaze.contact(on, irises(gray, on))
+            m = mouth_of(gray, on)
+            if m is not None and tr.mouth is not None and t - tr.mouth_t <= 0.8:
+                moving = float(np.abs(m - tr.mouth).mean()) >= config.MOUTH_MOVING
+            tr.mouth, tr.mouth_t = m, t
+        elif mine:
+            looking = False                     # followed, face not in view: turned away
+        self.history.append((int(time.time() * 1000), contact, moving, looking))
+        return tracker.update(t, mine, others, dark, stranger=alive and known and tr.owner is False)
+
     def _run(self) -> None:
         from .audio import other_app_using
         det = cv2.FaceDetectorYN.create(str(config.MODELS_DIR / YUNET), "", (640, 480),
-                                        config.FACE_SCORE_THRESHOLD, config.FACE_NMS_THRESHOLD, 10)
+                                        config.PRESENCE_KEEP_SCORE, config.FACE_NMS_THRESHOLD, 10)
         rec = None                                   # SFace: loaded only for your remembered face
         tracker, cap, busy, check_at = Tracker(), None, False, 0.0
-        verdict: dict = {"at": -1e9, "boxes": [], "owner": None, "strangers": 0}   # D38
+        probe, looked = None, -1e9                   # D39: away, a cheap motion check between looks
         try:
             while not self._stop.is_set():
                 t0 = time.monotonic()
@@ -371,7 +599,8 @@ class Presence:
                         cap.release()
                         cap = None
                 if busy:
-                    self._set(state="off", faces=0, facing=False, why="another app is using the camera")
+                    self.track = None
+                    self._set(state="off", faces=0, facing=False, contact=False, why="another app is using the camera")
                     if self.enrolling:
                         self.cancel_enrol()
                     self._stop.wait(1)
@@ -380,7 +609,7 @@ class Presence:
                     cap = cv2.VideoCapture(self.camera, cv2.CAP_MSMF)
                     if not cap.isOpened():
                         cap = None
-                        self._set(state="off", faces=0, facing=False, why="no camera")
+                        self._set(state="off", faces=0, facing=False, contact=False, why="no camera")
                         self._stop.wait(10)
                         continue
                     # D38: 640x480 at a few fps, not the driver's default 30: we read 4.
@@ -392,6 +621,7 @@ class Presence:
                 if not ok or frame is None:
                     cap.release()
                     cap = None
+                    self.track = None
                     self._set(state="off", why="camera stopped")
                     self._stop.wait(2)
                     continue
@@ -399,6 +629,20 @@ class Presence:
                 small = cv2.resize(frame, (640, int(640 * H / W)), interpolation=cv2.INTER_AREA) if W > 640 else frame
                 del frame                              # the full frame dies here, every tick
                 gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+                resting = tracker.state == "away" and self.track is None and not self.enrolling
+                if resting:
+                    # D39: you left and the curtain is down. Look properly every
+                    # AWAY_CHECK_S, or at once when the picture moves (you sitting down).
+                    tiny = cv2.resize(gray, (40, 30), interpolation=cv2.INTER_AREA).astype(np.int16)
+                    moved = probe is not None and float(np.abs(tiny - probe).mean()) >= config.AWAY_MOTION
+                    probe = tiny
+                    if not moved and t0 - looked < config.AWAY_CHECK_S:
+                        del small, gray
+                        self._stop.wait(max(0.0, 1.0 - (time.monotonic() - t0)))
+                        continue
+                else:
+                    probe = None
+                looked = t0
                 det.setInputSize((small.shape[1], small.shape[0]))
                 try:
                     _, faces = det.detect(small)
@@ -411,39 +655,21 @@ class Presence:
                 if (self._enrol is not None or self.owner.known) and rec is None:
                     rec = cv2.FaceRecognizerSF.create(str(config.MODELS_DIR / SFACE), "")
                 if self._enrol is not None:
-                    self._enrol_tick(t0, small, gray, faces, rec)
+                    self._enrol_tick(t0, small, gray, [f for f in faces if f[14] >= config.FACE_SCORE_THRESHOLD],
+                                     rec)
                     del small, gray
                     self._stop.wait(max(0.0, 1 / config.ENROL_FPS - (time.monotonic() - t0)))
                     continue
-                dark = float(gray.mean()) < config.DARK_FRAME
-                near = max(faces, key=lambda f: f[2]) if faces else None
-                is_facing = bool(near is not None and facing(near))
-                owner_here, strangers = None, 0
-                facing_boxes = [f[:4] for f in faces if facing(f)]
-                if self.owner.known and _same_faces(verdict, facing_boxes, t0):
-                    # D38: the same faces in the same places as half a second ago: the
-                    # identity verdict stands. Only the yes/no is kept, never a vector.
-                    owner_here, strangers = verdict["owner"], verdict["strangers"]
-                elif self.owner.known:
-                    owner_here = False
-                    for f in faces:
-                        if not facing(f):
-                            continue                     # identity only from a face turned to the screen
-                        try:
-                            score = self.owner.match(rec.feature(rec.alignCrop(small, f)))
-                        except cv2.error:
-                            continue
-                        # Only the score survives: the vector is gone with this line (D37).
-                        if score >= config.OWNER_MATCH:
-                            owner_here = True
-                        else:
-                            strangers += 1
-                    verdict.update(at=t0, boxes=facing_boxes, owner=owner_here, strangers=strangers)
+                state = self.observe(t0, small, gray, faces, rec, tracker)
                 del small, gray
-                state, away = tracker.update(t0, len(faces), is_facing, dark, owner_here, strangers)
-                self._set(state=state, faces=len(faces), facing=is_facing, looking_away=away,
-                          owner=self.owner.known, why="lens covered or dark" if state == "off" else "")
-                self._stop.wait(max(0.0, 1 / config.PRESENCE_FPS - (time.monotonic() - t0)))
+                recent = list(self.history)[-3:]
+                self._set(state=state, faces=len(faces), facing=bool(recent and recent[-1][3]),
+                          contact=sum(bool(h[1]) for h in recent) >= 2, owner=self.owner.known,
+                          why="lens covered or dark" if state == "off" else
+                          f"out of the picture; last match {self.last_match:.2f}, FOLLOW_MIN {config.FOLLOW_MIN}"
+                          if state == "away" else "")
+                wait = 1.0 if state == "away" and self.track is None else 1 / config.PRESENCE_FPS
+                self._stop.wait(max(0.0, wait - (time.monotonic() - t0)))
         except Exception as exc:                      # presence is optional; capture goes on
             print(f"[presence] stopped: {type(exc).__name__}: {exc}")
             self._set(state="off", why="error")

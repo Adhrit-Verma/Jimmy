@@ -49,6 +49,31 @@ _ABOUT = {"को", "का", "की", "के", "ने", "से", "में
 _ASKS = re.compile(r"^(?:what|who|whom|when|where|why|how|which|can|could|would|will|do|does|did|is|are|"
                    r"show|open|tell|find|search|remind|set|turn|scroll|close|pause|resume|lift|go|take|"
                    r"help|give|read|copy|draft|start|stop)\b", re.I)
+# D39: the end of a conversation, or just an acknowledgement: not a question.
+_CLOSER = re.compile(r"^(?:(?:ok(?:ay)?|alright|all right|fine|cool|great|nice|perfect|good|hmm+|haan|han|accha|"
+                     r"achha|theek hai|thik hai|got it|thanks?|thank you|thank you so much|that'?s (?:all|it|enough)|"
+                     r"bye|goodbye|never ?mind|nothing|no thanks|ठीक है|अच्छा|हाँ|हां|धन्यवाद|शुक्रिया|बस)[\s,.!]*)+$",
+                     re.I)
+# D39: Hindi asks: a question word or a request form of a verb.
+_HI_ASK = re.compile(r"क्या|कब|कहाँ|कहां|कौन|कैसे|क्यों|कितन|बताओ|बताइए|बताना|दिखाओ|दिखाइए|खोलो|खोलिए|बंद करो|"
+                     r"कीजिए|चलाओ|लगाओ|हटाओ|रोको|सुनाओ|ढूंढो|ढूँढो|याद दिला")
+
+
+def for_jimmy(text: str) -> bool:
+    """Phrased as something to do or a question (D39): eye contact plus a statement
+    ("I'm going to eat") isn't a request. ponytail: a shape test, not intent."""
+    t = polite(normalize(text)).strip()
+    if not t or _CLOSER.match(t):
+        return False
+    if command(t) or nav(t):
+        return True
+    if len(t.split()) < 3:
+        return False                            # "Really?", "is it?": a reaction, not a request
+    if t.endswith("?"):
+        return True
+    if _HINDI.search(t):
+        return bool(_HI_ASK.search(t))
+    return bool(_ASKS.match(t))
 # D35: the few command words Whisper writes in Hindi/Urdu script, mapped back.
 _TRANSLIT = {"सकरोल": "scroll", "स्क्रॉल": "scroll", "स्क्रोल": "scroll", "سکرول": "scroll", "اسکرول": "scroll",
              "अप": "up", "اپ": "up", "डाउन": "down", "ڈاؤن": "down", "ڈاون": "down", "नेक्स्ट": "next",
@@ -145,6 +170,20 @@ _CMD = (
     ("remind", re.compile(r"^(?:please\s+)?remind me\b.+", re.I)),
     ("reminders", re.compile(r"^(?:what are|list|show me|show|read)\s+(?:all\s+)?(?:my\s+)?reminders\W*$", re.I)),
     ("unremind", re.compile(r"^(?:cancel|clear|drop|forget)\s+(?:all\s+)?(?:my\s+|the\s+)?reminders?\W*$", re.I)),
+    # D39: timers, counting down on the pill until they ring.
+    ("timers", re.compile(r"^(?:how (?:much time|long)(?: is| do i have)? left\b.*|what'?s left on (?:the |my )?timer\b.*|"
+                          r"(?:show|list|what are) (?:me )?(?:my |the )?timers)\W*$", re.I)),
+    ("untimer", re.compile(r"^(?:cancel|stop|clear|end|kill|remove|delete)\s+(?:the\s+|my\s+|all\s+(?:the\s+|my\s+)?)?"
+                           r"(?:timers?|countdowns?)\W*$", re.I)),
+    ("timer", re.compile(r"^(?:(?:set|start|put|make|run|begin)(?: up| on)?\s+)?(?:a\s+|an\s+|the\s+|my\s+)?"
+                         r"(?:[\w.-]+[\s-]+(?:seconds?|secs?|minutes?|mins?|hours?|hrs?)\s+)?(?:timer|countdown)"
+                         r"(?:\s+(?:for|of|on))?(?:\s+(.+?))?\W*$", re.I)),
+    # D39: talking to Jimmy without its name (eye contact), on or off, remembered.
+    ("eyes", re.compile(r"^(?:only (?:answer|listen|respond)(?: to| when i say)? (?:your|my) name|name only|"
+                        r"(?:stop|don'?t) (?:listen(?:ing)?|answer(?:ing)?) without (?:your|the|my) name|"
+                        r"(?:turn off|disable|stop) (?:the )?eye contact|always need (?:your|the) name|"
+                        r"(?:listen|answer) without (?:your|the|my) name|(?:turn on|enable|start) (?:the )?eye contact|"
+                        r"you can listen when i look at you|no (?:more )?wake word)\W*$", re.I)),
     ("yes", re.compile(r"^(?:yes|yeah|yep|yup|sure|do it|go ahead|accept|add it|okay|ok|sounds good|please do)"
                        r"(?:\s+(?:please|jimmy|do it))?\W*$", re.I)),
     ("no", re.compile(r"^(?:no|nope|no thanks|not now|skip(?: it)?|don'?t)\W*$", re.I)),
@@ -182,7 +221,44 @@ _CMD = (
                             r"(?: again)?(?: in (?:the |my )?browser)?\W*$"
                             r"|^(?:re)?open (?:it|that) (?:again|in (?:the |my )?browser)\W*$|^reopen (?:it|that)\W*$",
                             re.I)),
+    # D39: "delete everything from September": what Jimmy captured in a span, after a yes.
+    # Last: "forget my face", "clear my reminders", "clear everything" (the UI) come first.
+    ("forget", re.compile(r"^(?:delete|erase|wipe|clear|forget|remove|purge)\s+(.+?)\W*$", re.I)),
 )
+# The words allowed before the dates in a "forget" request: "delete [all my data] from …".
+# Anything else ("delete the email from yesterday") is about something other than Jimmy's record.
+_DATA_WORDS = set("all everything every thing my the your jimmy jimmy's of data history capture captures captured "
+                  "recording recordings memory memories record records stuff screenshots screenshot it what you have "
+                  "has saw seen heard recorded complete completely whole entire".split())
+_DUR = re.compile(r"\b(\d+(?:\.\d+)?|an?|one|two|three|four|five|ten|fifteen|twenty|thirty|forty|sixty|ninety|half an?)"
+                  r"[\s-]*(seconds?|secs?|minutes?|mins?|hours?|hrs?)\b", re.I)
+
+
+def _forget_ok(rest: str) -> bool:
+    from .plugin import date_range
+    if not date_range(rest, now_ms()):
+        return False
+    head = re.split(r"\b(?:from|in|of|for|since|before|after|older|between|on|during|today|yesterday|last|this|"
+                    r"past|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)|\d", rest.lower(), maxsplit=1)[0]
+    return all(w in _DATA_WORDS for w in re.findall(r"[a-z']+", head))
+
+
+def _seconds(text: str) -> int:
+    """'1 hour 30 minutes' -> 5400; 0 if no duration."""
+    nums = {**_NUMS, "forty": 40, "sixty": 60, "ninety": 90}
+    total = 0.0
+    for n, unit in _DUR.findall(text):
+        v = float(n) if n[0].isdigit() else nums.get(n.lower(), 1)
+        total += v * (3600 if unit[0].lower() == "h" else 60 if unit[0].lower() == "m" else 1)
+    return int(total)
+
+
+def _span(secs: float) -> str:
+    """5400 -> '1 h 30 min', 90 -> '1 min 30 s'."""
+    secs = max(0, int(round(secs)))
+    h, m, s = secs // 3600, secs % 3600 // 60, secs % 60
+    return " ".join(p for p in (f"{h} h" if h else "", f"{m} min" if m else "",
+                                f"{s} s" if s and not h else "") if p) or "0 s"
 
 # D33: moving around Jimmy's own UI by voice. After Jimmy shows you something,
 # these work without the wake word for NAV_WINDOW_S. Whole-phrase matches only.
@@ -270,6 +346,8 @@ Windows laptop. Jimmy can do exactly these things (tool: what it does):
 - pause {"minutes": number}: stop capturing for a while; resume {}: start again
 - focus {"text": "..."}: set what the user means to work on; unfocus {}
 - remind {"text": "...", "when": "..."}: set a reminder; list_reminders {}: say them
+- timer {"seconds": number}: start a countdown timer; cancel_timer {}: stop it
+- forget {"when": "..."}: delete what Jimmy recorded in a span of time (it asks first)
 - remember_face {}: learn the user's face (guided); forget_face {}: delete it
 - copy_screen {}: copy the text of the window in front to the clipboard
 - volume {"level": "softer" or "louder" or "mute" or "unmute"}: Jimmy's speaking voice
@@ -320,7 +398,13 @@ def command(text: str) -> tuple[str, object] | None:
             return kind, (n * (60 if m[2][0].lower() == "h" else 1) if n else None)
         if kind == "volume":
             return kind, _volume_word(t)
-        return kind, (next((g for g in m.groups() if g), "") or None) if m.groups() else None
+        if kind in ("timer", "eyes"):
+            return kind, t                      # the whole phrase: _do reads it
+        if kind == "forget":
+            if not _forget_ok(m[1]):
+                continue
+            return kind, m[1]
+        return kind,(next((g for g in m.groups() if g), "") or None) if m.groups() else None
     return None
 
 
@@ -650,6 +734,9 @@ class Asker:
         self.shown = 0                     # D33: which evidence item Jimmy last put up
         self.nav_until = 0                 # D33: bare "next", "scroll down" count until then
         self.offer: dict | None = None     # D32: what a "yes" would accept right now
+        self.followup_until = 0            # D39: after Jimmy answers you aloud, no name needed until then
+        self.armed_at = 0                  # ...counted from when its voice stops
+        self.others_at = 0                 # D39: last time someone else was heard near the mic
 
     def make_offer(self, kind: str, data, bare: bool = False, ttl_s: float | None = None) -> None:
         """Something Jimmy proposes and only you can approve: a focus, a calendar
@@ -657,10 +744,11 @@ class Asker:
         self.offer = {"kind": kind, "data": data, "bare": bare,
                       "until": now_ms() + int((ttl_s or (config.OFFER_WAIT_S if bare else 600)) * 1000)}
 
-    def hear(self, ts_end: int, source: str, text: str) -> bool:
+    def hear(self, ts_end: int, source: str, text: str, ts_start: int | None = None) -> bool:
         """Called for every transcribed segment. True if it was meant for Jimmy."""
         if source != "mic":
             return False
+        ts_start = ts_start or ts_end - 2000
         text = normalize(text)                 # D35: "جمی سکرول اپ" -> "جمی scroll up"
         now = now_ms()
         bare = " ".join(text.strip().split())
@@ -687,6 +775,13 @@ class Asker:
                 self.listen_until = 0
                 self.ask(text.strip(), "voice")
                 return True
+            why = self._unnamed(ts_start, ts_end, bare)
+            if why:
+                print(f"[ask] no name needed ({why}): {bare!r}")
+                self.ask(bare, "voice")
+                return True
+            if self.actions.get("spoke", lambda a, b: None)(ts_start, ts_end) is False:
+                self.others_at = now_ms()       # speech, and the camera saw your lips still: someone else
             return False
         if len(q.split()) < 2 and not command(q) and not nav(q):   # just "Jimmy": listen for the question
             self.listen_until = now_ms() + config.LISTEN_WINDOW_S * 1000
@@ -694,6 +789,56 @@ class Asker:
             return True
         self.ask(q, "voice")
         return True
+
+    def _unnamed(self, t0: int, t1: int, text: str) -> str | None:
+        """Why a line without the name is still for Jimmy (D39), or None.
+
+        - follow-up: Jimmy just answered you aloud, and you went on (FOLLOWUP_S), still
+          turned to the screen as far as the camera can tell;
+        - eye contact: you were looking at the screen as you began, your lips moved,
+          it's phrased as a request, and nobody else has been talking near the mic.
+        Never during a call (another app has the mic), and never when the camera saw
+        your lips still while it was said (a video, someone else in the room)."""
+        act = self.actions
+        words = text.split()
+        if not words or act.get("on_call", lambda: False)():
+            return None
+        spoke = act.get("spoke", lambda a, b: None)(t0, t1)
+        if spoke is False:
+            return None
+        if _CLOSER.match(polite(text)):
+            self.followup_until = 0             # "okay, thanks": the conversation's over
+            return None
+        if (now_ms() < self.followup_until and (len(words) >= 2 or command(text) or nav(text))
+                and act.get("facing", lambda a, b: None)(t0, t1) is not False):
+            return "follow-up"
+        if (spoke and act.get("eyes_on", lambda: config.EYE_CONTACT_ASKS)()
+                and now_ms() - self.others_at >= config.OTHERS_QUIET_S * 1000
+                and act.get("eye_contact", lambda a, b: False)(t0, t1) and for_jimmy(text)):
+            return "eye contact"
+        return None
+
+    def _arm(self, question: str) -> None:
+        """After an answer to something you said: keep listening without the name, from
+        when Jimmy's voice stops (voice_done). "Thanks", "stop", "that's all" end it."""
+        c = command(question)
+        if nav(question):
+            return                              # moving around has its own window (NAV_WINDOW_S)
+        if _CLOSER.match(polite(question)) or (c and c[0] in ("hush", "close_ui", "pause", "eyes")):
+            self.followup_until = self.armed_at = 0
+            return
+        self.armed_at = now_ms()
+        voice = self.actions.get("voice_on", lambda: bool(self.speak))()
+        # Speaking: the window opens when the voice ends (an answer is <= ~15 s aloud).
+        self.followup_until = now_ms() + int((config.FOLLOWUP_S + (30 if voice else 0)) * 1000)
+        if not voice:
+            self.publish({"type": "listening", "prompt": "go on…", "ms": config.FOLLOWUP_S * 1000})
+
+    def voice_done(self) -> None:
+        """Jimmy finished speaking: your next line needs no name for FOLLOWUP_S (D39)."""
+        if self.followup_until and now_ms() - self.armed_at < 120_000:
+            self.followup_until = now_ms() + config.FOLLOWUP_S * 1000
+            self.publish({"type": "listening", "prompt": "go on…", "ms": config.FOLLOWUP_S * 1000})
 
     def accept(self) -> str:
         """You said yes (or clicked it) to what Jimmy offered (D32)."""
@@ -705,6 +850,8 @@ class Asker:
             if "state" in self.actions:
                 self.publish({"type": "state", **self.actions["state"]()})
             return f"Focus set: {o['data']}."
+        if o["kind"] == "forget" and "forget" in self.actions:
+            return self.actions["forget"](*o["data"])
         if o["kind"] == "event" and "open_file" in self.actions:
             from .proactive import calendar_file
             self.actions["open_file"](str(calendar_file(o["data"])))
@@ -814,7 +961,50 @@ class Asker:
             if due is None and app is None:
                 return 'When? Say "at 5" or "in 20 minutes".'
             act["remind"](what, due, app)
+            self._state()                       # D39: due soon -> it counts down on the pill
             return f"Okay: {what}, {_when_due({'due_ts': due, 'app': app})}."
+        if kind in ("timer", "timers", "untimer"):
+            if "remind" not in act:
+                return "I can't do that from here."
+            timed = [r for r in act["reminders"]() if r.get("due_ts")]
+            if kind == "timers":
+                if not timed:
+                    return "No timers running."
+                return "; ".join(f"{_span((r['due_ts'] - now_ms()) / 1000)} left on {r['text']}" for r in timed[:2]) + "."
+            if kind == "untimer":
+                mine = [r for r in timed if r["text"].endswith("timer")]
+                for r in mine:
+                    act["cancel_reminder"](r["id"])
+                self._state()
+                return ("No timer running." if not mine else "Timer cancelled." if len(mine) == 1
+                        else f"{len(mine)} timers cancelled.")
+            secs = _seconds(arg)
+            if not secs:
+                return 'How long? Say "a timer for 5 minutes".'
+            purpose = re.search(r"\b(?:to|so i can)\s+(.+)$", _DUR.sub("", arg), re.I)
+            label = f"{_span(secs)} timer"
+            act["remind"](f"{purpose[1].strip()}, {label}" if purpose else label, now_ms() + secs * 1000, None)
+            self._state()
+            return f"Timer set: {_span(secs)}."
+        if kind == "forget":
+            if "forget" not in act:
+                return "I can't do that from here."
+            from .plugin import date_range
+            since, until, label = date_range(arg, now_ms())
+            n = act["measure"](since, until)
+            if not (n["frames"] or n["speech"]):
+                return f"I have nothing from {label}."
+            what = f"{n['frames']:,} screenshots" + (f" and {n['speech']:,} lines heard" if n["speech"] else "")
+            self.make_offer("forget", (since, until, label), bare=True)
+            when = "everything I've captured" if label == "everything" else label
+            return f"Delete {what} from {when}, {n['bytes'] / 1e6:,.0f} MB? It can't be undone. Say yes."
+        if kind == "eyes":
+            if "eye_mode" not in act:
+                return "I can't do that from here."
+            on = not re.search(r"\b(?:only|stop|don'?t|off|disable|always need)\b", arg, re.I)
+            act["eye_mode"](on)
+            return ("Okay: look at the screen and just ask. I'll still answer to my name." if on else
+                    "Okay: only when you say my name.")
         if kind in ("curtain", "uncurtain"):
             if "curtain" not in act:
                 return "I can't do that from here."
@@ -916,7 +1106,10 @@ class Asker:
         cmd = {"close_ui": ("close_ui", None), "resume": ("resume", None), "unfocus": ("unfocus", None),
                "copy_screen": ("copy_screen", None), "open_page": ("open_url", None),
                "remember_face": ("enrol", None), "forget_face": ("unenrol", None),
-               "list_reminders": ("reminders", None),
+               "list_reminders": ("reminders", None), "cancel_timer": ("untimer", None),
+               "timer": ("timer", f"timer for {int(float(args['seconds']))} seconds")
+               if str(args.get("seconds", "")).replace(".", "", 1).isdigit() else None,
+               "forget": ("forget", str(args.get("when") or "")) if _forget_ok(str(args.get("when") or "")) else None,
                "curtain": ("curtain" if args.get("on", True) is not False else "uncurtain", None),
                "pause": ("pause", float(args["minutes"]) if str(args.get("minutes", "")).replace(".", "", 1).isdigit()
                          else None),
@@ -1037,11 +1230,17 @@ class Asker:
         if source == "voice" and self.speak:
             self.speak("Draft copied." if wrote else speakable(text))
 
+    def _state(self) -> None:
+        if "state" in self.actions:
+            self.publish({"type": "state", **self.actions["state"]()})
+
     def _run(self, question: str, source: str, force: tuple[str, str] | None = None) -> None:
         try:
             self._answer(question, source, force)
         finally:
             self.busy -= 1
+            if source == "voice":
+                self._arm(question)             # D39: a conversation, not one question at a time
 
     def _answer(self, question: str, source: str, force: tuple[str, str] | None) -> None:
         with self._lock:                                # one answer at a time

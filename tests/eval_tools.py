@@ -53,6 +53,12 @@ CASES = [
     ("सब बंद कर दो", {"close_ui", "close"}),
     ("अगला दिखाओ", {"step"}),
     ("कल शाम को मैं क्या देख रहा था", {"answer:recall", "answer:goto", "goto"}),
+    # D39: timers and forgetting a span
+    ("wipe whatever you recorded last week", {"forget"}),
+    ("could you count down three minutes for me", {"timer"}),
+    ("पाँच मिनट का टाइमर लगाओ", {"timer"}),
+    ("टाइमर बंद करो", {"cancel_timer"}),
+    ("सितंबर का सारा डेटा डिलीट कर दो", {"forget"}),
 ]
 
 

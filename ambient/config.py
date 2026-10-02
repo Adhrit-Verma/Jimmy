@@ -160,17 +160,27 @@ MUTE_WINDOW_DAYS = 14        # ...and none used -> that kind stays quiet in that
 NAV_WINDOW_S = 45            # after Jimmy shows you something, "next", "scroll down",
                              # "close" work without saying "Jimmy" for this long (D33)
 OFFER_WAIT_S = 30            # "add it?" -> a bare "yes" counts for this long
+TIMER_SHOW_S = 3600          # D39: timers and reminders due within this long count down on the pill
+COMPACT_AFTER_AWAY_S = 600   # D39: away this long -> tidy the database (VACUUM + index merge)...
+COMPACT_EVERY_H = 24         # ...at most this often
 
-# --- privacy curtain: presence from your own webcam (D34) --------------------
-# Counts faces and reads head direction. Never recognises anyone: no face
-# vectors are computed from the webcam, nothing is stored (non-negotiable 2).
+# --- privacy curtain: presence from your own webcam (D34, D39) ---------------
+# D39: your face is found once, then the place you sit is followed. Where you look
+# never matters; only leaving the picture brings the curtain.
 PRESENCE = True              # False: no webcam at all
 PRESENCE_CAMERA = 0          # OpenCV camera index
 PRESENCE_FPS = 4
 PRESENCE_CAMERA_FPS = 5      # D38: ask the camera for 5 fps, not its 30: we read 4, it decoded 30
-PRESENCE_REID_S = 0.5        # D38: re-check who a steady face is twice a second, not every frame
 PRESENCE_MIN_FACE = 0.06     # ignore faces narrower than this share of the frame (far away)
-AWAY_S = 6                   # no face this long -> away -> curtain
+AWAY_S = 1.5                 # D39: out of the picture this long -> away -> curtain (was 6 s,
+                             # when a turned head looked like "no face"; now it's followed)
+AWAY_CHECK_S = 5             # D39: curtained because you left: look for you this often...
+AWAY_MOTION = 6.0            # ...or at once when the picture moves this much (mean grey change, 40x30)
+PRESENCE_KEEP_SCORE = 0.5    # D39: detector score that keeps a followed face (a turned head scores
+                             # low); a new face still needs FACE_SCORE_THRESHOLD and to face the screen
+FOLLOW_MIN = 0.5             # D39: template match that says you're still there when your face isn't seen
+BLIND_MAX_S = 120            # D39: no face at all this long -> the template is no longer trusted
+                             # (it could be matching the empty chair): looking up lifts it again
 WATCHED_S = 1.0              # a second face this long -> someone's looking
 RETURN_S = 0.6               # one face facing the screen this long -> curtain lifts
 CURTAIN_WHEN_AWAY = True
@@ -178,10 +188,15 @@ CURTAIN_WHEN_AWAY = True
 # password field), as the spec's shoulder-surf warning says; otherwise Jimmy
 # hides its own panels and warns in the pill.
 CURTAIN_WHEN_WATCHED = "sensitive"   # "always" | "sensitive" | "never"
-LOOK_AWAY_S = 0              # >0: looking away this long also curtains (off: reading paper is normal)
 # --- your face, remembered (D37): only on "remember my face", DPAPI-encrypted ----
 OWNER_MATCH = 0.42           # cosine to your template; OpenCV's same-person line is 0.363, a bit stricter here
 STRANGER_S = 2.0             # someone who isn't you, at the screen, this long -> curtain
+# D39: who a face is gets judged when it appears, then re-checked now and then; the
+# D37 version judged every half second, and one dim frame dropped the curtain on you.
+ID_EVERY_S = 0.25            # a new face: look this often until it's you...
+ID_TRIES = 6                 # ...or this many looks (~1.5 s) without a match -> not you
+REVERIFY_S = 15              # you, followed: re-check this often
+OWNER_KEEP = 0.30            # two re-checks below this (OpenCV's same-person line is 0.363) -> not you
 CURTAIN_WHEN_STRANGER = True
 ENROL_FPS = 8                # frames a second while capturing (preview + checks)
 ENROL_TIMEOUT_S = 90
@@ -190,6 +205,20 @@ ENROL_MAX_LIGHT = 210        # brighter -> "too much light on your face"
 ENROL_MIN_SHARP = 30         # Laplacian variance of the face crop: below -> "hold still" (motion blur)
 ENROL_MIN_AGREE = 0.5        # the straight-on samples must be this alike, or the capture is redone
 DARK_FRAME = 12              # mean grey below this = covered lens / dark room -> presence off
+
+# --- talking to Jimmy without its name (D39) ----------------------------------
+# Your face only. Eye contact: head pose and irises inside the zone where you usually
+# look, learnt as you work. Lips moving: the mouth patch changes between frames.
+GAZE_LEARN_N = 120           # frames of you facing the screen (~30 s) before the zone is used
+GAZE_ZONE = 2.5              # inside this many spreads of your usual yaw, tilt and iris position
+GAZE_MIN_SPREAD = (0.05, 0.05, 0.02, 0.02)   # floors for those spreads, so the zone isn't a pinhole
+GAZE_MIN_EYES = 24           # eye distance (px, 640-wide frame) below which irises aren't read
+MOUTH_MOVING = 0.22          # mean change of the normalised mouth patch that counts as moving
+MOUTH_SHARE = 0.3            # share of frames moving while a line was said -> you said it
+EYE_CONTACT_ASKS = True      # looking at the screen + your lips moving + a request -> no name needed
+FOLLOWUP_S = 10              # after Jimmy answers you aloud, your next line needs no name for this long
+OTHERS_QUIET_S = 30          # someone else spoke near the mic this recently (a call, a video, a
+                             # person): eye contact alone isn't enough; say the name
 
 # --- ask by voice, answers come to you (D25) --------------------------------
 ASK_EVIDENCE = 6             # moments shown beside a spoken answer

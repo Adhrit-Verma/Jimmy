@@ -158,6 +158,64 @@ def time_window(question: str, now_ms: int) -> tuple[int, int, str] | None:
     return None
 
 
+_MONTH_NAMES = ("january", "february", "march", "april", "may", "june", "july", "august", "september",
+                "october", "november", "december")
+_MON = r"(january|february|march|april|may|june|july|august|september|october|november|december|" \
+       r"jan|feb|mar|apr|jun|jul|aug|sept|sep|oct|nov|dec)\b\.?"
+_DATE = re.compile(rf"\b(?:(\d{{1,2}})(?:st|nd|rd|th)?\s+(?:of\s+)?{_MON}|{_MON}\s+(\d{{1,2}})(?:st|nd|rd|th)?\b|{_MON})"
+                   r"(?:,?\s+(\d{4}))?")
+_SPANS = {"day": 86400, "days": 86400, "week": 7 * 86400, "weeks": 7 * 86400, "month": 30 * 86400,
+          "months": 30 * 86400, "year": 365 * 86400, "years": 365 * 86400}
+
+
+def date_range(question: str, now_ms: int) -> tuple[int, int, str] | None:
+    """A span of days or months to delete (D39), as (since_ms, until_ms, label):
+    "September", "from September to October", "1 to 15 September", "25 Sep",
+    "since September", "before 1 September", "older than 30 days", "everything",
+    and every phrase `time_window` knows ("today", "last week", "on Tuesday").
+    A month or day without a year is the most recent one that has begun."""
+    q = question.lower()
+    now = datetime.fromtimestamp(now_ms / 1000)
+    ms = lambda d: int(d.timestamp() * 1000)  # noqa: E731
+    if m := re.search(r"\bolder than\s+(\d+|an?|one|two|three|four|five|six)\s+(days?|weeks?|months?|years?)\b", q):
+        n = int(m[1]) if m[1].isdigit() else {**_AGO_NUMS, "six": 6}[m[1]]
+        return 0, now_ms - int(n * _SPANS[m[2]] * 1000), f"older than {m[1]} {m[2]}"
+    # "from 1 to 15 September" -> "1 September to 15 September"
+    q = re.sub(rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s*(?:to|till|until|-|–|and)\s*(\d{{1,2}})(?:st|nd|rd|th)?\s+(?:of\s+)?{_MON}",
+               r"\1 \3 to \2 \3", q)
+    spans = []
+    for m in _DATE.finditer(q):
+        day, mon = (m[1], m[2]) if m[2] else (m[4], m[3]) if m[3] else (None, m[5])
+        if mon == "may" and not (day or m[6] or re.search(r"\b(?:in|from|since|before|of|to|until|during)\s+may\b", q)):
+            continue                            # "may I ask", not the month
+        mi =next(i for i, n in enumerate(_MONTH_NAMES) if n.startswith(mon.rstrip(".")[:3])) + 1
+        year = int(m[6]) if m[6] else now.year
+        try:
+            start = datetime(year, mi, int(day) if day else 1)
+        except ValueError:
+            continue
+        if not m[6] and start > now:
+            start = start.replace(year=year - 1)
+        end = (start + timedelta(days=1) if day else
+               start.replace(year=start.year + (mi == 12), month=mi % 12 + 1))
+        if not spans or spans[-1][0] != start:          # "September September": said twice, one month
+            spans.append((start, end, start.strftime("%d %b %Y").lstrip("0") if day else start.strftime("%B %Y")))
+    if len(spans) == 1:
+        s, e, label = spans[0]
+        if re.search(r"\b(?:since|after|onwards?|till now|until now|to now|to date)\b", q):
+            return ms(s), now_ms, f"since {label}"
+        if re.search(r"\b(?:before|until|till|up to)\b", q):
+            return 0, ms(s), f"before {label}"
+        return ms(s), min(now_ms, ms(e)), label
+    if spans:
+        return ms(spans[0][0]), min(now_ms, ms(spans[-1][1])), f"{spans[0][2]} to {spans[-1][2]}"
+    if w := time_window(question, now_ms):
+        return w
+    if re.search(r"\b(?:everything|all (?:of )?(?:it|my data|the data|data|my history|history))\b", q):
+        return 0, now_ms, "everything"
+    return None
+
+
 def coverage(times: list[int], since_ms: int, until_ms: int,
              gap_min: int = jcfg.COVERAGE_GAP_MIN) -> str:
     """Say plainly how much of a window was actually captured.

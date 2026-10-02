@@ -173,6 +173,14 @@ class Memory:
             self._write("INSERT INTO turns(ts, session, role, text) VALUES (?,?,?,?)",
                         (int(time.time() * 1000), session, role, text.strip()))
 
+    def forget_turns(self, since_ms: int, until_ms: int) -> int:
+        """D39: chat turns in a span the user deleted (answers quote what was captured).
+        Remembered facts and reminders stay: those you asked Jimmy to keep."""
+        with self._lock:
+            n = self.conn.execute("DELETE FROM turns WHERE ts >= ? AND ts < ?", (since_ms, until_ms)).rowcount
+            self.conn.commit()
+        return n
+
     def recent_turns(self, session: str, n: int) -> list[dict]:
         sql = """SELECT role, text FROM (SELECT id, role, text FROM turns WHERE session=?
                   ORDER BY id DESC LIMIT ?) ORDER BY id"""

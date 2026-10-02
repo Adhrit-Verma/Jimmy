@@ -185,6 +185,8 @@ def test_asker_answers_voice_questions_and_speaks_only_those():
     a._run("mckinsey application", "typed")
     assert len(spoken) == 1, "typed questions are answered silently"
     assert a.hear(0, "loopback", "Jimmy, what was that") is False, "only the user's mic can ask"
+    assert a.followup_until > 0, "D39: right after a spoken answer, you can go on without the name"
+    a.followup_until = 0                                 # ...for FOLLOWUP_S; after that:
     assert a.hear(0, "mic", "just talking about lunch") is False
     print("ok  asker: voice in, evidence + answer out, spoken reply")
 

@@ -250,17 +250,16 @@ def test_presence_states_never_recognise():
     looking = [0, 0, 40, 40, 10, 15, 30, 15, 20, 25, 12, 32, 28, 32, 0.9]   # nose centred below the eyes
     turned = [0, 0, 40, 40, 10, 15, 30, 15, 31, 25, 12, 32, 28, 32, 0.9]    # nose out past an eye
     assert facing(looking) and not facing(turned)
-    t = Tracker()
-    assert t.update(0, 1, True, False)[0] == "present"
-    assert t.update(3, 0, False, False)[0] == "present", "a few seconds without a face is not away"
-    assert t.update(3 + config.AWAY_S, 0, False, False)[0] == "away"
-    assert t.update(10, 1, False, False)[0] == "away", "someone walking past, not looking: still away"
-    t.update(11, 1, True, False)
-    assert t.update(11.01 + config.RETURN_S, 1, True, False)[0] == "present", "looking at the screen lifts it"
-    t.update(20, 2, True, False)
-    assert t.update(20 + config.WATCHED_S, 2, True, False)[0] == "watched"
-    t.update(30, 0, False, True)
-    assert t.update(41, 0, False, True)[0] == "off", "a covered lens turns presence off, not away"
+    t = Tracker()                     # D39: `you` = your face, or where it was followed to
+    assert t.update(0, True) == "present"
+    assert t.update(1, False) == "present", "a moment out of the picture is not away"
+    assert t.update(1 + config.AWAY_S, False) == "away"
+    t.update(11, True)
+    assert t.update(11.01 + config.RETURN_S, True) == "present", "back: lifted"
+    t.update(20, True, others=1)
+    assert t.update(20 + config.WATCHED_S, True, others=1) == "watched"
+    t.update(30, False, dark=True)
+    assert t.update(41, False, dark=True) == "off", "a covered lens turns presence off, not away"
     try:
         pickle.dumps(Presence(lambda i: None))
     except TypeError:
