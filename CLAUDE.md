@@ -15,7 +15,8 @@ and what not to build*. Everything else, including this file, is downstream of i
 **Thesis:** continuous capture is commodity. The product is the gate that decides
 to stay quiet. Build for six good interruptions an evening, not for throughput.
 
-**Current state: all five stages are done, plus voice Q&A (D25) and Insights + commands (D31):** "Jimmy, …" → an
+**Current state: all five stages are done, plus voice Q&A (D25), Insights + commands (D31),
+cards Jimmy writes itself (D32), hands-free UI (D33) and the privacy curtain (D34):** "Jimmy, …" → an
 evidence panel and a spoken answer, with no typing needed. Stage 3 (trigger gate) passed its 5-check
 list, blind-judged (D19–D22). Stage 4 is the Electron overlay (D23). Stage 5 is hybrid
 keyword + meaning recall and a timeline window (D24). Remaining work lives in
@@ -83,6 +84,8 @@ cd overlay; npm install; npm run build   # once, and after any change under over
 .\.venv\Scripts\python.exe tests\test_stage5.py   # 14 checks: recall, voice ask, router, clarify, screen, commands, self-exclusion, demo
 .\.venv\Scripts\python.exe tests\test_stage6.py   # 6 checks: insights estimate, usage answers, commands, time phrases, small thumbs
 .\.venv\Scripts\python.exe -m ambient.insights    # self-check for the time estimate
+.\.venv\Scripts\python.exe tests\test_stage7.py   # 11 checks: nav, reminders, deadlines, offers, curtain, presence
+.\.venv\Scripts\python.exe -m ambient deadlines --scan --dry   # date lines in history, no model
 ```
 
 Timeline window: pill → **Timeline**, or **Ctrl+Alt+T**; its Insights tab: **Ctrl+Alt+I**
@@ -126,6 +129,9 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `ambient/insights.py` | D31: where the day went: gap-capped time per app, runs, hours, week; usage answers written in code. |
 | `overlay/src/Insights.jsx` | D31: the Insights tab, plus the shared chart pieces (colours, bars, day ribbon) the overlay reuses. |
 | `tests/test_stage6.py` | D31 check: insights, usage answers, commands, time phrases, small thumbnails. |
+| `ambient/proactive.py` | D32: RESUME / SUGGEST / REMIND / DEADLINE / RECAP cards, reminder and date parsing, `.ics` files. |
+| `ambient/presence.py` | D34: webcam presence for the privacy curtain. Face count + head pose only. |
+| `tests/test_stage7.py` | D32–D34 check. No webcam, no network. |
 | `overlay/src/Answer.jsx` | the answer view: evidence left (best match focused), streamed answer right. |
 | `ambient/recall.py` | Stage 5: chunk + index (bge-m3), meaning search, hybrid (RRF) with furniture filter, timeline API reads. |
 | `overlay/src/Timeline.jsx` | the timeline window: day nav, search, preview, minute scrub strip. |
@@ -170,6 +176,14 @@ setting that defaults to off.
    matters most once Stage 3 gives Jimmy actions.
 9. **A model never writes a card.** It answers typed questions; `jimmy/cards.py`
    composes the line from words that exist in the evidence and real timestamps.
+   D32's cards follow the same rule: `ambient/proactive.py` writes every line.
+10. **The webcam never recognises anyone** (D34). `presence.py` counts faces and
+   reads head pose; it computes no face vector, keeps no frame and refuses to
+   pickle. A test scans it for recogniser calls. Owner recognition would need an
+   amendment to non-negotiable 2 first.
+11. **Jimmy proposes; you approve** (D32). Focus, page, draft, calendar event:
+   each waits for your yes, and drafts/events go no further than your
+   clipboard or your calendar app's own confirm.
 
 ---
 
@@ -300,6 +314,11 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
 - **Usage numbers are estimates.** Frames are change-driven, so each counts until
   the next, capped at `ACTIVE_GAP_S`. Returning to an unchanged window writes a
   "switched" row (D31); without it, time kept counting for the app you'd left.
+- **Bare navigation words are live after Jimmy shows something** (D33): "next",
+  "close", "scroll down" need no wake word for 45 s. Any new nav phrase must
+  be a whole-phrase match; "just talking about lunch" once became a filter.
+- **The curtain is drawn by the overlay window**, so a capture under it would
+  store the curtain: `bus.tick` returns "curtained" before reading the screen.
 - **Commands and usage questions route before everything else** (`ask.route`).
   A new pattern there can swallow real questions: add its negative case to
   `test_router_commands_and_stats` first.

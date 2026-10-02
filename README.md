@@ -55,6 +55,11 @@ While `ambient run` is going, say **"Jimmy,"** and then your question.
 | *"Jimmy, can you hear me?"* · *"what can you do?"* | Just talks. No search. |
 | *"Jimmy, how was my day?"* · *"how long was I on YouTube?"* | One line from your captures, with a chart: apps, a day map, totals. No model, instant. *"And yesterday?"* follows on. |
 | *"Jimmy, pause for 30 minutes"* · *"focus on the essay"* · *"open insights"* · *"never mind"* | Does it, and says so in the pill. |
+| *"Jimmy, show me yesterday at 3"* · *"show me the McKinsey form"* | Puts it in front of you: the timeline at that moment, or the screenshot opened big. |
+| *"next"* · *"go back"* · *"scroll down"* · *"close it"* · *"only Chrome"* | Right after Jimmy shows you something, no wake word needed. |
+| *"Jimmy, remind me at 5 to call Sam"* · *"…when I open Discord"* | A card (and a spoken reminder) at that time, or when that app comes up. |
+| *"Jimmy, draft a reply to this"* · *"add this to my calendar"* | A draft copied to your clipboard; an event you confirm with *"yes"*. Nothing is sent or saved behind your back. |
+| *"Jimmy, open that page"* · *"curtain"* · *"lift the curtain"* | Reopens the page in your browser; draws or lifts the privacy curtain. |
 
 It understands days and times: *today*, *yesterday afternoon*, *on Tuesday*,
 *between 2 and 3*, *the last 20 minutes*, *an hour ago*, *last Friday*. Say just **"Jimmy"** and pause if you
@@ -160,6 +165,7 @@ downloads its weights on the first run and caches them after that.
 | See where the day went | **Ctrl + Alt + I**, or hover the pill → **Insights** |
 | Set or clear a focus | Hover the pill → **Focus** / **Unfocus**, or say *"Jimmy, focus on …"* |
 | Copy or follow up an answer | **Copy** / **Follow up** under the answer |
+| Privacy curtain | Draws itself when you walk away (webcam: faces counted, never recognised). By hand: **Ctrl + Alt + L** |
 | Silence an answer | **Stop voice** on the answer panel |
 | Dismiss a card | Hover it, click **×**. Jimmy then stays quiet for 30 minutes |
 | Quit cleanly | Hover the pill → **Quit**, or **Ctrl + C** in the terminal |
@@ -303,13 +309,14 @@ take it to zero.
 | 5 · Recall | Hybrid keyword + meaning search and the timeline | ✅ |
 | + · Voice | "Jimmy, …", spoken answers, conversation, asking back | ✅ |
 | + · Insights | Day map, time per app, usage answers, voice commands | ✅ |
+| + · Autonomy | Its own cards, reminders, deadlines, hands-free UI, privacy curtain | ✅ |
 
 What's next lives in [`SCOPE.md`](SCOPE.md) → *Possible future changes*. The
 biggest one: the model reads text, not pixels, so windows that UI Automation
 can't reach (canvases, video, some apps' main panes) aren't described yet.
 
 <details>
-<summary><b>Checks</b>: 65 assert-based checks, no framework</summary>
+<summary><b>Checks</b>: 76 assert-based checks, no framework</summary>
 
 ```powershell
 .\.venv\Scripts\python.exe tests\test_stage1.py    # 15 · capture, blur, store
@@ -318,6 +325,7 @@ can't reach (canvases, video, some apps' main panes) aren't described yet.
 .\.venv\Scripts\python.exe tests\test_stage4.py    #  5 · overlay API and window flags
 .\.venv\Scripts\python.exe tests\test_stage5.py    # 14 · recall, voice, ask-back, demo
 .\.venv\Scripts\python.exe tests\test_stage6.py    #  6 · insights, usage answers, commands
+.\.venv\Scripts\python.exe tests\test_stage7.py    # 11 · own cards, hands-free, curtain
 ```
 
 OpenCV prints `net_impl_backend ... Targets are not supported` on import. It's harmless.

@@ -199,6 +199,24 @@ window, small lazy strip thumbnails, and the overlay feedback pass.
 
 ---
 
+## Autonomy, hands-free, curtain (D32–D34) — built, and NOT built
+
+Built: RESUME / SUGGEST / REMIND / DEADLINE / RECAP cards, learned mutes,
+lock and password-box protection, stored page URLs with Open page, drafts to
+the clipboard, calendar events via `.ics` after a yes, voice navigation
+without the wake word after Jimmy shows something, "show me …" driving the
+UI, and the presence-based privacy curtain.
+
+| Not built | Why |
+|---|---|
+| Battery mode | The human's call (D32): OCR and the local model stay on; performance gets optimised another way. |
+| Owner recognition for the curtain | Enrolment is ruled out by non-negotiable 2; needs a spec amendment first (D34). |
+| Gaze tracking | A plain webcam reads head direction well, gaze poorly; needs a gaze model. |
+| Sending drafts, adding events directly | Never: drafts go to the clipboard, events through your calendar's own confirm. |
+| A deadline eval set | Needs real evenings; freeze one before tuning, as D22 did for RECALL. |
+
+---
+
 ## Possible future changes
 
 Ideas I'd want to make but that are **not decided**. Each needs evidence or a
@@ -224,8 +242,6 @@ human call before it moves into a stage. When one is adopted, log it in
 - **One warm HTTP/2 connection** to the NVIDIA API, reused, to skip the TLS
   handshake on every call.
 - **Stream every cloud response** into the overlay token by token.
-- **Battery mode.** On battery, drop OCR and the local LLM, stretch the tick
-  interval, and lean on the cloud. Always-on GPU drains a laptop.
 
 **Capture quality:**
 - **Adaptive UIA budget.** Today it's a fixed 0.6 s / 1200 nodes. Grow the budget

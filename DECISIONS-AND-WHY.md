@@ -1135,3 +1135,118 @@ app, not its rank: five common apps have fixed slots, others hash into the three
 free ones (two rare apps can share; every mark is also labelled).
 
 Checks: `tests\test_stage6.py` (6).
+
+
+### D32 — Jimmy on its own: it notices; anything that acts waits for a yes
+
+**Asked for:** make Jimmy feel more autonomous. Agreed list: welcome-back,
+learning from dismissals, self-protection, reminders, suggested focus,
+deadlines, a daily recap, reopening pages, drafts, calendar events. Not
+battery mode: the human wants OCR and the local model always on, and will
+optimise performance another way.
+
+**The line drawn:** Jimmy acts by itself only on Jimmy (noticing, a card,
+pausing its own capture). Anything that touches the world is proposed and
+waits for the user: setting a focus, opening a page, adding an event, a
+draft (which only goes to the clipboard). Non-negotiable 1 holds by construction.
+
+**Built** (`ambient/proactive.py`, cards in the overlay):
+- **RESUME:** a frame after ≥ `RESUME_GAP_S` (45 min) without one →
+  "Left off: <what you were mostly on>", with Show me then / Open page.
+- **SUGGEST:** no focus set, one window held ≥ 60 % of the last 20 min →
+  "Focus on <title>?" with Yes. At most every 2 h. memory.py's rule ("intent
+  is only what the user states") holds: Jimmy offers, you say it.
+- **REMIND:** "Jimmy, remind me at 5 / in 20 minutes / tomorrow at 9 / when I
+  open Discord to …". Stored in Jimmy's memory DB (`reminders`, never
+  deleted, only done/cancelled), shown as a card and read aloud.
+- **DEADLINE:** every 5 min, new screen lines and mic speech with a due-word
+  and a date (today … +45 days) go to the local model, one yes/no each (D20
+  pattern, `jimmy.cards.DEADLINE_Q`, ≤ 20 per hour). Yeses go in a
+  `deadlines` table. Cards: "Tomorrow: <subject>" after 17:00 the day before,
+  "Today: <subject>" after 7. Code writes the line from the evidence's words.
+  `ambient deadlines [--scan [--dry]]` shows what it found or would find.
+- **RECAP:** once a day after `RECAP_HOUR` (21) with ≥ 30 min on screen:
+  "Today: 5h 36m, mostly Chrome"; Sundays, the week.
+- **Learning from dismissals:** cards now store the app they appeared in
+  (`cards.app`). Three dismissals of a kind in one app within 14 days, none
+  used → that kind is muted there (the gate checks it after the model says
+  yes; Jimmy's own cards check before showing). Using a card ("Show me
+  then", "Yes") marks it `used` and un-mutes.
+- **Protecting itself:** Windows locked → no capture, mic paused. Keyboard
+  focus in a password box → treated exactly like an excluded surface.
+- **Open page:** the address-bar URL was already read for exclusions; now it
+  is stored (`frames.url`), only past both exclusion checks, with the query
+  and fragment cut. Evidence, cards and the timeline get **Open page**;
+  "Jimmy, open that page" opens the one on show. Main only opens http(s).
+- **Draft:** "Jimmy, draft a reply …" → written from the window you're on,
+  under 120 words, copied to the clipboard. Never sent.
+- **Calendar:** "Jimmy, add this to my calendar" → the cloud model extracts
+  {title, date, start, end, where} as JSON; code checks it (a real date, real
+  times, or drops them); Jimmy asks; "yes" (no wake word for 30 s) or the
+  button writes an `.ics` to `data/events/` and opens it, so your calendar app
+  asks once more before saving.
+
+**Known limits:** deadlines need a real evening to judge (precision is
+unmeasured, like RECALL was before D22: freeze a set before tuning); "Mon,"
+abbreviations aren't parsed as weekdays (full names and dates are);
+`RECAP_HOUR` is a guess.
+
+### D33 — Hands-free: Jimmy drives its own UI
+
+**Asked for:** don't make me scroll and click through Jimmy; Jimmy should
+navigate its own UI and put things in front of me.
+
+**Built:**
+- **Navigation by voice** (`ask.nav`): next / previous / go back, scroll
+  down/up, the first / last one, zoom in/out, close, previous/next day,
+  "only Chrome" / all apps, "search for …". After Jimmy shows anything
+  (an answer, a screenshot, the timeline), these work **without the wake
+  word** for `NAV_WINDOW_S` (45 s), extended by each use. Whole-phrase matches
+  only; "just talking about lunch" stays talk (a test proves it). Silent and
+  instant; the pill flashes what happened.
+- **Jimmy uses its UI to show you things:** "show me yesterday at 3" opens the
+  timeline there; "show me the McKinsey form" answers, then opens the best
+  match big; "open the timeline" mid-conversation opens it at the moment you
+  were discussing.
+- **Routing:** Electron's main process sends navigation to whichever surface
+  you were last shown: the timeline window (opened or focused) or the overlay
+  (an answer or card arrived). App owns the lightbox index now, so "next" and
+  clicks move the same thing.
+
+### D34 — The privacy curtain, from presence, not identity
+
+**Asked for:** eye or face tracking of the owner, for a privacy curtain.
+
+**Conflict found:** non-negotiable 2 says the face stage "never persists,
+enrols or names", no enrolment gallery; the legal note says an embedding is
+biometric data even if never stored. Recognising *the owner* is enrolment.
+The same spec does list "shoulder-surf warning (a face in your own webcam
+that isn't yours …)".
+
+**Built within the spec** (`ambient/presence.py`): the webcam at 4 fps, YuNet
+detection only. It counts faces and reads head direction from YuNet's
+landmarks (nose between the eyes = facing). **No SFace, no face vector, no
+stored frame, refuses to pickle**; a test scans the file for recogniser calls.
+States: present / away (no face 6 s) / watched (a second face 1 s) / off
+(no camera, covered lens, or another app using the camera, which makes
+Jimmy let go of it, so calls keep their camera).
+- away → the curtain: an opaque cover over the whole display (the overlay
+  window grows to the display bounds), capture skipped (it would store the
+  curtain), audio kept so "Jimmy, …" from across the room still works.
+  Lifts when one face looks at the screen for 0.6 s.
+- watched → Jimmy hides its own panels and warns in the pill; a full curtain
+  only on a sensitive surface (bank page, password box), as the spec's
+  shoulder-surf warning describes (`CURTAIN_WHEN_WATCHED`).
+- By hand: Ctrl+Alt+L, the pill, "Jimmy, curtain" / "lift the curtain"; a
+  curtain you drew stays until you lift it.
+- Cards wait while you're away instead of timing out unseen.
+
+**Known limits:** "present" is any one face, not yours: the curtain is a
+screen against glances, not a lock. Head pose, not gaze: a plain webcam
+can't read where eyes point without a gaze model. The camera light stays on
+while Jimmy runs. Whether the camera is shared with Teams/Meet on this machine
+is untested: if a call can't get the camera, set `PRESENCE = False`.
+**Open for the human:** owner recognition would need an amendment to
+non-negotiable 2 (a RAM-only template, re-learned each run). Not done.
+
+Checks: `tests\test_stage7.py` (11).

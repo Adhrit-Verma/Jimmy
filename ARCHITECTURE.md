@@ -101,6 +101,8 @@ every screen reader charges.
 | `audio.py` | capture, VAD, transcription | loopback off by default; decoder output filtered for hallucinations |
 | `bus.py` | the one loop, capture-window lifecycle | screen on the calling thread, audio on its own |
 | `insights.py` | where the day went (D31) | estimated from frame times, gap-capped; no model, no new capture |
+| `proactive.py` | cards Jimmy writes itself (D32) | resume, focus offer, reminders, deadlines, recap; acts only on Jimmy |
+| `presence.py` | webcam presence for the curtain (D34) | YuNet count + head pose; no face vectors, nothing stored |
 | `__main__.py` | `run` / `search` / `stats` / `doctor` | `doctor` reports what actually works on this machine |
 
 ---
@@ -249,6 +251,9 @@ strip thumbnails (`/thumb?w=`), and deep links: `open_view` events and
  unclear ("what's this?") → clarify: ask back, pending + 20 s listen, no wake word needed (D28)
    spoken reply / button (POST /clarify) → interpret → screen or recall, forced
  ambient run --demo → demo.run thread → the same Asker.hear, scripted (D28)
+ D32/D33: route() order is command → nav → draft → event → stats → goto ("show me <time>") → …;
+   nav phrases need no wake word for NAV_WINDOW_S after Jimmy shows something; offers
+   (focus, calendar) wait for "yes"; Electron routes `ui` events to the surface last shown
  D31: route() first checks command() (pause/resume/focus/open/hush → Asker._do → bus
    actions; a toast, no panel) and usage questions (stats → insights.answer: one line
    written in code + chart data; no model)

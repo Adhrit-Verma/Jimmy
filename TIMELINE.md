@@ -12,6 +12,7 @@ result whenever either changes.
  [x] 4  Overlay                 built 2026-09-25: Electron pill + cards, pause, hotkey (D23)
  [x] 5  Recall timeline         done 2026-09-25: hybrid search + timeline window, acceptance met (D24)
  [x] +  Insights + commands     built 2026-10-02: day map, usage answers, voice/typed commands (D31)
+ [x] +  Autonomy + curtain      built 2026-10-02: own cards, hands-free UI, privacy curtain (D32–D34)
 ```
 
 ---
@@ -182,6 +183,17 @@ Local only, from captures already on disk: the Insights tab (day map, apps,
 hours, week), usage questions answered in code, voice/typed commands, shorter
 answers, and the overlay feedback pass. Checks: `tests\test_stage6.py` (6).
 Live acceptance (the human's run-through, list in the D31 hand-off) is open.
+
+---
+
+## Autonomy, hands-free, curtain · **built 2026-10-02 (D32–D34)**
+
+Cards Jimmy writes itself (welcome back, focus offer, reminders, deadlines,
+recap), learned mutes, lock/password protection, Open page, drafts, calendar
+events after a yes, voice navigation without the wake word, and the
+presence-based privacy curtain. Checks: `tests\test_stage7.py` (11). Live
+acceptance (the human's run-through) is open, and so is the owner-recognition
+question (D34).
 
 ---
 

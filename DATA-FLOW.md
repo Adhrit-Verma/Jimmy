@@ -9,8 +9,10 @@ step can write it.
 ## The screen tick — every 2 s
 
 ```
+ 0. paused? locked? curtain?    D32/D34: STOP before anything is read ────┐
  1. active_window()              Win32: hwnd, exe, title.  Cheap, no COM.
- 2. Exclusions.check(app,title) ─── excluded? ─► STOP. Nothing captured. ─┐
+ 2. Exclusions.check(app,title) ─── excluded? ─► STOP. Nothing captured. ─┤
+    + focus in a password box (D32) counts as excluded                   │
  3. ScreenSource.grab()          DXGI pull. None => desktop unchanged. ───┤
  4. _window_for(app)             live capture window for this app;        │
                                  expires idle/aged windows + their faces  │
@@ -26,6 +28,7 @@ step can write it.
  8. FaceStage.process()          detect, embed, BLUR -> `blurred`         │
  9. save_thumb(blurred)          the ONLY frame that touches disk         │
 10. add_frame                    always: the frame row is the timeline    │
+                                 (+ url: address bar, query cut, D32)     │
     add_text(new_lines(...))     only lines this window hasn't stored yet │
 11. ocr(blurred) if text < 40ch  inert today: no tesseract binary         │
                                                                           ▼
@@ -61,6 +64,25 @@ own windows are skipped. Pieces → per app, per hour, contiguous runs, top
 titles, switches, longest run; the week heatmap is the same over 7 days.
 Served as `GET /insights?day=`; a usage question uses the same pieces for its
 time window and matches its term against app names and window titles.
+
+---
+
+## Jimmy on its own (D32) and the curtain (D34)
+
+- `Proactive.tick` runs on the bus loop: due reminders (time, or the active
+  app/title matching), then once a minute the recap, deadline warnings and a
+  focus offer; every 5 min a background scan of new text for deadlines (local
+  model, yes/no). `on_capture` after a frame: a ≥ 45 min gap → RESUME.
+- Cards it writes go through `bus._show_card`: muted kinds are dropped, the
+  rest stored in `cards` (with `app`) and published like gate cards.
+- Presence runs on its own thread: webcam frame → 320×240 → YuNet → count +
+  head pose → state. The frame is deleted in the same iteration. State changes
+  go to `bus._on_presence`, which decides the curtain and publishes it.
+
+New in the schema: `frames.url`, `cards.app` (both added to older databases on
+open), `deadlines(id, seen_ts, due_ts, text, key UNIQUE, ref, state)` in the
+capture DB, and `reminders(id, created, text, due_ts, app, state)` in Jimmy's
+memory DB.
 
 ---
 
