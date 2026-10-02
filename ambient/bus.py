@@ -29,6 +29,7 @@ class _Window:
     last_seen: float
     last_sig: np.ndarray | None = None
     seen_lines: set[str] = field(default_factory=set)
+    last_thumb: str | None = None      # D31: reused when you switch back to an unchanged screen
 
 
 def new_lines(text: str, seen: set[str]) -> str:
@@ -53,6 +54,7 @@ class Counters:
     ticks: int = 0
     frames: int = 0
     skipped_unchanged: int = 0
+    switch_frames: int = 0
     skipped_excluded: int = 0
     skipped_no_frame: int = 0
     text_blocks: int = 0
@@ -174,6 +176,7 @@ class ContextBus:
         if reason:
             c.skipped_excluded += 1
             c.excluded_reasons[reason] = c.excluded_reasons.get(reason, 0) + 1
+            self._last_seen = None         # coming back is a switch, even to an unchanged screen
             return "excluded"
 
         frame = self.source.grab()
@@ -188,6 +191,14 @@ class ContextBus:
         sig = screen.signature(frame)
         if w.last_sig is not None and screen.changed_pct(sig, w.last_sig) < config.GATE_CHANGED_PCT:
             c.skipped_unchanged += 1
+            # D31: back to a window whose screen didn't change. Without a row, time on
+            # screen kept counting for the app you left. One row, the thumbnail already
+            # on disk, no text, no gate: the switch is all it records.
+            if (aw.app, aw.title) != getattr(self, "_last_seen", None) and w.last_thumb:
+                self.store.add_frame(w.id, aw.app, aw.title, w.last_thumb, 0, ts)
+                self._last_seen = (aw.app, aw.title)
+                c.switch_frames += 1
+                return "switched"
             return "unchanged"
 
         wt = screen.window_text(aw.hwnd) if aw.hwnd else screen.WindowText("", "", 0, 0.0, False)
@@ -224,6 +235,7 @@ class ContextBus:
 
         c.frames += 1
         w.last_sig = sig
+        w.last_thumb, self._last_seen = thumb, (aw.app, aw.title)
         return "captured"
 
     # --- audio -----------------------------------------------------------
@@ -256,8 +268,10 @@ class ContextBus:
             card_id = self.store.add_card(card.type, card.line, card.evidence, card.ts)
             print(f"\n[card] {card.type}: {card.line}   ({card.why})\n")
             if self._api:
+                # `at`: the earlier moment a RECALL points to, so the card can open it (D31).
+                at = next((e["ts"] for e in card.evidence if e.get("ts")), None)
                 self._api.publish({"type": "card", "id": card_id, "kind": card.type,
-                                   "line": card.line, "ts": card.ts})
+                                   "line": card.line, "ts": card.ts, "at": at})
 
         def on_decision(cand, card, why):
             if card is None:
@@ -269,9 +283,22 @@ class ContextBus:
 
     # --- overlay (Stage 4) ------------------------------------------------
     def overlay_state(self) -> dict:
+        from jimmy import config as jcfg
         paused = now_ms() < self.paused_until
+        mem = self._intent_memory()
         return {"paused": paused, "paused_until": self.paused_until if paused else 0,
-                "cards": self.gate is not None}
+                "cards": self.gate is not None,
+                "focus": mem.current_intent(jcfg.FOCUS_INTENT_MAX_H) if mem else None}
+
+    def _intent_memory(self):
+        return getattr(self, "_gate_memory", None) or getattr(self, "_focus_memory", None)
+
+    def set_focus(self, text: str | None) -> None:
+        """What you mean to be doing (FOCUS cards), from the pill or "Jimmy, focus on …" (D31)."""
+        mem = self._intent_memory()
+        if mem:
+            mem.set_intent(text)
+            print(f"[bus] focus: {text or '(cleared)'}")
 
     def pause(self, minutes: float) -> None:
         self.paused_until = now_ms() + int(minutes * 60_000)
@@ -301,6 +328,10 @@ class ContextBus:
         from .recall import timeline_hooks
         self._voice = Voice(on_start=self._voice_started, on_end=self._voice_ended) \
             if config.VOICE_ANSWERS else None
+        if not self.gate:                  # --no-cards: a stated focus still needs a home
+            from jimmy import config as jcfg
+            from jimmy.memory import Memory
+            self._focus_memory = Memory(jcfg.MEMORY_DB)
         self._api = OverlayAPI({"state": self.overlay_state, "pause": self.pause,
                                 "resume": self.resume, "dismiss": self.dismiss,
                                 "post_ask": lambda b: self._asker.ask(str(b.get("q", "")).strip(), "typed")
@@ -308,11 +339,18 @@ class ContextBus:
                                 "post_stop-voice": lambda b: self._voice and self._voice.stop(),
                                 "post_quit": lambda b: self.stop_running(),
                                 "post_clarify": lambda b: self._asker.choose(str(b.get("choice", ""))),
+                                "post_focus": lambda b: self.set_focus(str(b.get("text", "")).strip() or None),
                                 **timeline_hooks(self.store)}).start()
         self._asker = Asker(self.store, self._api.publish,
                             speak=self._voice.say if self._voice else None,
-                            screen_now=self.screen_now)
+                            screen_now=self.screen_now,
+                            actions={"pause": self.pause, "resume": self.resume, "focus": self.set_focus,
+                                     "hush": self._voice.stop if self._voice else (lambda: None),
+                                     "state": self.overlay_state})
         env = dict(os.environ, JIMMY_OVERLAY_URL=self._api.url, JIMMY_OVERLAY_TOKEN=self._api.token)
+        # Started from an Electron app's terminal (VS Code, Claude), this is inherited
+        # and makes electron.exe run as plain Node: no window, "app.whenReady" undefined.
+        env.pop("ELECTRON_RUN_AS_NODE", None)
         # Piped: a GUI program's console output goes nowhere on Windows unless it is,
         # and page errors must reach this terminal (D26).
         self._overlay_proc = subprocess.Popen(
@@ -326,7 +364,8 @@ class ContextBus:
                     print(line if line.startswith("[") else f"[overlay] {line}")
         threading.Thread(target=relay, args=(self._overlay_proc.stdout,), daemon=True,
                          name="overlay-log").start()
-        print("[overlay] up. Say \"Jimmy, …\" to ask; Ctrl+Alt+Space to type; Ctrl+Alt+J pauses")
+        print("[overlay] up. Say \"Jimmy, …\" to ask; Ctrl+Alt+Space to type; Ctrl+Alt+J pauses; "
+              "Ctrl+Alt+T timeline; Ctrl+Alt+I insights")
 
     def screen_now(self) -> dict | None:
         """The window the user is on right now: its latest frame and everything it
@@ -361,6 +400,9 @@ class ContextBus:
         if self._api:
             self._api.stop()
             self._api = None
+        if getattr(self, "_focus_memory", None):
+            self._focus_memory.close()
+            self._focus_memory = None
 
     def _index_loop(self) -> None:
         """Embed new captures for meaning search once a minute (Stage 5, D24).

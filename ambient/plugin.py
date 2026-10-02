@@ -20,6 +20,8 @@ from .recall import hybrid
 
 WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 _UNITS = {"min": 60, "minute": 60, "hour": 3600, "hr": 3600, "day": 86400}
+_AGO_NUMS = {"a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+             "a few": 3, "a couple of": 2, "half a": 0.5, "half an": 0.5}
 
 
 # A clock time: "10:40", "3pm", "3 p.m.", "11", "noon".
@@ -95,6 +97,8 @@ def _named_day(q: str, now: datetime, midnight: datetime) -> tuple[datetime, dat
     for i, day in enumerate(WEEKDAYS):
         if re.search(rf"\b{day}\b", q):
             back = (now.weekday() - i) % 7   # 0 = today; "Tuesday" on a Tuesday means today
+            if back == 0 and re.search(rf"\blast {day}\b", q):
+                back = 7                     # ...but "last Tuesday" on a Tuesday is a week ago
             start = midnight - timedelta(days=back)
             return start, start + timedelta(days=1), day.capitalize()
     return None
@@ -123,6 +127,19 @@ def time_window(question: str, now_ms: int) -> tuple[int, int, str] | None:
         return now_ms - 3600_000, now_ms, "last hour"
     if re.search(r"\b(?:last|past|this) week\b", q):
         return ms(midnight - timedelta(days=7)), now_ms, "last 7 days"
+    if re.search(r"\b(?:last|past|this) month\b", q):
+        return ms(midnight - timedelta(days=30)), now_ms, "last 30 days"
+    # "an hour ago", "20 minutes ago", "2 days ago": around then, not since then (D31).
+    m = re.search(r"\b(\d+|an?|one|two|three|four|five|a few|a couple of|half an?)\s+"
+                  r"(min|minute|hour|hr|day)s?\s+ago\b", q)
+    if m:
+        n = float(m[1]) if m[1].isdigit() else _AGO_NUMS[m[1]]
+        if m[2] == "day":
+            start = midnight - timedelta(days=round(n))
+            return ms(start), ms(start + timedelta(days=1)), m[0]
+        span = n * _UNITS[m[2]]
+        half = max(600, span * 0.35)
+        return int(now_ms - (span + half) * 1000), int(min(now_ms, now_ms - (span - half) * 1000)), m[0]
 
     day = _named_day(q, now, midnight)
     clock = clock_range(q)

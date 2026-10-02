@@ -9,6 +9,9 @@ through `jimmy.core.embed`; this module only stores and compares vectors.
 """
 from __future__ import annotations
 
+from functools import lru_cache
+from pathlib import Path
+
 import numpy as np
 
 from jimmy import config as jcfg
@@ -167,7 +170,8 @@ def timeline_hooks(store: Store) -> dict:
         day = p.get("day") or (days[0] if days else time.strftime("%Y-%m-%d"))
         start = int(datetime.strptime(day, "%Y-%m-%d").timestamp() * 1000)
         from .redact import is_own_window
-        frames = [f for f in store.timeline(start, start + 86_400_000 - 1)
+        from .insights import app_name
+        frames = [{**f, "name": app_name(f["app"])} for f in store.timeline(start, start + 86_400_000 - 1)
                   if not is_own_window(f["app"], f["title"])]
         return {"day": day, "days": days, "frames": frames}
 
@@ -179,7 +183,12 @@ def timeline_hooks(store: Store) -> dict:
         path = (config.DATA_DIR / p["path"]).resolve()
         if config.THUMB_DIR.resolve() not in path.parents or not path.is_file():
             return None
-        return {"data": "data:image/jpeg;base64," + base64.b64encode(path.read_bytes()).decode()}
+        data = _small(str(path), int(p["w"])) if p.get("w") else path.read_bytes()
+        return {"data": "data:image/jpeg;base64," + base64.b64encode(data).decode()}
+
+    def get_insights(p: dict) -> dict:
+        from .insights import day
+        return day(store, p.get("day") or None)
 
     def get_search(p: dict) -> dict:
         from .plugin import time_window
@@ -188,5 +197,21 @@ def timeline_hooks(store: Store) -> dict:
         hits = hybrid(store, q, w[0] if w else 0, w[1] if w else 1 << 62, 20) if q else []
         return {"window": w[2] if w else None, "results": hits}
 
-    return {"get_timeline": get_timeline, "get_frame": get_frame,
-            "get_thumb": get_thumb, "get_search": get_search}
+    return {"get_timeline": get_timeline, "get_frame": get_frame, "get_thumb": get_thumb,
+            "get_search": get_search, "get_insights": get_insights}
+
+
+@lru_cache(maxsize=600)
+def _small(path: str, width: int) -> bytes:
+    """A thumbnail scaled down for the scrub strip: a day of 1280-wide JPEGs as
+    base64 over IPC was ~150 KB a tile (D31). Undecodable files come back as-is.
+    ponytail: keyed by path, so a file rewritten in place would serve stale; thumbs never are."""
+    import cv2
+    raw = Path(path).read_bytes()
+    img = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+    width = max(64, min(1280, width))
+    if img is None or img.shape[1] <= width:
+        return raw
+    small = cv2.resize(img, (width, round(img.shape[0] * width / img.shape[1])), interpolation=cv2.INTER_AREA)
+    ok, buf = cv2.imencode(".jpg", small, [cv2.IMWRITE_JPEG_QUALITY, 72])
+    return buf.tobytes() if ok else raw

@@ -35,7 +35,10 @@ say: Jimmy, and when does it close?
 say: Jimmy, what's this?
 wait: 2
 reply: the one on my screen right now
-# 6. What it can do.
+# 6. Where the day went: answered from captures, drawn, no model (D31).
+say: Jimmy, how was my day?
+say: Jimmy, focus on finishing the application
+# 7. What it can do.
 say: Jimmy, what can you do?
 """
 

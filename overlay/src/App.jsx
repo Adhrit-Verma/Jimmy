@@ -1,10 +1,13 @@
 import { Component, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { History, MessageCircle, Pause, Play, Power, Target, X } from "lucide-react";
+import {
+  BarChart3, Check, Clock, ExternalLink, History, MessageCircle, MonitorSmartphone, Pause, Play, Power, Target, X,
+} from "lucide-react";
 import Answer from "./Answer.jsx";
 
 const CARD_MS = 12_000;      // a card fades on its own; × is the only real dismissal
 const ANSWER_MS = 60_000;    // an answer fades after a minute unless hovered
+const FLASH_MS = 2600;       // D31: how long the pill shows "Paused", "Copied", …
 const MAX_CARDS = 3;
 const bridge = window.jimmy; // from preload.cjs: events in, actions out
 
@@ -17,6 +20,17 @@ const hover = {
 const surface =
   "bg-neutral-950/90 ring-1 ring-white/10 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.6)]";
 
+// What typing offers before you've typed anything (D31). Filtered as you type.
+const SUGGEST = [
+  { label: "How was my day?", icon: BarChart3 },
+  { label: "What's on my screen?", icon: MonitorSmartphone },
+  { label: "What was I doing an hour ago?", icon: History },
+  { label: "Focus on…", fill: "focus on ", icon: Target },
+  { label: "Pause for 30 minutes", icon: Pause },
+  { label: "Open insights", icon: BarChart3 },
+];
+const FLASH_ICON = { pause: Pause, resume: Play, focus: Target, unfocus: Target, open: ExternalLink, show: X };
+
 // A render error in one panel must never blank the whole overlay (D26: one did,
 // taking the pill with it). The panel is dropped, the error logged to the
 // `ambient run` terminal, and everything else keeps working.
@@ -28,26 +42,38 @@ class Guard extends Component {
   render() { return this.state.failed ? null : this.props.children; }
 }
 
-function minutesLeft(until) {
-  const m = Math.max(0, Math.round((until - Date.now()) / 60_000));
+function span(ms) {
+  const m = Math.max(0, Math.round(ms / 60_000));
   return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
 }
 
-function PillButton({ onClick, label, children }) {
+function PillButton({ onClick, label, children, danger }) {
   return (
     <motion.button
       initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: "auto" }} exit={{ opacity: 0, width: 0 }}
-      onClick={onClick} aria-label={label}
-      className="flex items-center gap-1 overflow-hidden whitespace-nowrap rounded-full bg-white/10 px-2 py-0.5 text-neutral-100 hover:bg-white/15"
+      whileTap={{ scale: 0.94 }}
+      onClick={onClick} aria-label={label} title={label}
+      className={`flex items-center gap-1 overflow-hidden whitespace-nowrap rounded-full px-2 py-0.5 transition-colors
+        ${danger ? "bg-rose-500/80 text-white" : "bg-white/10 text-neutral-100 hover:bg-white/20"}`}
     >
       {children}
     </motion.button>
   );
 }
 
-function Pill({ state, mood, prompt, typing, setTyping }) {
+function Equalizer() {
+  return (
+    <span className="eq flex h-3 w-[14px] items-end gap-[2px]" aria-hidden>
+      {[0, 1, 2, 3].map((i) => <span key={i} className="block h-full w-[2px] rounded-full bg-sky-400" />)}
+    </span>
+  );
+}
+
+function Pill({ state, mood, prompt, typing, setTyping, flash, recent, onAsk, answerOpen }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
+  const [sel, setSel] = useState(-1);
+  const [armed, setArmed] = useState(false);     // Quit asks twice
   const input = useRef(null);
   const [, tick] = useState(0);
   useEffect(() => {
@@ -55,66 +81,154 @@ function Pill({ state, mood, prompt, typing, setTyping }) {
     return () => clearInterval(t);
   }, []);
   useEffect(() => { if (typing) setTimeout(() => input.current?.focus(), 30); }, [typing]);
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(false), 3000);
+    return () => clearTimeout(t);
+  }, [armed]);
+  useEffect(() => { setSel(-1); }, [q]);
 
   const paused = state.paused;
+  const startTyping = (prefill = "") => { setQ(prefill); setTyping(true); bridge?.focusAsk(); };
   const done = () => { setTyping(false); setQ(""); bridge?.releaseFocus(); bridge?.pointerOverUi(false); };
+  const send = (text) => { if (text.trim()) onAsk(text.trim()); done(); };
+  const needle = q.toLowerCase().trim();
+  const items = [...recent.map((r) => ({ label: r, icon: Clock, recent: true })), ...SUGGEST]
+    .filter((s, i, all) => all.findIndex((x) => x.label.toLowerCase() === s.label.toLowerCase()) === i)
+    .filter((s) => !needle || (s.label.toLowerCase().includes(needle) && s.label.toLowerCase() !== needle))
+    .slice(0, 6);
+  const choose = (s) => {
+    if (s.fill) { setQ(s.fill); input.current?.focus(); } else send(s.label);
+  };
+  const onKey = (e) => {
+    if (e.key === "Escape") done();
+    else if (e.key === "ArrowDown" && items.length) { e.preventDefault(); setSel((s) => (s + 1) % items.length); }
+    else if (e.key === "ArrowUp" && items.length) { e.preventDefault(); setSel((s) => (s <= 0 ? items.length - 1 : s - 1)); }
+    else if (e.key === "Tab" && items.length) { e.preventDefault(); const s = items[Math.max(sel, 0)]; setQ(s.fill || s.label); }
+  };
   const submit = (e) => {
     e.preventDefault();
-    if (q.trim()) bridge?.api("ask", { q: q.trim() });
-    done();
+    if (sel >= 0 && items[sel]) choose(items[sel]);
+    else send(q);
   };
-  const status = paused ? `paused · ${minutesLeft(state.paused_until)}`
-    : mood === "listening" ? (prompt || "listening… ask your question")
-    : mood === "thinking" ? "thinking…"
-    : "listening";
+
+  const status = paused ? <span className="text-amber-300/90">Paused · {span(state.paused_until - Date.now())} left</span>
+    : mood === "listening" ? <span className="text-sky-200">{prompt || "Listening… ask away"}</span>
+    : mood === "thinking" ? <span className="shimmer">Thinking…</span>
+    : mood === "answering" ? <span className="shimmer">Answering…</span>
+    : <span className="text-neutral-400">Listening</span>;
   const dot = paused ? "bg-amber-400" : mood ? "bg-sky-400" : "bg-emerald-400";
+  const FlashIcon = flash ? FLASH_ICON[flash.icon] || Check : null;
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-2 flex justify-center">
+    <div className="pointer-events-none absolute inset-x-0 top-2 flex flex-col items-center gap-2">
       <motion.div
         layout
         onMouseEnter={() => { hover.onMouseEnter(); setOpen(true); }}
-        onMouseLeave={() => { if (!typing) hover.onMouseLeave(); setOpen(false); }}
+        onMouseLeave={() => { if (!typing) hover.onMouseLeave(); setOpen(false); setArmed(false); }}
         transition={{ type: "spring", stiffness: 500, damping: 38 }}
-        className={`pointer-events-auto flex h-8 items-center gap-2 rounded-full px-3 text-[12px] ${surface}`}
+        className={`pointer-events-auto flex h-8 items-center gap-2 rounded-full px-3 text-[12px] ${surface}
+          ${mood === "listening" ? "ring-sky-400/40" : ""}`}
       >
-        <span className="relative flex size-2">
-          {!paused && <span className={`absolute inline-flex size-full animate-ping rounded-full ${mood ? "bg-sky-400/60" : "bg-emerald-400/60"}`} />}
-          <span className={`relative inline-flex size-2 rounded-full ${dot}`} />
-        </span>
+        {mood === "listening" ? <Equalizer /> : (
+          <span className="relative flex size-2">
+            {!paused && <span className={`absolute inline-flex size-full animate-ping rounded-full ${mood ? "bg-sky-400/60" : "bg-emerald-400/60"}`} />}
+            <span className={`relative inline-flex size-2 rounded-full ${dot}`} />
+          </span>
+        )}
         <span className="font-medium text-neutral-100">Jimmy</span>
         {typing ? (
           <form onSubmit={submit} className="flex items-center">
             <input
-              ref={input} value={q} onChange={(e) => setQ(e.target.value)}
-              onKeyDown={(e) => e.key === "Escape" && done()} onBlur={done}
-              placeholder='Ask anything… or just say "Jimmy, …"'
+              ref={input} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey} onBlur={done}
+              placeholder={answerOpen ? "Follow up…" : 'Ask anything, or "focus on …", "pause 30 min"'}
               className="w-[340px] bg-transparent text-[12.5px] text-neutral-100 outline-none placeholder:text-neutral-500"
             />
           </form>
         ) : (
-          <span className="text-neutral-400">{status}</span>
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.span
+              key={flash ? `f${flash.id}` : `s${paused}${mood}`}
+              initial={{ opacity: 0, y: 5, filter: "blur(2px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+              exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.16 }}
+              onClick={() => !flash && !paused && startTyping()}
+              className={`flex items-center gap-1.5 whitespace-nowrap ${flash || paused ? "" : "cursor-text"}`}
+            >
+              {flash ? <><FlashIcon size={12} className="text-emerald-300" /><span className="text-neutral-50">{flash.text}</span></> : status}
+            </motion.span>
+          </AnimatePresence>
+        )}
+        {state.focus && !typing && !flash && (
+          <span title={`Focus: ${state.focus.text}`}
+            className="flex max-w-[220px] items-center gap-1 rounded-full bg-violet-400/10 px-2 py-0.5 text-[11.5px] text-violet-200">
+            <Target size={11} className="shrink-0" />
+            <span className="truncate">{state.focus.text}</span>
+            <span className="shrink-0 text-violet-300/60">· {span(Date.now() - state.focus.ts)}</span>
+          </span>
         )}
         <AnimatePresence initial={false}>
           {open && !typing && (
             <motion.div key="menu" className="ml-1 flex items-center gap-1">
-              <PillButton label="Ask by typing" onClick={() => { setTyping(true); bridge?.focusAsk(); }}>
+              <PillButton label="Ask by typing (Ctrl+Alt+Space)" onClick={() => startTyping()}>
                 <MessageCircle size={12} /> Ask
               </PillButton>
-              <PillButton label="Open timeline" onClick={() => bridge?.openTimeline()}>
+              <PillButton label="Timeline (Ctrl+Alt+T)" onClick={() => bridge?.openTimeline("timeline")}>
                 <History size={12} /> Timeline
               </PillButton>
-              <PillButton label={paused ? "Resume" : "Pause for 2 hours"}
+              <PillButton label="Insights (Ctrl+Alt+I)" onClick={() => bridge?.openTimeline("insights")}>
+                <BarChart3 size={12} /> Insights
+              </PillButton>
+              {state.focus ? (
+                <PillButton label="Clear your focus" onClick={() => bridge?.api("focus", { text: "" })}>
+                  <Target size={12} /> Unfocus
+                </PillButton>
+              ) : (
+                <PillButton label="Say what you mean to be doing" onClick={() => startTyping("focus on ")}>
+                  <Target size={12} /> Focus
+                </PillButton>
+              )}
+              <PillButton label={paused ? "Resume" : "Pause for 2 hours (Ctrl+Alt+J)"}
                 onClick={() => bridge?.api(paused ? "resume" : "pause", { minutes: 120 })}>
                 {paused ? <Play size={12} /> : <Pause size={12} />} {paused ? "Resume" : "Pause 2h"}
               </PillButton>
-              <PillButton label="Quit Jimmy" onClick={() => bridge?.api("quit")}>
-                <Power size={12} /> Quit
+              <PillButton label={armed ? "Click again to quit" : "Quit Jimmy"} danger={armed}
+                onClick={() => (armed ? bridge?.api("quit") : setArmed(true))}>
+                <Power size={12} /> {armed ? "Sure?" : "Quit"}
               </PillButton>
             </motion.div>
           )}
         </AnimatePresence>
       </motion.div>
+      <AnimatePresence>
+        {typing && items.length > 0 && (
+          <motion.div
+            key="suggest"
+            initial={{ opacity: 0, y: -6, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6 }}
+            transition={{ type: "spring", stiffness: 520, damping: 36 }}
+            className={`pointer-events-auto w-[440px] overflow-hidden rounded-xl p-1 ${surface}`}
+          >
+            {items.map((s, i) => {
+              const Icon = s.icon;
+              return (
+                <button
+                  key={s.label} type="button"
+                  onMouseDown={(e) => { e.preventDefault(); choose(s); }}    // before the input blurs
+                  onMouseEnter={() => setSel(i)}
+                  className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[12.5px] transition-colors
+                    ${sel === i ? "bg-white/10 text-neutral-50" : "text-neutral-300"}`}
+                >
+                  <Icon size={13} className="shrink-0 text-neutral-500" />
+                  <span className="truncate">{s.label}</span>
+                  {s.recent && <span className="ml-auto text-[10.5px] text-neutral-600">recent</span>}
+                </button>
+              );
+            })}
+            <div className="mt-1 flex gap-3 border-t border-white/[0.06] px-2.5 pb-1 pt-1.5 text-[10.5px] text-neutral-500">
+              <span>↑↓ choose</span><span>Tab fill</span><span>Enter ask</span><span>Esc close</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -129,8 +243,10 @@ function Card({ card, onGone, onDismiss }) {
     return () => { clearTimeout(t); left.current -= Date.now() - started; };
   }, [held]);
 
-  const Icon = card.kind === "FOCUS" ? Target : History;
+  const focus = card.kind === "FOCUS";
+  const Icon = focus ? Target : History;
   const when = new Date(card.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const show = () => { bridge?.openTimeline("timeline", { ts: card.at }); onGone(); };
 
   return (
     <motion.div
@@ -144,20 +260,35 @@ function Card({ card, onGone, onDismiss }) {
       className={`group pointer-events-auto relative w-80 overflow-hidden rounded-2xl p-3.5 ${surface}`}
     >
       <div className="flex items-center gap-2 text-[11px] text-neutral-400">
-        <span className="flex size-5 items-center justify-center rounded-md bg-white/[0.06] text-neutral-300">
+        <span className={`flex size-5 items-center justify-center rounded-md ${focus ? "bg-violet-400/15 text-violet-200" : "bg-white/[0.06] text-neutral-300"}`}>
           <Icon size={12} />
         </span>
-        <span className="uppercase tracking-wider">{card.kind === "FOCUS" ? "Focus" : "Recall"}</span>
+        <span className="uppercase tracking-wider">{focus ? "Focus" : "Recall"}</span>
         <span className="ml-auto text-neutral-500">{when}</span>
         <button
           onClick={onDismiss}
-          aria-label="Dismiss"
+          aria-label="Dismiss" title="Not now (quiets cards for a while)"
           className="flex size-5 items-center justify-center rounded-md text-neutral-500 opacity-0 transition group-hover:opacity-100 hover:bg-white/10 hover:text-neutral-200"
         >
           <X size={12} />
         </button>
       </div>
       <p className="mt-2 text-[15px] font-medium leading-snug text-neutral-50">{card.line}</p>
+      {(card.at || focus) && (
+        <div className="mt-2.5 flex gap-1.5 opacity-60 transition group-hover:opacity-100">
+          {!focus && card.at && (
+            <button onClick={show} className="flex items-center gap-1 rounded-md bg-white/[0.07] px-2 py-1 text-[11.5px] text-neutral-200 hover:bg-white/15">
+              <ExternalLink size={11} /> Show me then
+            </button>
+          )}
+          {focus && (
+            <button onClick={() => { bridge?.api("focus", { text: "" }); onGone(); }}
+              className="flex items-center gap-1 rounded-md bg-white/[0.07] px-2 py-1 text-[11.5px] text-neutral-200 hover:bg-white/15">
+              <Target size={11} /> I'm done with that
+            </button>
+          )}
+        </div>
+      )}
       {/* Time left: frozen while hovered, then runs out from where it stopped. */}
       <motion.div
         key={held ? "held" : `run-${left.current}`}
@@ -171,14 +302,27 @@ function Card({ card, onGone, onDismiss }) {
 }
 
 export default function App() {
-  const [state, setState] = useState({ paused: false, paused_until: 0 });
+  const [state, setState] = useState({ paused: false, paused_until: 0, focus: null });
   const [cards, setCards] = useState([]);
   const [answer, setAnswer] = useState(null);
-  const [mood, setMood] = useState(null);      // "listening" | "thinking" | null
+  const [mood, setMood] = useState(null);      // "listening" | "thinking" | "answering" | null
   const [prompt, setPrompt] = useState(null);  // what the pill says while listening (D28)
   const [openIndex, setOpenIndex] = useState(null);
   const [typing, setTyping] = useState(false);
+  const [flash, setFlash] = useState(null);    // D31: a moment of feedback in the pill
+  const [recent, setRecent] = useState([]);    // this session's typed questions; never saved
   const hideTimer = useRef(null);
+  const flashTimer = useRef(null);
+  const flashN = useRef(0);
+  const prev = useRef(null);
+  const waiting = useRef(0);                   // a typed question sent, no answer_start yet
+
+  const say = (text, icon) => {
+    clearTimeout(flashTimer.current);
+    setFlash({ id: ++flashN.current, text, icon });
+    flashTimer.current = setTimeout(() => setFlash(null), FLASH_MS);
+  };
+  const unthink = () => setMood((m) => (m === "thinking" ? null : m));
 
   const closeAnswer = () => {
     clearTimeout(hideTimer.current);
@@ -187,9 +331,25 @@ export default function App() {
     bridge?.api("stop-voice");
   };
 
+  const ask = (q) => {
+    setMood("thinking");                       // react now; the answer follows
+    waiting.current = Date.now();
+    setTimeout(() => { if (waiting.current && Date.now() - waiting.current >= 4000) { waiting.current = 0; unthink(); } }, 4000);
+    setRecent((r) => [q, ...r.filter((x) => x.toLowerCase() !== q.toLowerCase())].slice(0, 3));
+    bridge?.api("ask", { q });
+  };
+
   useEffect(() => {
-    bridge?.onEvent((ev) => {
-      if (ev.type === "state") setState(ev);
+    return bridge?.onEvent((ev) => {
+      if (ev.type === "state") {
+        const p = prev.current;
+        if (p && p.paused !== ev.paused) say(ev.paused ? `Paused for ${span(ev.paused_until - Date.now())}` : "Capturing again", ev.paused ? "pause" : "resume");
+        else if (p && (p.focus?.text || null) !== (ev.focus?.text || null)) say(ev.focus ? `Focus: ${ev.focus.text}` : "Focus cleared", "focus");
+        prev.current = ev;
+        setState(ev);
+      }
+      if (ev.type === "toast") { waiting.current = 0; unthink(); say(ev.text, ev.icon); }
+      if (ev.type === "answer_close") closeAnswer();
       if (ev.type === "card") setCards((cs) => [ev, ...cs.filter((c) => c.id !== ev.id)].slice(0, MAX_CARDS));
       if (ev.type === "focus-ask") setTyping(true);
       if (ev.type === "listening") {
@@ -197,9 +357,10 @@ export default function App() {
         setPrompt(ev.prompt || null);
         setTimeout(() => setMood((m) => (m === "listening" ? null : m)), ev.prompt ? 20000 : 9000);
       }
-      if (ev.type === "open_evidence") setOpenIndex(ev.index);
+      if (ev.type === "open_evidence") { waiting.current = 0; unthink(); setOpenIndex(ev.index); }
       if (ev.type === "close_evidence") setOpenIndex(null);
       if (ev.type === "answer_start") {
+        waiting.current = 0;
         clearTimeout(hideTimer.current);
         setMood("thinking");
         setOpenIndex(null);
@@ -207,9 +368,11 @@ export default function App() {
                     history: ev.history || [], status: "searching", evidence: [], text: "" });
       }
       const same = (fn) => setAnswer((a) => (a && a.id === ev.id ? fn(a) : a));
-      if (ev.type === "answer_evidence")
+      if (ev.type === "answer_evidence") {
+        setMood((m) => (m === "thinking" ? "answering" : m));
         same((a) => ({ ...a, status: "answering", mode: ev.mode || a.mode, evidence: ev.evidence,
-                       terms: ev.terms, days: ev.days, window: ev.window }));
+                       terms: ev.terms, days: ev.days, window: ev.window, stats: ev.stats }));
+      }
       if (ev.type === "answer_delta") same((a) => ({ ...a, status: "answering", text: a.text + ev.text }));
       if (ev.type === "answer_end" || ev.type === "answer_error") {
         if (!ev.awaiting) setMood(null);   // a question back keeps the pill listening
@@ -224,14 +387,17 @@ export default function App() {
 
   return (
     <>
-      <Pill state={state} mood={mood} prompt={prompt} typing={typing} setTyping={setTyping} />
+      <Pill state={state} mood={mood} prompt={prompt} typing={typing} setTyping={setTyping}
+        flash={flash} recent={recent} onAsk={ask} answerOpen={!!answer} />
       <div
         onMouseEnter={() => clearTimeout(hideTimer.current)}
         onMouseLeave={() => { if (answer?.status === "done") hideTimer.current = setTimeout(() => setAnswer(null), ANSWER_MS); }}
       >
         <Guard resetKey={answer?.id} onError={() => bridge?.pointerOverUi(false)}>
           <AnimatePresence>{answer && <Answer key={answer.id} answer={answer} onClose={closeAnswer}
-            openIndex={openIndex} onCloseEvidence={() => setOpenIndex(null)} />}</AnimatePresence>
+            openIndex={openIndex} onCloseEvidence={() => setOpenIndex(null)}
+            onFollowUp={() => { setTyping(true); bridge?.focusAsk(); }}
+            onCopied={() => say("Copied", "copy")} />}</AnimatePresence>
         </Guard>
       </div>
       {!answer && (

@@ -121,11 +121,16 @@ DISMISS_COOLDOWN_S = 30 * 60  # after a dismissal (wired by the Stage 4 overlay)
 # --- recall timeline, Stage 5 (D24) -----------------------------------------
 INDEX_EVERY_S = 60           # embed new captures for meaning search this often while running
 
+# --- insights: where the day went (D31) -------------------------------------
+# Frames are written only when something changes, so time is estimated: each
+# frame counts until the next, up to this cap. A longer gap is away / idle.
+ACTIVE_GAP_S = 300
+
 # --- ask by voice, answers come to you (D25) --------------------------------
 ASK_EVIDENCE = 6             # moments shown beside a spoken answer
 LISTEN_WINDOW_S = 8          # after "Jimmy" alone, the next thing said (within this) is the question
 VOICE_ANSWERS = True         # read spoken questions' answers aloud (Windows' built-in voice)
-VOICE_MAX_CHARS = 320        # read at most this much: the first sentences that fit
+VOICE_MAX_CHARS = 220        # read at most this much: the first sentences that fit (D31: was 320)
 VOICE_RATE = 1               # SAPI speaking rate, -10..10
 VOICE_VOLUME = 100           # 0..100
 CONVO_S = 180                # questions this close together are one conversation (D27)

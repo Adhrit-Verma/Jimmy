@@ -100,7 +100,7 @@ def test_bus_pause_stops_capture_and_dismiss_quiets_the_gate():
     b.pause(120)
     assert b.tick() == "paused" and b.overlay_state()["paused"] is True, "a pause captures nothing"
     b.resume()
-    assert b.overlay_state() == {"paused": False, "paused_until": 0, "cards": True}
+    assert b.overlay_state() == {"paused": False, "paused_until": 0, "cards": True, "focus": None}
     cid = b.store.add_card("RECALL", "Same x as Tue 15:02", {"e": 1})
     b.dismiss(cid)
     assert b.store.conn.execute("SELECT state FROM cards WHERE id=?", (cid,)).fetchone()[0] == "dismissed"

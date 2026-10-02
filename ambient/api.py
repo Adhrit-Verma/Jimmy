@@ -11,7 +11,7 @@ an out-of-process caller (D16): the Electron overlay. Standard library only.
 Routes: GET /events (Server-Sent Events: state, cards), GET /state,
 POST /dismiss {"id"}, POST /pause {"minutes"}, POST /resume, POST /toggle-pause.
 Stage 5 (the timeline window): GET /timeline?day=YYYY-MM-DD, /frame?id=,
-/thumb?path=, /search?q=.
+/thumb?path=[&w=], /search?q=. D31: GET /insights?day=, POST /focus {"text"}.
 """
 from __future__ import annotations
 

@@ -6,7 +6,7 @@
 // the page has no network access and no Node, just the small bridge in preload.cjs.
 //
 // Flags: --demo (fake cards, no Python needed)  --snapshot <file.png> (render, save, quit)
-const { app, BrowserWindow, screen, ipcMain, globalShortcut } = require("electron");
+const { app, BrowserWindow, clipboard, screen, ipcMain, globalShortcut } = require("electron");
 const fs = require("fs");
 const path = require("path");
 
@@ -19,15 +19,24 @@ const delayAt = process.argv.indexOf("--snap-delay");
 const SNAP_DELAY = delayAt > 0 ? Number(process.argv[delayAt + 1]) : 2600;
 const HOTKEY = "Control+Alt+J";
 const TIMELINE_HOTKEY = "Control+Alt+T";
+const INSIGHTS_HOTKEY = "Control+Alt+I";
 const OPEN_TIMELINE = process.argv.includes("--timeline");
 
 let win = null;
 let timeline = null;
 
 // Stage 5: the recall timeline. A normal, focusable window (unlike the overlay),
-// frameless with its own drag bar, same page bundle at #timeline.
-function openTimeline() {
+// frameless with its own drag bar, same page bundle at #timeline. D31: the same
+// window has an Insights view (#insights), and can open at a moment (?ts=).
+function openTimeline(view, params) {
+  view = view === "insights" ? "insights" : "timeline";
+  const p = params || {};
+  const deep = {};                                   // only what the page understands
+  if (Number.isFinite(Number(p.ts)) && p.ts) deep.ts = String(Number(p.ts));
+  if (/^\d{4}-\d{2}-\d{2}$/.test(p.day || "")) deep.day = p.day;
+  if (typeof p.q === "string" && p.q) deep.q = p.q.slice(0, 200);
   if (timeline && !timeline.isDestroyed()) {
+    timeline.webContents.send("event", { type: "goto", view, ...deep });
     timeline.show();
     timeline.focus();
     return timeline;
@@ -46,8 +55,9 @@ function openTimeline() {
     },
   });
   const q = process.env.JIMMY_TIMELINE_QUERY;
-  timeline.loadFile(path.join(__dirname, "dist", "index.html"),
-                    { hash: q ? `timeline?q=${encodeURIComponent(q)}` : "timeline" });
+  if (q && !deep.q) deep.q = q;
+  const qs = new URLSearchParams(deep).toString();
+  timeline.loadFile(path.join(__dirname, "dist", "index.html"), { hash: qs ? `${view}?${qs}` : view });
   timeline.once("ready-to-show", () => timeline.show());
   return timeline;
 }
@@ -62,6 +72,7 @@ async function get(route, params) {
 }
 
 function send(event) {
+  if (event.type === "open_view") return openTimeline(event.view);   // "Jimmy, open insights"
   if (win && !win.isDestroyed()) win.webContents.send("event", event);
 }
 
@@ -180,7 +191,8 @@ app.whenReady().then(() => {
   ipcMain.on("pointer-over-ui", (_e, over) => win.setIgnoreMouseEvents(!over, { forward: true }));
   ipcMain.handle("api", (_e, route, body) => call(route, body));
   ipcMain.handle("get", (_e, route, params) => get(route, params));
-  ipcMain.on("open-timeline", () => openTimeline());
+  ipcMain.on("open-timeline", (_e, view, params) => openTimeline(view, params));
+  ipcMain.on("copy", (_e, text) => clipboard.writeText(String(text).slice(0, 20_000)));
   // Typing a question (D25) is the one time the overlay may take focus; it gives
   // it back as soon as the question is sent or dismissed.
   const focusAsk = () => {
@@ -199,9 +211,10 @@ app.whenReady().then(() => {
   ipcMain.on("close-window", (e) => BrowserWindow.fromWebContents(e.sender)?.close());
   globalShortcut.register(HOTKEY, () => call("toggle-pause"));
   globalShortcut.register(TIMELINE_HOTKEY, () => openTimeline());
+  globalShortcut.register(INSIGHTS_HOTKEY, () => openTimeline("insights"));
 
   if (OPEN_TIMELINE) {
-    const t = openTimeline();
+    const t = openTimeline(process.argv.includes("--insights") ? "insights" : "timeline");
     if (SNAPSHOT) {
       t.webContents.once("did-finish-load", () => setTimeout(async () => {
         const img = await t.webContents.capturePage();

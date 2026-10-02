@@ -2,12 +2,18 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("jimmy", {
-  onEvent: (cb) => ipcRenderer.on("event", (_e, ev) => cb(ev)),
+  // Returns an unsubscribe, so an effect can clean up after itself.
+  onEvent: (cb) => {
+    const h = (_e, ev) => cb(ev);
+    ipcRenderer.on("event", h);
+    return () => ipcRenderer.removeListener("event", h);
+  },
   api: (route, body) => ipcRenderer.invoke("api", route, body),
   get: (route, params) => ipcRenderer.invoke("get", route, params),
   pointerOverUi: (over) => ipcRenderer.send("pointer-over-ui", over),
-  openTimeline: () => ipcRenderer.send("open-timeline"),
+  openTimeline: (view, params) => ipcRenderer.send("open-timeline", view, params),
   closeWindow: () => ipcRenderer.send("close-window"),
   focusAsk: () => ipcRenderer.send("focus-ask"),
   releaseFocus: () => ipcRenderer.send("release-focus"),
+  copy: (text) => ipcRenderer.send("copy", String(text)),
 });

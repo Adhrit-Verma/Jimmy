@@ -352,6 +352,25 @@ class Store:
         with self._lock:
             return [dict(r) for r in self.conn.execute(sql, (since_ms, until_ms, limit))]
 
+    def tallies(self, since_ms: int, until_ms: int) -> dict:
+        """Counts for the Insights view (D31): words of new text seen (spaces + line
+        breaks + 1 per block, close enough), faces blurred, speech, commands, cards."""
+        with self._lock:
+            words, faces = self.conn.execute(
+                "SELECT COALESCE(SUM(LENGTH(t.text) - LENGTH(REPLACE(REPLACE(t.text, ' ', ''), char(10), '')) + 1), 0),"
+                " (SELECT COALESCE(SUM(face_count), 0) FROM frames WHERE ts BETWEEN ? AND ?)"
+                " FROM text_blocks t JOIN frames f ON f.id = t.frame_id WHERE f.ts BETWEEN ? AND ?",
+                (since_ms, until_ms, since_ms, until_ms)).fetchone()
+            segs, speech_ms, commands = self.conn.execute(
+                "SELECT COALESCE(SUM(source != 'command'), 0),"
+                " COALESCE(SUM(CASE WHEN source != 'command' THEN ts_end - ts_start END), 0),"
+                " COALESCE(SUM(source = 'command'), 0)"
+                " FROM audio_segments WHERE ts_start BETWEEN ? AND ?", (since_ms, until_ms)).fetchone()
+            cards = dict(self.conn.execute("SELECT state, COUNT(*) FROM cards WHERE ts BETWEEN ? AND ? "
+                                           "GROUP BY state", (since_ms, until_ms)).fetchall())
+        return {"words": words, "faces": faces, "speech": {"segments": segs, "ms": speech_ms},
+                "commands": commands, "cards": cards}
+
     def stats(self) -> dict:
         tables = ("capture_windows", "frames", "text_blocks", "audio_segments", "cards")
         with self._lock:

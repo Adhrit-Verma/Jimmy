@@ -26,7 +26,7 @@ from jimmy import config as jcfg
 from jimmy.core import LLMError, Snippet
 from jimmy.memory import fts_query
 
-from . import config
+from . import config, insights
 from .db import Store, now_ms
 from .recall import furniture, hybrid
 from .redact import is_own_window
@@ -62,31 +62,66 @@ _NOW = re.compile(r"\b(?:now|right now|currently|current|at the moment|in front 
                   r"this one|on (?:my|the) screen)\b", re.I)
 _SHOW = re.compile(r"\b(?:show|open|zoom|enlarge|bigger)\b.*\b(?:first|best|top|second|third|one|it|that|match)\b"
                    r"|\b(?:show|zoom|open)(?: it| that)?(?: bigger| bigger please)?$", re.I)
-_ORDINAL = {"first": 0, "best": 0, "top": 0, "second": 1, "third": 2}
-CLARIFY_Q = ("Do you mean what's on your screen right now, or something you saw earlier?")
+_ORDINAL = {"first": 0, "best": 0, "top": 0, "second": 1, "third": 2, "fourth": 3, "fifth": 4, "last": -1}
+CLARIFY_Q = "Your screen right now, or something from earlier?"
 
-ANSWER_STYLE = """The user just asked this question out loud. The <context> items are the
-evidence shown next to your answer on their screen. Reply in at most three short
-sentences, plain text, easy to read aloud:
-1. the direct answer;
-2. when and where it was (day and time, app or page);
-3. why you're confident, in a few words (what on screen or heard shows it).
-If the context doesn't answer the question, say so in one sentence."""
+# D31: how the day went, answered from captures in code (no model, instant).
+_STATS = re.compile(
+    r"\bhow (?:long|much time|many (?:hours|minutes))\s+(?:was i|did i|have i|i)\b(?!.*\bago\b)"
+    r"|\bscreen ?time\b|\btime (?:spent|on screen)\b|\bspen[dt] (?:my |the )?(?:time|day|morning|afternoon)\b"
+    r"|\b(?:which|what) apps? (?:did i use|have i used|was i (?:on|using)|i used)\b|\bmost used apps?\b"
+    r"|\b(?:show|how was|how'?s|recap|review)\s+(?:me\s+)?my (?:day|week|morning|afternoon|evening)\b"
+    r"|\bwhere did (?:my |the )?(?:time|day) go\b|\bhow (?:productive|focused) was i\b", re.I)
+# Only these continue a usage answer; "what is this?" after one is a new question.
+_STATS_FOLLOW = re.compile(r"(?:and|also|what about|how about|and what about)\b", re.I)
 
-SCREEN_STYLE = """The user is asking about what is on their screen right now. The <context> is
-the text of the window they're looking at, with its app and title. Answer in at most
-three short sentences, plain text, easy to read aloud: what it is, then what matters
-for their question. If they ask for a summary, summarise the content, not the interface.
-Use only this <context>: the screen changes, so never reuse an earlier answer. If the
-text is thin (menus, a sidebar, a title), say which app and window it is and that you
+# D31: things to do, not questions. Only ever from the user's own mic or typing.
+_NUMS = {"a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "ten": 10,
+         "fifteen": 15, "twenty": 20, "thirty": 30, "half an": 0.5, "half a": 0.5}
+_CMD = (
+    ("open", re.compile(r"^(?:please\s+)?(?:open|show|launch|bring up)(?: me)?(?: my| the)?\s+"
+                        r"(timeline|insights|dashboard|stats|day map)\W*$", re.I)),
+    ("pause", re.compile(r"^(?:please\s+)?(?:pause|stop (?:listening|recording|capturing|watching)|go private)"
+                         r"(?:\s+(?:for\s+)?(\d+|an?|one|two|three|four|five|ten|fifteen|twenty|thirty|half an?)"
+                         r"\s*(m|mins?|minutes?|h|hrs?|hours?))?\W*$", re.I)),
+    ("resume", re.compile(r"^(?:please\s+)?(?:resume|unpause|start (?:listening|recording|capturing)(?: again)?)\W*$",
+                          re.I)),
+    ("unfocus", re.compile(r"^(?:clear|stop|end|drop|cancel)\s+(?:my\s+|the\s+)?focus\W*$", re.I)),
+    ("focus", re.compile(r"^(?:(?:i (?:want|need) to|let me|let'?s|help me)\s+)?"
+                         r"(?:focus on|set (?:my )?focus(?: to)?|my focus is)\s+(.{3,}?)\W*$", re.I)),
+    ("hush", re.compile(r"^(?:stop|stop talking|shush|hush|quiet|be quiet|shut up|enough|never ?mind|cancel|"
+                        r"that'?s all|close)\W*$", re.I)),
+)
+
+ANSWER_STYLE = """The user asked this out loud; the <context> items are shown beside your reply.
+Answer in one or two short sentences, under 35 words, plain text: the answer first,
+then when and where (day, time, app). No preamble, no restating the question, no
+hedging. If the context doesn't answer it, say so in under ten words."""
+
+SCREEN_STYLE = """The <context> is the window the user is looking at right now. In one or two
+short sentences, under 40 words: what it is, then what matters for their question. For
+a summary, give the gist of the content, not the interface. Use only this <context>:
+never reuse an earlier answer. If the text is thin, name the app and window and say you
 can't read its main content."""
 
-CHAT_STYLE = """The user is talking to you out loud; this is conversation, not a search of
-their history. Reply naturally and briefly (one or two sentences, plain text, easy to
-read aloud). What you can do, if they ask: recall anything they saw or heard on this
-computer ("Jimmy, what was that form on Friday?"), explain what's on their screen now
-("Jimmy, what's on my screen?"), and nudge them when they drift from what they meant
-to do. You hear them through the microphone right now."""
+CHAT_STYLE = """This is conversation, not a search. Reply in one short sentence, plain text,
+easy to read aloud. If asked what you can do: recall what they saw or heard ("what was
+that form on Friday?"), explain their screen ("what's on my screen?"), show where their
+day went ("how was my day?"), and keep them on track ("focus on ...")."""
+
+
+def command(text: str) -> tuple[str, object] | None:
+    """(kind, argument) if this is something to do rather than a question (D31)."""
+    t = text.strip()
+    for kind, rx in _CMD:
+        m = rx.match(t)
+        if not m:
+            continue
+        if kind == "pause":
+            n = m[1] and (float(m[1]) if m[1].isdigit() else _NUMS.get(m[1].lower(), 1))
+            return kind, (n * (60 if m[2][0].lower() == "h" else 1) if n else None)
+        return kind, (m[1].strip() if m.groups() else None)
+    return None
 
 
 def parse_wake(text: str) -> str | None:
@@ -101,11 +136,21 @@ def route(text: str, last: dict | None = None, now: int | None = None) -> tuple[
     from .plugin import time_window
     now = now or now_ms()
     t = text.strip()
+    if command(t):
+        return "command", t
+    fresh_time = time_window(t, now) is not None
+    if _STATS.search(t):
+        return "stats", t
+    # "And yesterday?" / "what about Discord?" after a usage answer: same question,
+    # new time or new app. The turn keeps its term and time label for this (D31).
+    if (last and last["mode"] == "stats" and now - last["ts"] < config.CONVO_S * 1000
+            and len(t.split()) <= 8 and (_STATS_FOLLOW.match(t) or (fresh_time and not _PAST.search(t)))):
+        q = t if insights.terms(t) else f"{t} {last.get('term', '')}"
+        return "stats", (q if fresh_time else f"{q} {last.get('when', '')}").strip()
     if _CHAT.search(t) and not _PAST.search(t):
         return "chat", t
     if last and last["mode"] in ("recall", "screen") and _SHOW.search(t) and len(t.split()) <= 8:
         return "show", t                          # "show me the first one": zoom evidence
-    fresh_time = time_window(t, now) is not None
     past = bool(_PAST.search(t))
     if _SCREEN.search(t) and not past:
         return "screen", t
@@ -152,7 +197,7 @@ def excerpt(text: str, terms: list[str], limit: int = 220) -> str:
 
 
 def _app(app: str | None) -> str:
-    return (app or "").removesuffix(".exe").replace("ms-teams", "Teams").capitalize() if app else ""
+    return insights.app_name(app) if app else ""
 
 
 def _item(ref, ts, kind, text, frame, via, terms) -> dict:
@@ -268,9 +313,11 @@ class Asker:
 
     def __init__(self, store: Store, publish: Callable[[dict], None],
                  speak: Callable[[str], None] | None = None, jimmy=None,
-                 screen_now: Callable[[], dict | None] | None = None):
+                 screen_now: Callable[[], dict | None] | None = None,
+                 actions: dict[str, Callable] | None = None):
         self.store, self.publish, self.speak = store, publish, speak
         self.screen_now = screen_now or (lambda: None)
+        self.actions = actions or {}      # D31: pause, resume, focus, hush, state (from the bus)
         self._jimmy = jimmy
         self._lock = threading.Lock()
         self.listen_until = 0
@@ -289,20 +336,21 @@ class Asker:
             # The reply to Jimmy's question: no wake word needed.
             self.listen_until = 0
             reply = parse_wake(text)
-            if reply is not None and len(reply.split()) >= 4 and interpret(reply) is None:
-                self.pending = None       # "Jimmy, <a new question>": drop the old one
-                self.ask(reply, "voice")
+            body = reply if reply is not None else text.strip()
+            if command(body) or (reply is not None and len(reply.split()) >= 4 and interpret(reply) is None):
+                self.pending = None       # "stop", or "Jimmy, <a new question>": drop the old one
+                self.ask(body, "voice")
                 return True
-            self.resolve(reply if reply is not None else text.strip(), "voice")
+            self.resolve(body, "voice")
             return True
         q = parse_wake(text)
         if q is None:
-            if now_ms() < self.listen_until and len(text.split()) >= 2:
+            if now_ms() < self.listen_until and (len(text.split()) >= 2 or command(text)):
                 self.listen_until = 0
                 self.ask(text.strip(), "voice")
                 return True
             return False
-        if len(q.split()) < 2:                          # just "Jimmy": listen for the question
+        if len(q.split()) < 2 and not command(q):       # just "Jimmy": listen for the question
             self.listen_until = now_ms() + config.LISTEN_WINDOW_S * 1000
             self.publish({"type": "listening"})
             return True
@@ -365,6 +413,49 @@ class Asker:
         item.update(text=f"{now['frame']['title']}\n{text[-3900:]}", day="Now", time="")
         return [item]
 
+    def _do(self, kind: str, arg) -> str:
+        """Carry out a command the user gave (D31). Returns what to say about it."""
+        act = self.actions
+        if kind == "hush":
+            self.pending, self.listen_until = None, 0
+            act.get("hush", lambda: None)()
+            self.publish({"type": "answer_close"})
+            return "Okay."
+        if kind == "open":
+            view = "timeline" if arg.lower() == "timeline" else "insights"
+            self.publish({"type": "open_view", "view": view})
+            return f"Opening {view}."
+        need = {"pause": "pause", "resume": "resume", "focus": "focus", "unfocus": "focus"}[kind]
+        if need not in act:
+            return "I can't do that from here."
+        if kind == "pause":
+            act["pause"](arg or 120)
+            said = f"Paused for {insights.dur((arg or 120) * 60_000)}."
+        elif kind == "resume":
+            act["resume"]()
+            said = "Listening again."
+        else:
+            act["focus"](arg if kind == "focus" else None)
+            said = f"Focus set: {arg}." if kind == "focus" else "Focus cleared."
+        if "state" in act:
+            self.publish({"type": "state", **act["state"]()})
+        return said
+
+    def _stats(self, aid: str, question: str, query: str, source: str) -> None:
+        """Where the time went, from captures, in one line and a chart (D31). No model."""
+        from .plugin import time_window
+        now = now_ms()
+        line, data = insights.answer(self.store, query, time_window(query, now), now)
+        self.last_evidence = []
+        self.publish({"type": "answer_evidence", "id": aid, "mode": "stats", "evidence": [],
+                      "window": data["label"], "terms": [], "days": [], "stats": data})
+        self.publish({"type": "answer_delta", "id": aid, "text": line})
+        self.publish({"type": "answer_end", "id": aid, "text": line})
+        self.turns.append({"q": question, "a": line, "mode": "stats", "query": query, "ts": now,
+                           "term": (data["match"] or {}).get("term", ""), "when": data["label"]})
+        if source == "voice" and self.speak and config.VOICE_ANSWERS:
+            self.speak(line)
+
     def _run(self, question: str, source: str, force: tuple[str, str] | None = None) -> None:
         try:
             self._answer(question, source, force)
@@ -378,21 +469,36 @@ class Asker:
             now = now_ms()
             last = self._conversation(now)
             mode, query = force or route(question, last, now)
+            if mode == "command":
+                kind, arg = command(question)
+                said = self._do(kind, arg)
+                self.publish({"type": "toast", "text": said, "icon": kind})
+                if source == "voice" and self.speak and kind != "hush":
+                    self.speak(said)
+                return
             if mode == "show":
                 # "Show me the best match": open evidence already on screen, no new search.
-                words = question.lower().split()
+                words = question.lower().replace("?", "").split()
                 idx = next((_ORDINAL[w] for w in words if w in _ORDINAL), 0)
-                if idx < len(self.last_evidence):
+                idx = len(self.last_evidence) - 1 if idx < 0 else idx
+                if 0 <= idx < len(self.last_evidence):
                     self.publish({"type": "open_evidence", "index": idx})
-                    if source == "voice" and self.speak:
-                        self.speak("Here it is.")
+                    said = "Here it is."
+                else:
+                    said = "There's no such match."
+                    self.publish({"type": "toast", "text": said, "icon": "show"})
+                if source == "voice" and self.speak:
+                    self.speak(said)
                 return
+            # A new question drops a question Jimmy asked back; only a re-ask keeps its count.
+            asked = (self.pending or {}).get("asked", 0) if force and force[0] == "clarify" else 0
+            self.pending = None
             history = [{"q": t["q"], "a": t["a"]} for t in self.turns[-2:]]
             self.publish({"type": "answer_start", "id": aid, "question": question, "source": source,
                           "mode": mode, "history": history})
             if mode == "clarify":
                 # D28: can't tell the screen now from a screen captured earlier: ask.
-                self.pending = {"q": question, "asked": (self.pending or {}).get("asked", 0) + 1, "ts": now}
+                self.pending = {"q": question, "asked": asked + 1, "ts": now}
                 self.listen_until = now_ms() + config.CLARIFY_WAIT_S * 1000
                 self.publish({"type": "answer_evidence", "id": aid, "mode": "clarify", "evidence": [],
                               "window": None, "terms": [], "days": []})
@@ -403,6 +509,8 @@ class Asker:
                     self.speak(CLARIFY_Q)
                 return
             try:
+                if mode == "stats":
+                    return self._stats(aid, question, query, source)
                 if mode == "chat":
                     items, label, terms = [], None, []
                 elif mode == "screen":
@@ -416,11 +524,11 @@ class Asker:
                 jim = self._jim()
                 style = {"chat": CHAT_STYLE, "screen": SCREEN_STYLE}.get(mode, ANSWER_STYLE)
                 if mode != "chat" and not items:
-                    text = ("I can't see a window to describe right now." if mode == "screen" else
-                            "I couldn't find anything in what I captured that matches that.")
+                    text = ("I can't see a window I'm allowed to read." if mode == "screen" else
+                            "Nothing I captured matches that.")
                     self.publish({"type": "answer_delta", "id": aid, "text": text})
                 elif not jim.llm.configured:
-                    text = "Here's what I found. I can't summarise it without the language model's key."
+                    text = "Here's what I found; there's no model key to summarise it."
                     self.publish({"type": "answer_delta", "id": aid, "text": text})
                 else:
                     text = ""

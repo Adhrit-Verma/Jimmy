@@ -17,3 +17,26 @@ body {
   user-select: none;
   cursor: default;
 }
+
+/* D31: motion that reads as "alive" without layout work: transform/opacity only. */
+@keyframes eq { 0%, 100% { transform: scaleY(0.35); } 50% { transform: scaleY(1); } }
+.eq > span { transform-origin: bottom; animation: eq 0.9s ease-in-out infinite; }
+.eq > span:nth-child(2) { animation-delay: -0.3s; }
+.eq > span:nth-child(3) { animation-delay: -0.6s; }
+.eq > span:nth-child(4) { animation-delay: -0.15s; }
+
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.shimmer {
+  background: linear-gradient(90deg, #8a8a8a 0%, #f5f5f5 45%, #8a8a8a 90%) 0 0 / 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 1.8s linear infinite;
+}
+
+@keyframes indet { from { transform: translateX(-100%); } to { transform: translateX(350%); } }
+.indet { animation: indet 1.15s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .eq > span, .shimmer, .indet { animation: none; }
+}
