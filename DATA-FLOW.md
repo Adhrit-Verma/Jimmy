@@ -81,8 +81,8 @@ time window and matches its term against app names and window titles.
 
 New in the schema: `frames.url`, `cards.app` (both added to older databases on
 open), `deadlines(id, seen_ts, due_ts, text, key UNIQUE, ref, state)` in the
-capture DB, and `reminders(id, created, text, due_ts, app, state)` in Jimmy's
-memory DB.
+capture DB, and `reminders(id, created, text, due_ts, app, state)` and (D35)
+`settings(key, value)` (voice volume, mute) in Jimmy's memory DB.
 
 ---
 

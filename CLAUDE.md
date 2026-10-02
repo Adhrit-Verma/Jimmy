@@ -86,7 +86,10 @@ cd overlay; npm install; npm run build   # once, and after any change under over
 .\.venv\Scripts\python.exe -m ambient.insights    # self-check for the time estimate
 .\.venv\Scripts\python.exe tests\test_stage7.py   # 11 checks: nav, reminders, deadlines, offers, curtain, presence
 .\.venv\Scripts\python.exe -m ambient deadlines --scan --dry   # date lines in history, no model
+.\.venv\Scripts\python.exe tests\test_stage8.py   # 6 checks: the first real session's misses, tools, ask-back
 ```
+
+Only one `ambient run` at a time (D35): a second one exits with a message.
 
 Timeline window: pill → **Timeline**, or **Ctrl+Alt+T**; its Insights tab: **Ctrl+Alt+I**
 (`electron . --timeline --insights --snapshot shot.png` renders it). Snapshot it on real data
@@ -132,6 +135,7 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `ambient/proactive.py` | D32: RESUME / SUGGEST / REMIND / DEADLINE / RECAP cards, reminder and date parsing, `.ics` files. |
 | `ambient/presence.py` | D34: webcam presence for the privacy curtain. Face count + head pose only. |
 | `tests/test_stage7.py` | D32–D34 check. No webcam, no network. |
+| `tests/test_stage8.py` | D35 check: the human's real misses from 2026-10-02, tool picking, ask-back. |
 | `overlay/src/Answer.jsx` | the answer view: evidence left (best match focused), streamed answer right. |
 | `ambient/recall.py` | Stage 5: chunk + index (bge-m3), meaning search, hybrid (RRF) with furniture filter, timeline API reads. |
 | `overlay/src/Timeline.jsx` | the timeline window: day nav, search, preview, minute scrub strip. |
@@ -184,6 +188,8 @@ setting that defaults to off.
 11. **Jimmy proposes; you approve** (D32). Focus, page, draft, calendar event:
    each waits for your yes, and drafts/events go no further than your
    clipboard or your calendar app's own confirm.
+12. **Scroll is the only input Jimmy sends to another app** (D35), and only when
+   asked. No clicks, no typing. Anything more needs its own approval design.
 
 ---
 
@@ -319,6 +325,12 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   be a whole-phrase match; "just talking about lunch" once became a filter.
 - **The curtain is drawn by the overlay window**, so a capture under it would
   store the curtain: `bus.tick` returns "curtained" before reading the screen.
+- **`cards.parse` reads flat JSON only.** Tool picks are nested (`"args": {...}`);
+  use `ask._json_obj`. The cloud model also puts `reason` beside `args`.
+- **The heredoc trap bites code too**: a `\\b` in a heredoc'd Python edit became a
+  backspace character inside a regex (D35). Write edit scripts to a file.
+- **Read the human's real session before guessing** (D35): commands are in
+  `audio_segments` with `source = 'command'`, answers in `jimmy.db` `turns`.
 - **Commands and usage questions route before everything else** (`ask.route`).
   A new pattern there can swallow real questions: add its negative case to
   `test_router_commands_and_stats` first.

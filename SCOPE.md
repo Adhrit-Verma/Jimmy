@@ -217,6 +217,21 @@ UI, and the presence-based privacy curtain.
 
 ---
 
+## Fixes from the first real session (D35) — built, and NOT built
+
+Built: one instance at a time, model tool picking with ask-back and honest
+"can't", presence and usage answers for the session's missed questions,
+scroll falling through to the window in front, wake word in Devanagari/Urdu,
+no personal identifiers read aloud, quieter remembered voice, a compact idle pill.
+
+| Not built | Why |
+|---|---|
+| Clicking or typing into other apps | Scroll is the one input Jimmy sends, on request. Anything more needs its own approval design. |
+| Full Hindi/Urdu command understanding | Only the command words Whisper produced are mapped; a translation step would cost a model call per line. |
+| Tool picking for questions | Questions route by rules; only unrecognised instructions pay for a model call. |
+
+---
+
 ## Possible future changes
 
 Ideas I'd want to make but that are **not decided**. Each needs evidence or a

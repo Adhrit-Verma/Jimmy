@@ -13,6 +13,7 @@ result whenever either changes.
  [x] 5  Recall timeline         done 2026-09-25: hybrid search + timeline window, acceptance met (D24)
  [x] +  Insights + commands     built 2026-10-02: day map, usage answers, voice/typed commands (D31)
  [x] +  Autonomy + curtain      built 2026-10-02: own cards, hands-free UI, privacy curtain (D32–D34)
+ [x] +  First-session fixes     built 2026-10-02: routing, tool use, ask-back, scroll, volume, declutter (D35)
 ```
 
 ---

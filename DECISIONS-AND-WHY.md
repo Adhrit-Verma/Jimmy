@@ -1250,3 +1250,63 @@ is untested: if a call can't get the camera, set `PRESENCE = False`.
 non-negotiable 2 (a RAM-only template, re-learned each run). Not done.
 
 Checks: `tests\test_stage7.py` (11).
+
+
+### D35 — What the first real session got wrong
+
+**Source:** the human's own session on 2026-10-02 (14:12–15:51), read back from
+`audio_segments` (source `command`) and Jimmy's chat turns. Every miss below
+is now a test case in `tests\test_stage8.py`, in the human's actual words.
+
+**Found, and fixed:**
+- **Two Jimmys.** Questions at 14:13–14:14 were stored twice and answered
+  twice, in two conversations: two `ambient run`s were up. `ambient run` now
+  takes a named mutex (`Local\JimmyAmbientRun`) and refuses to start a second.
+- **Instructions answered as questions.** "turn on privacy curtain", "close
+  your UI", "stop focusing on Spotify" reached the model, which said it
+  couldn't. The rules now cover those phrasings, see through politeness
+  ("can you …", "please …", "… for me"), and have new commands: close
+  everything (panels, cards, the timeline window), copy the window's text to
+  the clipboard, voice volume.
+- **Tool use for the rest.** An instruction the rules still don't know
+  (starts with turn, close, put, copy, make, …) goes to the model with
+  Jimmy's tool list; it answers with JSON: a tool, `ask_back` with one
+  question, or `cannot` with a reason. Code runs the tool through the same
+  path a spoken command takes. Measured on the cloud model: right tool for
+  all five probes, 0.3–3 s; it put `reason` beside `args` and spoke of
+  "Jimmy" in the third person, so the parser accepts both and rewrites them.
+  Questions never pay for this call.
+- **"Can you see my screen / me?"** was answered "No". Jimmy can: screen
+  questions go to the screen answer; "can you see me" is answered by code
+  from presence ("one face at the screen; I count faces, I don't recognise them").
+- **Usage questions missed:** "show me the apps I have used today", "what was
+  the apps I have opened last month", "my routine last month", "last time I
+  used Discord" (that one was answered from Jimmy's own voice command).
+  Now usage answers: last/first seen (falling back to all history when the
+  named day is empty), and a routine line for multi-day spans: active days,
+  hours a day, usual start, top apps.
+- **Scrolling did nothing.** Jimmy's panel had nothing to scroll. Now "scroll
+  down" moves Jimmy's panel if it can, the timeline if you're in it, and
+  otherwise the window you're on (mouse wheel under the pointer, or Page
+  Down). That is the only input Jimmy ever sends to another app, and only
+  when asked. "can you scroll down and show me…" is recognised.
+- **Wake word in other scripts.** With language detection on, Whisper wrote
+  "Jimmy scroll up" as "جمی سکرول اپ". The wake word and a few command words
+  are now recognised in Devanagari and Urdu script.
+- **Reading personal data aloud.** On Instagram's sign-in page the screen
+  answer said two email addresses aloud and claimed the user was logged in.
+  Screen answers now never say emails, phone numbers, passwords or codes, and
+  a sign-in form means not signed in.
+- **Asking back.** The recall prompt now asks which one when the evidence
+  shows two different things; any answer ending in a question keeps the mic
+  open for the reply, no wake word needed, in the same conversation.
+- **Too loud.** Default volume 55 (was 100). "Jimmy, speak softer / louder /
+  mute your voice" change it and are remembered (`settings` table in Jimmy's
+  memory DB).
+- **Clutter.** The idle pill is now a dot (it sat on Chrome's tab strip),
+  answers fade after 30 s (was 60), at most two cards, the evidence panel is
+  as tall as its content, and "close your UI" clears everything.
+
+**Not fixed, noted:** Hindi/Urdu speech is still transcribed as it is said;
+only command words are mapped back. "Give me scroll down" (no wake word) was
+missed and still is: bare phrases stay narrow on purpose.

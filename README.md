@@ -60,6 +60,9 @@ While `ambient run` is going, say **"Jimmy,"** and then your question.
 | *"Jimmy, remind me at 5 to call Sam"* · *"…when I open Discord"* | A card (and a spoken reminder) at that time, or when that app comes up. |
 | *"Jimmy, draft a reply to this"* · *"add this to my calendar"* | A draft copied to your clipboard; an event you confirm with *"yes"*. Nothing is sent or saved behind your back. |
 | *"Jimmy, open that page"* · *"curtain"* · *"lift the curtain"* | Reopens the page in your browser; draws or lifts the privacy curtain. |
+| *"Jimmy, scroll down"* · *"close your UI"* · *"copy the text on my screen"* | Scrolls Jimmy's panel, or the window you're on; clears Jimmy off the screen; copies the window's text. |
+| *"Jimmy, speak softer"* · *"louder"* · *"mute your voice"* | Remembered next time. |
+| *"Jimmy, last time I used Discord?"* · *"my routine last month"* | Answered from your captures, instantly. |
 
 It understands days and times: *today*, *yesterday afternoon*, *on Tuesday*,
 *between 2 and 3*, *the last 20 minutes*, *an hour ago*, *last Friday*. Say just **"Jimmy"** and pause if you
@@ -316,7 +319,7 @@ biggest one: the model reads text, not pixels, so windows that UI Automation
 can't reach (canvases, video, some apps' main panes) aren't described yet.
 
 <details>
-<summary><b>Checks</b>: 76 assert-based checks, no framework</summary>
+<summary><b>Checks</b>: 82 assert-based checks, no framework</summary>
 
 ```powershell
 .\.venv\Scripts\python.exe tests\test_stage1.py    # 15 · capture, blur, store
@@ -326,6 +329,7 @@ can't reach (canvases, video, some apps' main panes) aren't described yet.
 .\.venv\Scripts\python.exe tests\test_stage5.py    # 14 · recall, voice, ask-back, demo
 .\.venv\Scripts\python.exe tests\test_stage6.py    #  6 · insights, usage answers, commands
 .\.venv\Scripts\python.exe tests\test_stage7.py    # 11 · own cards, hands-free, curtain
+.\.venv\Scripts\python.exe tests\test_stage8.py    #  6 · the first real session's misses
 ```
 
 OpenCV prints `net_impl_backend ... Targets are not supported` on import. It's harmless.

@@ -254,6 +254,8 @@ strip thumbnails (`/thumb?w=`), and deep links: `open_view` events and
  D32/D33: route() order is command → nav → draft → event → stats → goto ("show me <time>") → …;
    nav phrases need no wake word for NAV_WINDOW_S after Jimmy shows something; offers
    (focus, calendar) wait for "yes"; Electron routes `ui` events to the surface last shown
+ D35: an instruction the rules miss (starts with turn/close/put/copy/…) → TOOLS_Q to the
+   cloud model → {tool, args} → the same Asker._do path; or ask_back / cannot
  D31: route() first checks command() (pause/resume/focus/open/hush → Asker._do → bus
    actions; a toast, no panel) and usage questions (stats → insights.answer: one line
    written in code + chart data; no model)
