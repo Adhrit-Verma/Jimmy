@@ -260,7 +260,12 @@ Jimmy resting while you're away (mic, indexing, own cards), the follow-up window
 eye-contact asks (auto-calibrating zone, lips, request shape, others-talking rule,
 "name only"), the wake word anywhere in the first four words, "delete … from
 September" with a yes, `ambient forget` / `ambient compact`, compaction while
-away, timers on the pill.
+away, timers on the pill. D40: the guided eye calibration, follow-ups on a call,
+"I'm not on a call", the pill saying why eye contact is off on a call, a steady
+eye indicator, a fresh timeline after a forget, scrolling through UI Automation.
+NOT built (D40): telling a real call from Discord idling in a channel (the
+registry can't); scrolling VS Code's editor by UI Automation (it exposes none:
+the pointer's wheel still does it).
 
 | Not built | Why / what it needs |
 |---|---|

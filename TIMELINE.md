@@ -208,6 +208,11 @@ auto-compaction, timers on the pill. Checks: `tests\test_stage9.py` (12), the
 command matrix (149), `tests\eval_tools.py` (39/39). Live acceptance on the real
 webcam (the follow match, the gaze zone, lips) is open.
 
+**D40, same evening:** the first live session's misses (Discord's mic read as a
+call, an unmeasured lip veto, no visible calibration, a flickering eye, a stale
+timeline after a forget, scroll in Claude). Checks: `tests\test_stage9.py` (14),
+matrix (154), eval 41/41.
+
 ---
 
 ## Next, in order

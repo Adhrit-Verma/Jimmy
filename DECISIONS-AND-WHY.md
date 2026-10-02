@@ -1558,3 +1558,64 @@ window and over the curtain, and ring with "Time's up".
 Checks: `tests\test_stage9.py` (12, including the real presence thread on a fake
 camera), 18 new rows in the command matrix (149), `tests\eval_tools.py` 39/39
 with 5 new timer/forget cases (English and Hindi). DB read paths: identical (43).
+
+
+### D40 — What the first "live" session got wrong
+
+**Source:** the human's session on 2026-10-02 (21:45–21:55), read from
+`audio_segments` and `turns`, and Windows' mic-in-use registry.
+
+**"It waits for the wake word."** Lines that should have counted ("uh no what
+else did I open today?", "scroll up" ×3, "can you see this?") were never taken.
+Two causes:
+- **Discord held the mic the whole evening** (since ~21:00; Jimmy started ~45
+  min later). D9's rule "another app has the mic = a call" switched off every
+  path without the name, silently. Whether it was a real call or Discord idling
+  in a voice channel can't be told from the registry. Now: a **follow-up works
+  on a call** (you were just talking to Jimmy); **eye contact doesn't, and the
+  pill says why** ("On a call (Discord): say "Jimmy" first", at most every 2
+  min). **"Jimmy, I'm not on a call"** sets the apps holding the mic aside until
+  they let go and take it again (`audio.not_a_call`; (app, start time) pairs).
+  That also lets the mic pause while you're away and on bank pages again.
+- **An unmeasured lip threshold had a veto.** "Lips still" rejected the line and
+  marked "someone else is talking", which blocked eye contact for 30 s, over
+  and over. Now lips decide nothing until the eye calibration has measured them
+  (`Presence.spoke` returns None); eye contact needs only "not lips-still".
+
+**"The eye calibration is not there."** D39's zone was learnt silently; nothing
+showed it, and "eye calibration" (heard as "2i calibration") was answered as a
+question. Now **"Jimmy, eye calibration"** opens the guided panel (the same one
+as remember-my-face, ~20 s): look at the camera, at the middle of the screen, at
+the keyboard; count out loud; stay quiet. `presence.calibrate` sets the zone
+(centred on the camera and screen looks, wide enough for 90 % of them, halfway
+to the nearest keyboard looks when they're separable) and the lip threshold
+(geometric mean of talking and quiet movement, only if talking moved ≥ 1.6×).
+It says when the camera can't tell them apart. **Stored** in Jimmy's settings
+(`eye_calibration`): 4 medians, 4 spreads, a scale and a threshold: head pose,
+iris offsets and lip movement, no picture, no face vector. The spec amendment
+(D39) now says so. Mouth movement is compared ~0.25 s apart, the gap between
+frames outside calibration.
+
+**"UI is glitching when I see and say Jimmy."** The eye indicator followed raw
+frames (up to 4 changes a second) and swapped a 9 px icon for an 8 px dot in a
+pill with layout animation. Now eye contact turns on with 2 of the last 3
+frames and off only when 4 of the last 5 miss (~1 s), and the indicator sits in
+a fixed 14×12 px slot, so a change never resizes the pill.
+
+**"Insights and timeline glitched" after "delete September".** The day list
+was cached until a newer frame arrived, so September stayed listed with its
+pictures gone; and the timeline window only ever hides, so it still held them.
+Now `Store.generation` (bumped by `forget`) keys the day-list and furniture
+caches, the thumbnail cache is cleared, and a `data_changed` event destroys the
+hidden window so the next open is fresh.
+
+**"Scroll did nothing in the Claude window."** The scroll was a mouse wheel at
+the pointer (over Claude's message box: nothing scrolls) or Page Down to the
+focused box. Now UI Automation scrolls the biggest scrollable part of the window
+in front by a page (Claude's "Chat messages", a Chrome page: found in ~0.1 s;
+down and up restored the exact place), if it's at least 15 % of the window and
+the position actually moves. Otherwise (VS Code's editor exposes no scrolling)
+the old wheel / Page Down.
+
+Checks: `tests\test_stage9.py` (14), the command matrix (154), `tests\eval_tools.py`
+41/41. DB read paths identical (43). Scroll: by hand on Chrome and VS Code.

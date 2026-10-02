@@ -18,8 +18,9 @@ to stay quiet. Build for six good interruptions an evening, not for throughput.
 **Current state: all five stages are done, plus voice Q&A (D25), Insights + commands (D31),
 cards Jimmy writes itself (D32), hands-free UI (D33), the privacy curtain (D34), fixes from
 the first real session (D35), English + Hindi only (D36), "remember my face" (D37), a
-performance pass (D38) and "live" (D39: a curtain that follows you, resting while away,
-asking without the name, forget a span, timers). Next: mouse/keyboard control, waiting
+performance pass (D38), "live" (D39: a curtain that follows you, resting while away,
+asking without the name, forget a span, timers) and its first-session fixes (D40: calls,
+eye calibration, UIA scroll, fresh timeline after a forget). Next: mouse/keyboard control, waiting
 on two human decisions (`TIMELINE.md` → Next).** "Jimmy, …" → an
 evidence panel and a spoken answer, with no typing needed. Stage 3 (trigger gate) passed its 5-check
 list, blind-judged (D19–D22). Stage 4 is the Electron overlay (D23). Stage 5 is hybrid
@@ -92,8 +93,8 @@ cd overlay; npm install; npm run build   # once, and after any change under over
 .\.venv\Scripts\python.exe -m ambient deadlines --scan --dry   # date lines in history, no model
 .\.venv\Scripts\python.exe tests\test_stage8.py   # 7 checks: the first real session's misses, tools, ask-back
 .\.venv\Scripts\python.exe tests\test_face.py     # 6 checks: remember-my-face capture, template, tracker
-.\.venv\Scripts\python.exe tests\test_stage9.py   # 12 checks: curtain follows you, presence thread, no-name asks, forget, timers
-.\.venv\Scripts\python.exe tests\test_commands.py # the command matrix: 149 utterances, talk, a drill
+.\.venv\Scripts\python.exe tests\test_stage9.py   # 14 checks: curtain follows you, presence thread, no-name asks, calls, calibration, forget, timers
+.\.venv\Scripts\python.exe tests\test_commands.py # the command matrix: 154 utterances, talk, a drill
 .\.venv\Scripts\python.exe -m ambient forget "1 to 15 September"   # shows what goes, asks first
 .\.venv\Scripts\python.exe -m ambient compact      # VACUUM + FTS optimize (also runs while you're away)
 .\.venv\Scripts\python.exe tests\eval_tools.py    # live: the model's tool pick (34 cases, needs the key)
@@ -206,13 +207,16 @@ setting that defaults to off.
    it matches a new face against the owner's DPAPI-encrypted template (per track,
    not per frame); every other face's vector lives for one comparison. For the
    owner's face only: looking-at-screen and lips-moving as yes/no values, two
-   minutes, RAM (D39's spec amendment). No frame is kept; nothing pickles. A test
+   minutes, RAM (D39's spec amendment); the eye calibration stores only a few
+   numbers in settings (D40). No frame is kept; nothing pickles. A test
    checks there is one write path (`self.owner.save(e.samples)`) and no image write.
 11. **Jimmy proposes; you approve** (D32). Focus, page, draft, calendar event:
    each waits for your yes, and drafts/events go no further than your
    clipboard or your calendar app's own confirm.
 12. **Scroll is the only input Jimmy sends to another app** (D35), and only when
    asked. No clicks, no typing. Anything more needs its own approval design.
+   D40: done through UI Automation's ScrollPattern where the window has one, so
+   it's still only a scroll, just not dependent on where the pointer is.
 
 ---
 
@@ -375,6 +379,16 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
 - **`Presence()` in a test loads the real `data/owner_face.bin`** (the owner enrolled
   on 2026-10-02), so a test expecting "no face remembered" silently gets identity
   checks. Pass `owner=` a stub (`tests/test_stage9.py` has `_Nobody`).
+- **Another app holding the mic switches off asking without the name** (D9's
+  "that's a call" rule). On 2026-10-02 Discord held the mic all evening and eye
+  contact looked broken. Check `audio.mic_holders()` before debugging gaze; the
+  user can say "I'm not on a call" (D40).
+- **An unmeasured threshold must not veto.** D39's lip check rejected lines and
+  then blocked eye contact for 30 s, in a loop. Signals tuned on drawings decide
+  nothing until a calibration has measured them on the real camera (D40).
+- **UI Automation off the main thread needs `auto.UIAutomationInitializerInThread()`**
+  (the scroll runs on an API thread). `uiautomation`'s client is in
+  `uiautomation.uiautomation._AutomationClient`; `TreeScope_Descendants` is 4.
 - **The curtain's thresholds are from drawn scenes** (D39): turned head 0.55–0.69,
   empty chair 0.42, `FOLLOW_MIN` 0.5. The console prints the last match when it
   decides you left; tune from that, not from the drawings.

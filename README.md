@@ -102,7 +102,10 @@ follows a real card or answer format from the code.
 
 While `ambient run` is going, say **"Jimmy,"** and then what you want. Or skip the name: look at
 the screen and ask (an eye in the pill shows Jimmy sees you looking), and after Jimmy answers,
-just keep talking for 10 seconds, like a conversation. *"Thanks"* ends it.
+just keep talking for 10 seconds, like a conversation. *"Thanks"* ends it. Say **"Jimmy, eye
+calibration"** once (about 20 seconds, guided on screen) so it knows your camera, your eyes and
+your lips. On a call (another app has the mic, Discord in a voice channel counts), looking isn't
+enough and the pill says so; *"Jimmy, I'm not on a call"* if you aren't.
 
 <table>
 <tr><th width="20%">Kind</th><th width="42%">You say</th><th>Jimmy</th></tr>
@@ -289,7 +292,8 @@ says so and exits.
 | Action | How |
 |---|---|
 | Ask | Say *"Jimmy, …"*, or **Ctrl + Alt + Space** to type |
-| Ask without the name | Look at the screen and ask. *"Jimmy, only answer to your name"* turns this off; *"listen without your name"* turns it back on |
+| Ask without the name | Look at the screen and ask. *"Jimmy, eye calibration"* tunes it to you (~20 s); *"only answer to your name"* turns it off, *"listen without your name"* back on |
+| Scroll the window you're on | *"Jimmy, scroll down"* (then just *"scroll up"*, *"scroll down"*): the page or chat in front moves, wherever your pointer is |
 | Pause capture (and resume) | **Ctrl + Alt + J**, or hover the pill → **Pause 2h** |
 | Open the timeline | **Ctrl + Alt + T**, or hover the pill → **Timeline** |
 | See where the day went | **Ctrl + Alt + I**, or hover the pill → **Insights** |
@@ -531,7 +535,7 @@ come first ([`TIMELINE.md`](TIMELINE.md) → Next). Other ideas are in [`SCOPE.m
 UI Automation can't reach (canvases, video) aren't described yet.
 
 <details>
-<summary><b>Checks</b>: 105 assert-based checks and a 149-utterance command matrix, no test framework</summary>
+<summary><b>Checks</b>: 107 assert-based checks and a 154-utterance command matrix, no test framework</summary>
 
 ```powershell
 .\.venv\Scripts\python.exe tests\test_stage1.py    # 15 · capture, blur, store
@@ -542,9 +546,9 @@ UI Automation can't reach (canvases, video) aren't described yet.
 .\.venv\Scripts\python.exe tests\test_stage6.py    #  6 · insights, usage answers, commands
 .\.venv\Scripts\python.exe tests\test_stage7.py    # 11 · own cards, hands-free, curtain
 .\.venv\Scripts\python.exe tests\test_stage8.py    #  7 · the first real session's misses
-.\.venv\Scripts\python.exe tests\test_stage9.py    # 12 · curtain that follows you, no-name asks, forget, timers
+.\.venv\Scripts\python.exe tests\test_stage9.py    # 14 · curtain that follows you, no-name asks, calibration, forget, timers
 .\.venv\Scripts\python.exe tests\test_face.py      #  6 · remember my face
-.\.venv\Scripts\python.exe tests\test_commands.py  #  4 · 149 commands, talk that mustn't trigger, a drill
+.\.venv\Scripts\python.exe tests\test_commands.py  #  4 · 154 commands, talk that mustn't trigger, a drill
 .\.venv\Scripts\python.exe tests\eval_tools.py     #  live: the model's tool pick, English + Hindi
 .\.venv\Scripts\python.exe tests\equiv_db.py snap before   # then change code, snap after, diff
 ```

@@ -223,7 +223,11 @@ typed yes (or `ambient forget`): embeddings by the ids they point at, then
 empty; the thumbnail files and empty day folders; Jimmy's `turns` in the span.
 Kept: remembered facts, reminders, settings. Then `compact()`: FTS `optimize`,
 `VACUUM`, `wal_checkpoint(TRUNCATE)`. No schema change; Jimmy's `settings` gains
-`eye_contact` and `last_compact`.
+`eye_contact`, `last_compact` and (D40) `eye_calibration`: JSON of 4 medians and 4
+spreads (head turn, head tilt, iris x/y), a zone scale, and a lip threshold. No
+picture, no face vector. A forget bumps `Store.generation`, which resets the
+day-list and furniture caches; the overlay gets `data_changed` and rebuilds the
+timeline window.
 
 ---
 

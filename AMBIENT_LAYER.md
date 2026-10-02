@@ -42,7 +42,9 @@ throughput.
    may tell Jimmy it's being spoken to** — whether the owner is looking at the
    screen and whether their lips are moving, kept as per-frame yes/no values in
    RAM for two minutes, so a request needs no wake word. Never computed for anyone
-   else's face, never stored, never surfaced as a finding.
+   else's face, never surfaced as a finding. The one thing stored (D40, on the
+   owner's "eye calibration"): a few numbers in Jimmy's settings, where they look
+   and how much their lips move when they talk; no picture, no face vector.
 4. **Exclusion list ships before first run.** Password managers, banking domains,
    private/incognito windows. Cheaper now than scrubbing six months of history later.
 

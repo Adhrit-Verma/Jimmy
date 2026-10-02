@@ -276,6 +276,10 @@ strip thumbnails (`/thumb?w=`), and deep links: `open_view` events and
    never when the camera saw your lips still (someone else). Timers are reminders
    ending in "timer" (counted down on the pill); "delete … from September" →
    date_range → an offer → yes → bus.forget (Store.forget + compact)
+ D40: a call (audio.mic_holders, minus "I'm not on a call") blocks eye contact, not
+   follow-ups, and the pill says so; lips veto only after "eye calibration"
+   (Presence._calib_tick → presence.calibrate → settings); "scroll" → overlay →
+   POST /scroll_window → screen.scroll_active → UI Automation ScrollPattern, else wheel
 ```
 
 ## Boundaries for later stages
