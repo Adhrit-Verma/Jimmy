@@ -102,7 +102,7 @@ every screen reader charges.
 | `bus.py` | the one loop, capture-window lifecycle | screen on the calling thread, audio on its own |
 | `insights.py` | where the day went (D31) | estimated from frame times, gap-capped; no model, no new capture |
 | `proactive.py` | cards Jimmy writes itself (D32) | resume, focus offer, reminders, deadlines, recap; acts only on Jimmy |
-| `presence.py` | webcam presence for the curtain (D34) | YuNet count + head pose; no face vectors, nothing stored |
+| `presence.py` | webcam presence for the curtain (D34, D37) | YuNet count + head pose; with "remember my face", the owner's DPAPI-encrypted template, nobody else's |
 | `__main__.py` | `run` / `search` / `stats` / `doctor` | `doctor` reports what actually works on this machine |
 
 ---

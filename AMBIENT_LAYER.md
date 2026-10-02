@@ -28,6 +28,12 @@ throughput.
    user confirms. This matches Jimmy's existing rule about self-modification.
 2. **Face stage never persists, enrols or names.** See "Stage 1b" below. These are
    absent code paths, not settings that default to off.
+   *Amended by the human on 2026-10-02 (D37), one exception:* **the owner's own
+   face**, enrolled only when they ask ("remember my face") through a guided
+   capture, kept as a template (SFace vectors, never an image) encrypted with
+   Windows DPAPI so only their Windows account can read it, used only to lift the
+   privacy curtain, and deleted on "forget my face". No one else is ever enrolled,
+   stored or named.
 3. **No proactive alerts about other people's surroundings.** The system may not
    surface "an unknown person is present in X's video call" or any equivalent
    finding about a third party's environment or behaviour. The face signal feeds
@@ -109,6 +115,8 @@ were present without ever learning *who* they are.
 **Rules**
 - The dict is never serialised, never written to SQLite, never logged.
 - No enrolment gallery. No name binding. No cross-window comparison.
+  (D37's one exception: the owner's own template, for the curtain only; see
+  non-negotiable 2. Other webcam faces are compared with it once and dropped.)
 - Only two things leave the window: the **blurred frame** (faces blurred *before* the
   write, so the stored artifact never contains a face) and a **count plus per-window
   ordinal** ("2 faces: face 1, face 2").

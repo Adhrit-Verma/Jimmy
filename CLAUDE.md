@@ -87,6 +87,9 @@ cd overlay; npm install; npm run build   # once, and after any change under over
 .\.venv\Scripts\python.exe tests\test_stage7.py   # 11 checks: nav, reminders, deadlines, offers, curtain, presence
 .\.venv\Scripts\python.exe -m ambient deadlines --scan --dry   # date lines in history, no model
 .\.venv\Scripts\python.exe tests\test_stage8.py   # 7 checks: the first real session's misses, tools, ask-back
+.\.venv\Scripts\python.exe tests\test_face.py     # 6 checks: remember-my-face capture, template, tracker
+.\.venv\Scripts\python.exe tests\test_commands.py # the command matrix: 131 utterances, talk, a drill
+.\.venv\Scripts\python.exe tests\eval_tools.py    # live: the model's tool pick (34 cases, needs the key)
 ```
 
 Only one `ambient run` at a time (D35): a second one exits with a message.
@@ -136,6 +139,9 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `ambient/presence.py` | D34: webcam presence for the privacy curtain. Face count + head pose only. |
 | `tests/test_stage7.py` | D32–D34 check. No webcam, no network. |
 | `tests/test_stage8.py` | D35 check: the human's real misses from 2026-10-02, tool picking, ask-back. |
+| `tests/test_face.py` | D37: guidance, capture steps, DPAPI template, tracker with your face. No webcam. |
+| `tests/test_commands.py` | D37: the command matrix (131 utterances, 16 talk negatives, a 25-command drill). Add rows for real misses. |
+| `tests/eval_tools.py` | live: the cloud model's tool pick on 34 English/Hindi requests. Needs the key. |
 | `overlay/src/Answer.jsx` | the answer view: evidence left (best match focused), streamed answer right. |
 | `ambient/recall.py` | Stage 5: chunk + index (bge-m3), meaning search, hybrid (RRF) with furniture filter, timeline API reads. |
 | `overlay/src/Timeline.jsx` | the timeline window: day nav, search, preview, minute scrub strip. |
@@ -163,6 +169,8 @@ setting that defaults to off.
    asserts their absence. If you find yourself adding one, you have lost the design.
 3. **Face vectors never leave RAM.** `FaceStage` refuses to pickle, on purpose.
    Only two things leave a capture window: a blurred frame, and a count + ordinals.
+   The one exception (D37, the human's spec amendment): the owner's own template,
+   on "remember my face", DPAPI-encrypted, written in exactly one place.
 4. **Faces are blurred before the write.** `bus.tick` only ever passes `blurred`
    to `save_thumb`; the clean frame never reaches disk. Proven by
    `test_blur_defeats_redetection`, which re-runs the detector on the saved JPEG.
@@ -181,10 +189,11 @@ setting that defaults to off.
 9. **A model never writes a card.** It answers typed questions; `jimmy/cards.py`
    composes the line from words that exist in the evidence and real timestamps.
    D32's cards follow the same rule: `ambient/proactive.py` writes every line.
-10. **The webcam never recognises anyone** (D34). `presence.py` counts faces and
-   reads head pose; it computes no face vector, keeps no frame and refuses to
-   pickle. A test scans it for recogniser calls. Owner recognition would need an
-   amendment to non-negotiable 2 first.
+10. **The webcam recognises only its owner, and only if asked** (D34, D37).
+   `presence.py` counts faces and reads head pose. After "remember my face" it
+   matches faces against the owner's DPAPI-encrypted template; every other face's
+   vector lives for one comparison. No frame is kept; nothing pickles. A test
+   checks there is one write path (`self.owner.save(e.samples)`) and no image write.
 11. **Jimmy proposes; you approve** (D32). Focus, page, draft, calendar event:
    each waits for your yes, and drafts/events go no further than your
    clipboard or your calendar app's own confirm.

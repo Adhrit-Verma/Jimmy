@@ -14,6 +14,8 @@ result whenever either changes.
  [x] +  Insights + commands     built 2026-10-02: day map, usage answers, voice/typed commands (D31)
  [x] +  Autonomy + curtain      built 2026-10-02: own cards, hands-free UI, privacy curtain (D32–D34)
  [x] +  First-session fixes     built 2026-10-02: routing, tool use, ask-back, scroll, volume, declutter (D35)
+ [x] +  English and Hindi only  built 2026-10-02 (D36)
+ [x] +  Remember my face        built 2026-10-02: guided capture, DPAPI template, spec amended (D37)
 ```
 
 ---

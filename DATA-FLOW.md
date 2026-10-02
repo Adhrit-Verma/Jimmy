@@ -79,6 +79,9 @@ time window and matches its term against app names and window titles.
   head pose → state. The frame is deleted in the same iteration. State changes
   go to `bus._on_presence`, which decides the curtain and publishes it.
 
+On disk, only after "remember my face" (D37): `data/owner_face.bin`, the owner's SFace
+vectors encrypted with DPAPI; deleted by "forget my face".
+
 New in the schema: `frames.url`, `cards.app` (both added to older databases on
 open), `deadlines(id, seen_ts, due_ts, text, key UNIQUE, ref, state)` in the
 capture DB, and `reminders(id, created, text, due_ts, app, state)` and (D35)

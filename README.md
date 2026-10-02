@@ -168,7 +168,8 @@ downloads its weights on the first run and caches them after that.
 | See where the day went | **Ctrl + Alt + I**, or hover the pill → **Insights** |
 | Set or clear a focus | Hover the pill → **Focus** / **Unfocus**, or say *"Jimmy, focus on …"* |
 | Copy or follow up an answer | **Copy** / **Follow up** under the answer |
-| Privacy curtain | Draws itself when you walk away (webcam: faces counted, never recognised). By hand: **Ctrl + Alt + L** |
+| Privacy curtain | Draws itself when you walk away. By hand: **Ctrl + Alt + L** |
+| Let the curtain know you | Say *"Jimmy, remember my face"* and follow the on-screen guide (about 20 s). Then someone else at your screen brings the curtain down. Kept as an encrypted template on this PC, never a photo. *"Forget my face"* deletes it |
 | Silence an answer | **Stop voice** on the answer panel |
 | Dismiss a card | Hover it, click **×**. Jimmy then stays quiet for 30 minutes |
 | Quit cleanly | Hover the pill → **Quit**, or **Ctrl + C** in the terminal |
@@ -319,7 +320,7 @@ biggest one: the model reads text, not pixels, so windows that UI Automation
 can't reach (canvases, video, some apps' main panes) aren't described yet.
 
 <details>
-<summary><b>Checks</b>: 83 assert-based checks, no framework</summary>
+<summary><b>Checks</b>: 93 assert-based checks (plus a 131-utterance command matrix), no framework</summary>
 
 ```powershell
 .\.venv\Scripts\python.exe tests\test_stage1.py    # 15 · capture, blur, store
@@ -330,6 +331,9 @@ can't reach (canvases, video, some apps' main panes) aren't described yet.
 .\.venv\Scripts\python.exe tests\test_stage6.py    #  6 · insights, usage answers, commands
 .\.venv\Scripts\python.exe tests\test_stage7.py    # 11 · own cards, hands-free, curtain
 .\.venv\Scripts\python.exe tests\test_stage8.py    #  7 · the first real session's misses
+.\.venv\Scripts\python.exe tests\test_face.py      #  6 · remember my face
+.\.venv\Scripts\python.exe tests\test_commands.py  #  4 · 131 commands, talk that mustn't trigger, a drill
+.\.venv\Scripts\python.exe tests\eval_tools.py     #  live: the model's tool pick, English + Hindi
 ```
 
 OpenCV prints `net_impl_backend ... Targets are not supported` on import. It's harmless.

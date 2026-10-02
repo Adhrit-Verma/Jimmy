@@ -210,7 +210,7 @@ UI, and the presence-based privacy curtain.
 | Not built | Why |
 |---|---|
 | Battery mode | The human's call (D32): OCR and the local model stay on; performance gets optimised another way. |
-| Owner recognition for the curtain | Enrolment is ruled out by non-negotiable 2; needs a spec amendment first (D34). |
+| Liveness (a photo of you could lift the curtain) | Needs depth or a challenge; the curtain is against glances, not a lock (D37). |
 | Gaze tracking | A plain webcam reads head direction well, gaze poorly; needs a gaze model. |
 | Sending drafts, adding events directly | Never: drafts go to the clipboard, events through your calendar's own confirm. |
 | A deadline eval set | Needs real evenings; freeze one before tuning, as D22 did for RECALL. |

@@ -1332,3 +1332,54 @@ request (screen, usage, recall …). Measured on the cloud model: "मेरी 
 चलाया" → usage; "पर्दा लगा दो" → curtain; "थोड़ा धीरे बोलो" → softer.
 0.5–2.5 s each, ~12 s on a cold first call. Answers stay in English (the
 Windows voice is English).
+
+
+### D37 — "Remember my face": the owner, by their own request, for the curtain only
+
+**Asked for:** "add face detection like a remember-my-face feature, with
+on-screen guidance for proper capture."
+
+**A spec amendment, the human's call.** Non-negotiable 2 said the face stage
+never enrols anyone; D34 built the curtain without identity and asked whether
+to amend it. The human asked for the feature, so the amendment is written into
+`AMBIENT_LAYER.md`, as narrow as it can be:
+- **Only the owner**, only on "remember my face" (or the pill's Remember me).
+- **A template, not a picture:** 14 SFace vectors from a guided capture.
+- **Encrypted with Windows DPAPI** (`data/owner_face.bin`): only this Windows
+  account on this machine can decrypt it. One write path in the code
+  (`self.owner.save(e.samples)`), checked by a test.
+- **Used only for the curtain.** Other faces in the webcam are embedded for one
+  comparison and dropped in the same loop iteration: never stored, logged, or
+  compared with anything else. Screen faces are untouched (still blurred,
+  still never enrolled).
+- **"Forget my face"** deletes the file.
+
+**Guided capture** (`ambient/presence.py`, the overlay's Remember-my-face
+panel): a mirrored live preview at ~8 fps, an oval to line up in, the face box
+green when the frame is good, three steps (look straight, turn to one side,
+the other side), a progress bar, and one instruction at a time, shown and
+spoken when it changes: come closer, move back, move into the middle, too
+dark, too much light, hold still (motion blur), just you please (two faces).
+The straight-on samples must agree (cosine ≥ 0.5) or the capture is refused
+and redone rather than saving a template that would lock you out. Screen
+capture is off while the panel shows your face.
+
+**Matching:** with a template, "present" means you (cosine ≥ `OWNER_MATCH`
+0.42; OpenCV's same-person line is 0.363). Someone else alone at the screen
+for 2 s is "stranger": the curtain falls. Identity is judged only on faces
+turned to the screen; a turned head keeps the last state.
+
+**Known limits:** no liveness check: a photo of you could lift the curtain.
+It's a screen against glances, not a lock. Thresholds are unmeasured on the
+human's real face and lighting: if the curtain falls on you, re-capture in
+better light or lower `OWNER_MATCH`.
+
+**Command testing.** `tests\test_commands.py` freezes 131 utterances to their
+route and arguments, 16 everyday phrases that must never trigger (even in the
+navigation window), and a drill of 25 commands through the real Asker. The
+matrix found and fixed: "not now" (the politeness stripper ate "now"), "show
+all apps", and "show me the best match" / "open the second one" without a
+conversation on record. `tests\eval_tools.py` measures the cloud model's tool
+pick live: **34/34 right** (20 English, 14 Hindi), median 0.6 s, slowest
+6.7 s. It also showed the reminder tool's "when" arrives as "5" or "10 minutes
+from now" with Hindi text; the English sentence the model returns is now used.
