@@ -5,8 +5,8 @@ import "./index.css";
 import App from "./App.jsx";
 import Timeline from "./Timeline.jsx";
 
-// One bundle, two windows: the transparent overlay, and #timeline / #insights (Stage 5, D31).
-const Page = /^#(timeline|insights)/.test(location.hash) ? Timeline : App;
+// One bundle, two windows: the transparent overlay, and #timeline / #insights / #memory (D31, D41).
+const Page = /^#(timeline|insights|memory)/.test(location.hash) ? Timeline : App;
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>

@@ -20,6 +20,16 @@ MODEL = os.environ.get("JIMMY_MODEL") or "nvidia/nemotron-3-super-120b-a12b"
 # Thinking off: ~1 s to first word. On: ~2.5 s, same answer quality on recall
 # questions. Turn it on per call for heavy syntheses, not for chat.
 THINKING = False
+# D41: seeing the screen. Probed 2026-10-03 with drawn images (an invoice + chart, an
+# editor with an error): of 81 listed models only these answered for this key.
+# nemotron-3-nano-omni: 0.7-3.5 s, read the error and gave a concrete fix, but also
+# returned 503 "request limit reached" once; llama-3.2-11b-vision: 1.1-9 s, vaguer.
+# Gemma 4, Kimi K3, GLM-5.3 and llama-3.2-90b-vision timed out; others 404.
+# Tried in order, once each; then the answer falls back to the window's text alone.
+VISION_MODELS = tuple(filter(None, (os.environ.get("JIMMY_VISION_MODEL"),
+                                    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+                                    "meta/llama-3.2-11b-vision-instruct")))
+VISION_READ_TIMEOUT_S = 20.0
 TEMPERATURE = 0.3
 MAX_TOKENS = 600
 CONNECT_TIMEOUT_S = 5.0

@@ -104,7 +104,8 @@ _SCREEN = re.compile(
     r"|\bwhat(?:'s| is) on (?:my |the )?screen\b"
     r"|\b(?:can|do) you see (?:my |the |this )?(?:screen|window|page)\b", re.I)    # D35: it can; show it
 # D35: "can you see me?" is about the webcam, answered from presence, by code.
-_PRESENCE = re.compile(r"\b(?:can|do) you see me\b|\b(?:see|recogni[sz]e) my face\b|"
+_PRESENCE = re.compile(r"\b(?:can|do) you see me\b|\b(?:see|recogni[sz]e) my (?:face|eyes?)\b|"
+                       r"\bam i looking at you\b|\b(?:are|do) you (?:see|know) (?:that )?i'?m looking\b|"
                        r"\bam i (?:in front of|on) (?:the )?camera\b|\bis (?:my|the) (?:webcam|camera) on\b", re.I)
 _CHAT = re.compile(
     r"^(?:can|could|do|are|will) you (?:hear|listen|there|awake|working|understand|see me)\b"
@@ -152,8 +153,9 @@ _STATS_FOLLOW = re.compile(r"(?:and|also|what about|how about|and what about)\b"
 _NUMS = {"a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "ten": 10,
          "fifteen": 15, "twenty": 20, "thirty": 30, "half an": 0.5, "half a": 0.5}
 _CMD = (
-    ("open", re.compile(r"^(?:please\s+)?(?:open|show|launch|bring up)(?: me)?(?: my| the)?\s+"
-                        r"(timeline|insights|dashboard|stats|day map)\W*$", re.I)),
+    ("open", re.compile(r"^(?:please\s+)?(?:open|show|launch|bring up|navigate to|go to|switch to|take me to)"
+                        r"(?: me)?(?: my| the| your)?\s+(timelines?|insights|dashboard|stats|day map|memory|memories|"
+                        r"reminders? (?:list|page|window)|goals?(?: list)?)(?:\s+(?:tab|window|page))?\W*$", re.I)),
     ("pause", re.compile(r"^(?:please\s+)?(?:pause|stop (?:listening|recording|capturing|watching)|go private)"
                          r"(?:\s+(?:for\s+)?(\d+|an?|one|two|three|four|five|ten|fifteen|twenty|thirty|half an?)"
                          r"\s*(m|mins?|minutes?|h|hrs?|hours?))?\W*$", re.I)),
@@ -167,9 +169,13 @@ _CMD = (
     ("hush", re.compile(r"^(?:stop|stop talking|shush|hush|quiet|be quiet|shut up|enough|never ?mind|cancel|"
                         r"that'?s all)\W*$", re.I)),
     # D32: reminders, and answers to what Jimmy offered ("Focus on the deck?").
-    ("remind", re.compile(r"^(?:please\s+)?remind me\b.+", re.I)),
-    ("reminders", re.compile(r"^(?:what are|list|show me|show|read)\s+(?:all\s+)?(?:my\s+)?reminders\W*$", re.I)),
-    ("unremind", re.compile(r"^(?:cancel|clear|drop|forget)\s+(?:all\s+)?(?:my\s+|the\s+)?reminders?\W*$", re.I)),
+    ("remind", re.compile(r"^(?:please\s+)?remind me\b.+|^(?:set|add|create|make|put)\s+(?:up\s+)?(?:a\s+|an\s+)?"
+                          r"(?:new\s+)?reminder\b.*", re.I)),
+    ("reminders", re.compile(r"^(?:what are|what're|list|show me|show|read|tell me|give me)\s+(?:all\s+|any\s+)?"
+                             r"(?:of\s+)?(?:my\s+|the\s+)?reminders?(?:\s+(?:i have|i've got|i set|(?:that )?i have set))?\W*$|"
+                             r"^(?:do i have|have i got|are there) any reminders?\W*$|^(?:my )?reminders\W*$", re.I)),
+    ("unremind", re.compile(r"^(?:cancel|clear|drop|forget|delete|remove)\s+(?:all\s+)?(?:of\s+)?(?:my\s+|the\s+)?"
+                            r"reminders\W*$", re.I)),
     # D39: timers, counting down on the pill until they ring.
     ("timers", re.compile(r"^(?:how (?:much time|long)(?: is| do i have)? left\b.*|what'?s left on (?:the |my )?timer\b.*|"
                           r"(?:show|list|what are) (?:me )?(?:my |the )?timers)\W*$", re.I)),
@@ -181,11 +187,18 @@ _CMD = (
     # D40: the guided eye calibration. Whisper wrote "eye calibration" as "2i calibration".
     ("calibrate", re.compile(r"^(?:(?:start|do|run|redo|begin)\s+)?(?:the\s+|my\s+|an?\s+)?"
                              r"(?:eyes?|2i|i|ai|aye|gaze|eye contact|camera)\s+(?:calibration|calibrate)\W*$|"
-                             r"^(?:re)?calibrate(?:\s+(?:my|the|your))?(?:\s+(?:eyes?|gaze|eye contact|camera))?\W*$",
+                             r"^(?:re)?calibrate(?:\s+(?:my|the|your))?(?:\s+(?:eyes?|gaze|eye contact|camera))?\W*$|"
+                             r"^(?:\S+\s+){0,2}calibrat(?:e|ion|ing)\W*$",
                              re.I)),
     # D40: another app holds the mic, so Jimmy thinks you're on a call; you aren't.
     ("notcall", re.compile(r"^(?:i'?m|i am)\s+not\s+(?:on|in)\s+(?:a\s+)?(?:call|meeting)\W*$|"
                            r"^(?:it'?s|this is)\s+not\s+a\s+call\W*$|^no call\W*$|^not on a call\W*$", re.I)),
+    ("click", re.compile(r"^(?:click|press|tap|hit|push)(?:\s+on)?\s+(?:the\s+)?(.{2,60}?)\W*$", re.I)),
+    ("type", re.compile(r"^(?:type|enter)\s+(.{1,200}?)\s+(?:in|into|in to)\s+(?:the\s+)?(.{2,60}?)\W*$", re.I)),
+    ("open_app", re.compile(r"^(?:please\s+)?(?:open|launch|start|run)\s+(?:up\s+)?(?:the\s+|my\s+)?(?:app\s+)?"
+                            r"(chrome|google chrome|spotify|discord|vs ?code|visual studio code|word|excel|powerpoint|"
+                            r"notepad|calculator|whatsapp|telegram|teams|zoom|edge|firefox|file explorer|explorer|"
+                            r"settings|steam|obs|vlc|slack|notion|outlook)(?:\s+app)?\W*$", re.I)),
     # D39: talking to Jimmy without its name (eye contact), on or off, remembered.
     ("eyes", re.compile(r"^(?:only (?:answer|listen|respond)(?: to| when i say)? (?:your|my) name|name only|"
                         r"(?:stop|don'?t) (?:listen(?:ing)?|answer(?:ing)?) without (?:your|the|my) name|"
@@ -205,7 +218,7 @@ _CMD = (
                              r"i'?m back)\W*$", re.I)),
     # D35: Jimmy's own clutter, gone: every panel, card and the timeline window.
     ("close_ui", re.compile(r"^(?:close|hide|clear|dismiss|remove|minimi[sz]e)\s+(?:all\s+(?:of\s+)?)?"
-                            r"(?:your|the|my|jimmy'?s)?\s*(?:ui|interface|panels?|windows?|cards?|everything|"
+                            r"(?:your|the|my|jimmy'?s)?\s*(?:ui|interface|panels?|windows?|cards?|suggestions?|notifications?|popups?|everything|"
                             r"overlay|stuff|screen)\W*$|^(?:hide yourself|go away|clear the screen)\W*$", re.I)),
     # D35: "copy the text on my screen" copies; it doesn't read it out.
     ("copy_screen", re.compile(r"^(?:\w+\s+)?copy\s+(?:all\s+)?(?:of\s+)?(?:the\s+)?(?:text|everything|words|"
@@ -233,6 +246,8 @@ _CMD = (
     # Last: "forget my face", "clear my reminders", "clear everything" (the UI) come first.
     ("forget", re.compile(r"^(?:delete|erase|wipe|clear|forget|remove|purge)\s+(.+?)\W*$", re.I)),
 )
+_CMD_RX = dict(_CMD)
+
 # The words allowed before the dates in a "forget" request: "delete [all my data] from …".
 # Anything else ("delete the email from yesterday") is about something other than Jimmy's record.
 _DATA_WORDS = set("all everything every thing my the your jimmy jimmy's of data history capture captures captured "
@@ -338,36 +353,71 @@ can do: recall what they saw or heard ("what was that form on Friday?"), explain
 screen ("what's on my screen?"), show where their day went ("how was my day?"), set
 reminders and a focus, draft replies, and move around your own panels by voice."""
 
-# D35: when the rules don't recognise a request but it sounds like an instruction,
-# the model picks which of Jimmy's tools it means, or asks back. One call, JSON,
-# nothing captured goes in: only the request.
+# D35: when the rules don't recognise a request, the model picks which of Jimmy's
+# tools it means, or asks back. One call, JSON. D41: every request the rules don't
+# place goes here (not only ones that start like an instruction: "show me the
+# reminders" searched old screens), with Jimmy's own lists in <state> so "move that
+# reminder to 10" knows which one. Nothing captured goes in: only the request, the
+# last turn, and what the user told Jimmy to keep.
 TOOLS_Q = """You route one spoken request to Jimmy, a desktop assistant on the user's
-Windows laptop. Jimmy can do exactly these things (tool: what it does):
+Windows laptop. Jimmy can do exactly these things (tool {args}: what it does):
+- answer {}: a question about the screen, the user's past (what they saw, read,
+  heard, did, opened), their time, or anything general; also "show me" a past thing
+- presence {}: whether Jimmy can see the user, their face or their eyes (webcam)
+- open {"view": "timeline" or "insights" or "memory"}: one of Jimmy's own windows
+  (memory = the list of reminders, goals and things Jimmy remembers)
+- open_app {"name": "..."}: start an app on the laptop (Chrome, Spotify, VS Code...)
+- open_page {}: open the web page being discussed, in the browser
+- click {"target": "..."}: press a button, link, tab, checkbox or menu item in the
+  window in front, by its name. Jimmy points at it first and waits for a yes
+- type {"text": "...", "target": "..."}: type into a box in the window in front
+  (Jimmy points at it first and waits for a yes)
 - scroll {"dir": "up" or "down"}: scroll what's in front (Jimmy's panel or the window)
 - step {"by": 1 or -1}: the next or previous item in Jimmy's panel or timeline
-- close {}: close the one thing Jimmy has open (a picture, an answer)
-- close_ui {}: hide all of Jimmy's panels, cards and windows
+- close {}: close the one thing Jimmy has open; close_ui {}: hide all of Jimmy's
+  panels, cards, suggestions and windows
 - goto {"when": "..."}: open Jimmy's timeline at a time ("yesterday at 3pm")
-- open_page {}: open the web page being discussed, in the browser
-- open {"view": "timeline" or "insights"}: open Jimmy's timeline or insights window
 - curtain {"on": true or false}: draw or lift the privacy curtain over the screen
-- pause {"minutes": number}: stop capturing for a while; resume {}: start again
-- focus {"text": "..."}: set what the user means to work on; unfocus {}
-- remind {"text": "...", "when": "..."}: set a reminder; list_reminders {}: say them
-- timer {"seconds": number}: start a countdown timer; cancel_timer {}: stop it
-- forget {"when": "..."}: delete what Jimmy recorded in a span of time (it asks first)
+- pause {"minutes": number}: stop capturing (watching, listening) for a while;
+  resume {}: start capturing again ("start watching again", "listen again")
+- focus {"text": "..."}: set what the user is working on now; unfocus {}
+- remind {"text": "...", "when": "..."}: a new reminder; list_reminders {}
+- reminder_update {"id": n, "text": "...", "when": "..."}: change a reminder in
+  <state> (text and/or time; leave out what stays)
+- reminder_delete {"id": n}, or {"all": true} for every reminder
+- timer {"seconds": number}: start a countdown timer; cancel_timer {}
+- goal_add {"text": "..."}; list_goals {}; goal_done {"id": n};
+  goal_update {"id": n, "text": "..."}; goal_delete {"id": n}
+- remember {"text": "..."}: keep a fact about the user; list_memories {}: say what
+  Jimmy remembers ("what do you know about me");
+  memory_update {"id": n, "text": "..."}; memory_delete {"id": n} or {"all": true}
+- forget {"when": "..."}: delete Jimmy's recorded data (screenshots, text and what
+  it heard) for a span of time, e.g. "September" or "the last hour"; it asks first.
+  Not for reminders, goals or memories
 - remember_face {}: learn the user's face (guided); forget_face {}: delete it
 - calibrate_eyes {}: the guided eye calibration (so Jimmy knows when it's looked at)
 - copy_screen {}: copy the text of the window in front to the clipboard
 - volume {"level": "softer" or "louder" or "mute" or "unmute"}: Jimmy's speaking voice
-- answer {}: a question about the screen, the user's past, their time, or anything
-- ask_back {"question": "..."}: too unclear to act on; ask one short question
-- cannot {"reason": "..."}: none of the above can do it (clicking, typing, closing
-  other apps, reading formatting like bold or colour)
-Put "reason" and "question" inside "args", in the first person ("I can't ..."),
-under 15 words, in English. The request may be in Hindi or English: always also put
-"english" in "args", the request said in plain English.
+- ask_back {"question": "..."}: too unclear to act on, or it could mean more than
+  one of these tools; ask one short question
+- cannot {"reason": "..."}: none of the above can do it (closing other apps,
+  reading formatting like bold or colour, anything on the internet)
+<state> lists the user's reminders, goals and memories with their ids: use those
+ids, and if the request could mean two of them, ask_back. "It", "that" or "that
+one" means what <last_turn> was about. Put "reason" and "question" inside "args",
+in the first person ("I can't ..."), under 15 words, in English. The request may be
+in Hindi or English: always also put "english" in "args", the request said in plain
+English.
 Reply with JSON only: {"tool": "...", "args": {...}}"""
+
+
+def tool_messages(question: str, state: str = "", last: dict | None = None) -> list[dict]:
+    """The tool pick's messages (D41): the request, Jimmy's own lists, the last turn."""
+    parts = [f"<state>\n{state or '(nothing yet)'}\n</state>"]
+    if last:
+        parts.append(f"<last_turn>\nuser: {last.get('q', '')}\njimmy: {str(last.get('a', ''))[:300]}\n</last_turn>")
+    parts.append(f"Request: {question}")
+    return [{"role": "system", "content": TOOLS_Q}, {"role": "user", "content": "\n".join(parts)}]
 # D36: Hindi requests (Devanagari) go through the model once, so they meet the same
 # rules as English ones.
 _HINDI = re.compile(r"[ऀ-ॿ]")
@@ -546,6 +596,28 @@ def _json_obj(reply: str) -> dict | None:
     except ValueError:
         return None
     return got if isinstance(got, dict) else None
+
+
+def screen_image(item: dict) -> str | None:
+    """The window's latest picture as a data: URL, for a vision model (D41). It is the
+    stored thumbnail: faces already blurred, never of an excluded window (those are
+    never captured), at most 1280 px wide. None if seeing is off or there's no picture."""
+    import base64
+    rel = item.get("thumb")
+    if not config.VISION_SCREEN or not rel:
+        return None
+    path = config.DATA_DIR / rel
+    try:
+        return "data:image/jpeg;base64," + base64.b64encode(path.read_bytes()).decode()
+    except OSError:
+        return None
+
+
+def _when_phrase(when: str) -> str:
+    """The model's "when" as parse_reminder reads it: "10 minutes from now" -> "in 10
+    minutes", "5" / "5pm" -> "at 5pm" (measured, D37)."""
+    when = re.sub(r"^(\d+\s*\w+) from now$", r"in \1", " ".join(when.split()), flags=re.I)
+    return f"at {when}" if re.fullmatch(r"\d{1,2}(?::\d{2})?\s*(?:[ap]\.?m\.?)?", when, re.I) else when
 
 
 def _when_due(r: dict) -> str:
@@ -784,11 +856,16 @@ class Asker:
                 self.listen_until = 0
                 self.ask(text.strip(), "voice")
                 return True
-            why = self._unnamed(ts_start, ts_end, bare)
+            why, skip = self._unnamed(ts_start, ts_end, bare)
             if why:
                 print(f"[ask] no name needed ({why}): {bare!r}")
+                # D41: show what was heard, so you know it was taken without the name.
+                self.publish({"type": "heard", "text": bare[:120], "via": why})
                 self.ask(bare, "voice")
                 return True
+            if skip:
+                # ...and when you were looking but it wasn't taken, why not.
+                self.publish({"type": "heard", "text": bare[:120], "skip": skip})
             if self.actions.get("spoke", lambda a, b: None)(ts_start, ts_end) is False:
                 self.others_at = now_ms()       # speech, and the camera saw your lips still: someone else
             return False
@@ -799,43 +876,43 @@ class Asker:
         self.ask(q, "voice")
         return True
 
-    def _unnamed(self, t0: int, t1: int, text: str) -> str | None:
-        """Why a line without the name is still for Jimmy (D39), or None.
+    def _unnamed(self, t0: int, t1: int, text: str) -> tuple[str | None, str | None]:
+        """(why a line without the name is for Jimmy, or None; why not, when you were
+        looking at the screen and so may have meant it (D41: the pill says which)).
 
         - follow-up: Jimmy just answered you aloud, and you went on (FOLLOWUP_S), still
           turned to the screen as far as the camera can tell;
-        - eye contact: you were looking at the screen as you began, your lips moved,
-          it's phrased as a request, and nobody else has been talking near the mic.
-        Never during a call (another app has the mic), and never when the camera saw
-        your lips still while it was said (a video, someone else in the room)."""
+        - eye contact: you were looking at the screen as you began, it's phrased as a
+          request, nobody else has been talking near the mic, and you're not on a call.
+        Never when the camera saw your lips still while it was said (D40: only once
+        the lips are calibrated)."""
         act = self.actions
         words = text.split()
         spoke = act.get("spoke", lambda a, b: None)(t0, t1)    # None until the lips are calibrated (D40)
-        if not words or spoke is False:
-            return None
+        looking = bool(words) and act.get("eye_contact", lambda a, b: False)(t0, t1)
+        if not words:
+            return None, None
+        if spoke is False:
+            return None, ("your lips didn't move: someone else?" if looking else None)
         if _CLOSER.match(polite(text)):
             self.followup_until = 0             # "okay, thanks": the conversation's over
-            return None
+            return None, None
         # D40: a follow-up works on a call too: you were just talking to Jimmy.
         if (now_ms() < self.followup_until and (len(words) >= 2 or command(text) or nav(text))
                 and act.get("facing", lambda a, b: None)(t0, t1) is not False):
-            return "follow-up"
-        if not (act.get("eyes_on", lambda: config.EYE_CONTACT_ASKS)()
-                and now_ms() - self.others_at >= config.OTHERS_QUIET_S * 1000
-                and act.get("eye_contact", lambda a, b: False)(t0, t1) and for_jimmy(text)):
-            return None
+            return "follow-up", None
+        if not looking or not act.get("eyes_on", lambda: config.EYE_CONTACT_ASKS)():
+            return None, None
+        if now_ms() - self.others_at < config.OTHERS_QUIET_S * 1000:
+            return None, "someone else is talking"
+        if not for_jimmy(text):
+            return None, "didn't sound like a request"
         holders = act.get("call", lambda: [])()
         if holders:
-            # D40: on a call, what you say is for the call: the name is needed. Say so
-            # (once in a while), or a Discord idling in a voice channel looks like Jimmy
-            # ignoring you.
-            if now_ms() - getattr(self, "_call_said", 0) > 120_000:
-                self._call_said = now_ms()
-                self.publish({"type": "toast", "icon": "presence",
-                              "text": f'On a call ({", ".join(holders[:2])}): say "Jimmy" first'})
+            # D40: on a call, what you say is for the call: the name is needed.
             print(f"[ask] not without the name: {', '.join(holders)} has the mic (a call?)")
-            return None
-        return "eye contact"
+            return None, f"on a call ({', '.join(holders[:2])})"
+        return "eye contact", None
 
     def _arm(self, question: str) -> None:
         """After an answer to something you said: keep listening without the name, from
@@ -853,6 +930,10 @@ class Asker:
         self.followup_until = now_ms() + int((config.FOLLOWUP_S + (30 if voice else 0)) * 1000)
         if not voice:
             self.publish({"type": "listening", "prompt": "go on…", "ms": config.FOLLOWUP_S * 1000})
+
+    def awaiting(self) -> bool:
+        """Is a line without the name taken right now (a reply, a follow-up)? (D41)"""
+        return now_ms() < max(self.followup_until, self.listen_until)
 
     def voice_done(self) -> None:
         """Jimmy finished speaking: your next line needs no name for FOLLOWUP_S (D39)."""
@@ -872,6 +953,17 @@ class Asker:
             return f"Focus set: {o['data']}."
         if o["kind"] == "forget" and "forget" in self.actions:
             return self.actions["forget"](*o["data"])
+        if o["kind"] == "unremind_all" and "unremind" in self.actions:         # D41
+            self.actions["unremind"]()
+            self._changed()
+            return "All reminders deleted."
+        if o["kind"] == "forget_memories" and "forget_memory" in self.actions:
+            for m in self.actions["memories"]():
+                self.actions["forget_memory"](m["id"])
+            self._changed()
+            return "Forgotten. I keep nothing you told me now."
+        if o["kind"] == "act" and "perform" in self.actions:                  # D41: the virtual cursor
+            return self.actions["perform"](o["data"])
         if o["kind"] == "event" and "open_file" in self.actions:
             from .proactive import calendar_file
             self.actions["open_file"](str(calendar_file(o["data"])))
@@ -944,7 +1036,10 @@ class Asker:
             self.publish({"type": "answer_close"})
             return "Okay."
         if kind == "open":
-            view = "timeline" if arg.lower() == "timeline" else "insights"
+            low = arg.lower()
+            # D41: "timelines" opened insights; reminders, goals and memories have a tab.
+            view = ("timeline" if low.startswith("timeline") else
+                    "memory" if re.match(r"memor|remind|goal", low) else "insights")
             ev = {"type": "open_view", "view": view}
             if view == "timeline" and self.last_evidence:          # where we were just talking about
                 ev["ts"] = self.last_evidence[min(self.shown, len(self.last_evidence) - 1)]["ts"]
@@ -954,8 +1049,17 @@ class Asker:
         if kind == "yes":
             return self.accept()
         if kind == "no":
+            if (self.offer or {}).get("kind") == "act":
+                self.publish({"type": "cursor", "hide": True})       # D41: the cursor goes away
             self.offer = None
             return "Okay, skipped."
+        if kind in ("click", "type"):
+            if "point" not in act:
+                return "I can't do that from here."
+            m = _CMD_RX["type"].match(polite(normalize(question))) if kind == "type" else None
+            return act["point"](m[2] if m else arg, m[1] if m else None)
+        if kind == "open_app":
+            return act["open_app"](arg) if "open_app" in act else "I can't do that from here."
         if kind == "open_url":
             e = self.last_evidence[min(self.shown, len(self.last_evidence) - 1)] if self.last_evidence else {}
             if not e.get("url"):
@@ -975,7 +1079,19 @@ class Asker:
                 return f"{len(rs)} reminder{'s' * (len(rs) > 1)}: " + "; ".join(
                     f"{r['text']} {_when_due(r)}" for r in rs[:4]) + "."
             from .proactive import parse_reminder
-            what, due, app = parse_reminder(question, now_ms())
+            # D41: "set a reminder for tomorrow to …" says it the other way round.
+            said = re.sub(r"^\W*(?:please\s+)?(?:set|add|create|make|put)\s+(?:up\s+)?(?:a\s+|an\s+)?(?:new\s+)?"
+                          r"reminder\b\s*", "remind me ", question, flags=re.I)
+            # "for 5 to call Sam" is a time; "for tomorrow" a day.
+            said = re.sub(r"^remind me for\s+(?=\d{1,2}(?::\d{2})?\s*(?:[ap]\.?m\.?)?\b)", "remind me at ", said, flags=re.I)
+            said = re.sub(r"^remind me for\s+", "remind me ", said, flags=re.I)
+            what, due, app = parse_reminder(said, now_ms())
+            if not what and (due or app):
+                # "set a reminder for tomorrow": ask what, and the reply needs no name.
+                self._remind_wait = (due, app, now_ms() + config.CLARIFY_WAIT_S * 1000)
+                self.listen_until = now_ms() + config.CLARIFY_WAIT_S * 1000
+                self.publish({"type": "listening", "prompt": "listening… remind you about what?"})
+                return "What should I remind you about?"
             if not what:
                 return "What should I remind you about?"
             if due is None and app is None:
@@ -1107,17 +1223,39 @@ class Asker:
             return "No one's in front of the camera right now."
         return f"No, the webcam is off for me{': ' + info['why'] if info.get('why') else ''}."
 
+    def _state_text(self) -> str:
+        """Jimmy's own lists, with ids, for the tool pick (D41). Only what the user
+        asked Jimmy to keep; nothing captured."""
+        act, out = self.actions, []
+        for name, key, fmt in (("reminders", "reminders", lambda r: f'"{r["text"]}" {_when_due(r)}'),
+                               ("goals", "goals", lambda g: f'"{g["text"]}"'),
+                               ("memories", "memories", lambda m: f'"{m["text"]}"')):
+            if key not in act:
+                continue
+            try:
+                rows = act[key]()[:12]
+            except Exception:
+                continue
+            out.append(f"{name}:" + ("" if rows else " none"))
+            out += [f"  #{r['id']} {fmt(r)}" for r in rows]
+        return "\n".join(out)
+
     def _pick_tool(self, question: str) -> tuple[str, dict] | None:
         """(tool, args) the model chose for an unrecognised instruction, or None."""
         from jimmy.cards import parse
         jim = self._jim()
         if not getattr(jim, "llm", None) or not jim.llm.configured or not hasattr(jim.llm, "chat"):
             return None
+        if now_ms() < getattr(self, "_pick_down_until", 0):
+            return None                             # D41: it just failed; the rules route alone for now
         try:
-            reply = jim.llm.chat([{"role": "system", "content": TOOLS_Q}, {"role": "user", "content": question}],
-                                 max_tokens=160, temperature=0.0)
+            last = self.turns[-1] if self.turns and now_ms() - self.turns[-1]["ts"] < config.CONVO_S * 1000 else None
+            reply = jim.llm.chat(tool_messages(question, self._state_text(), last), max_tokens=200, temperature=0.0)
         except Exception as exc:                    # any failure: answer as before
             print(f"[ask] tool pick failed: {type(exc).__name__}: {exc}")
+            # D41: every unplaced request now asks the model first, and the endpoint's
+            # empty answers come in runs: don't pay ~3 s of retries on each question.
+            self._pick_down_until = now_ms() + 60_000
             return None
         got = _json_obj(reply) or parse(reply, "tool")   # nested ("args": {...}); flat as a fallback
         if not got or not isinstance(got.get("tool"), str):
@@ -1128,9 +1266,116 @@ class Asker:
         print(f"[ask] tool: {got['tool']} {args}")
         return got["tool"], args
 
+    def _changed(self) -> None:
+        """Reminders, goals or memories changed: the pill's timers and the Memory tab follow."""
+        self._state()
+        self.publish({"type": "memory_changed"})
+
+    def _crud(self, tool: str, args: dict) -> str | None:
+        """D41: the user's reminders, goals and memories, by voice. The model picked
+        ids from <state>; one that isn't in the list now is refused, never guessed.
+        Deleting everything of a kind waits for a yes."""
+        act = self.actions
+        try:
+            rid = int(str(args.get("id", "")).lstrip("#"))
+        except ValueError:
+            rid = None
+        text = " ".join(str(args.get("text") or "").split()) or None
+        if tool in ("reminder_update", "reminder_delete") and "reminders" in act:
+            rs = {r["id"]: r for r in act["reminders"]()}
+            if tool == "reminder_delete" and args.get("all"):
+                if not rs:
+                    return "No reminders."
+                self.make_offer("unremind_all", None, bare=True)
+                return f"Delete all {len(rs)} reminders? Say yes."
+            r = rs.get(rid)
+            if not r:
+                return "Which reminder? I couldn't tell."
+            if tool == "reminder_delete":
+                act["cancel_reminder"](r["id"])
+                self._changed()
+                return f"Deleted: {r['text']}."
+            due, when = None, str(args.get("when") or "").strip()
+            if when:
+                from .proactive import parse_reminder
+                due = parse_reminder(f"remind me {_when_phrase(when)} to x", now_ms())[1]
+                if not due:
+                    return f"I didn't get the time “{when}”."
+            if not act["update_reminder"](r["id"], text, due):
+                return "Nothing to change."
+            self._changed()
+            return f"Changed: {text or r['text']}, {_when_due({'due_ts': due or r['due_ts'], 'app': r.get('app')})}."
+        if tool in ("goal_add", "list_goals", "goal_done", "goal_update", "goal_delete") and "goals" in act:
+            gs = {g["id"]: g for g in act["goals"]()}
+            if tool == "goal_add":
+                if not text:
+                    return "What's the goal?"
+                act["add_goal"](text)
+                self._changed()
+                return f"Goal added: {text}."
+            if tool == "list_goals":
+                return (f"{len(gs)} goal{'s' * (len(gs) != 1)}: " + "; ".join(g["text"] for g in gs.values()) + "."
+                        if gs else "No goals yet.")
+            g = gs.get(rid)
+            if not g:
+                return "Which goal? I couldn't tell."
+            state = {"goal_done": "done", "goal_delete": "deleted"}.get(tool)
+            act["update_goal"](g["id"], text if tool == "goal_update" else None, state)
+            self._changed()
+            return {"goal_done": f"Done: {g['text']}. Nice.", "goal_delete": f"Deleted the goal: {g['text']}."}.get(
+                tool, f"Goal changed to: {text}.")
+        if tool in ("remember", "list_memories", "memory_update", "memory_delete") and "memories" in act:
+            ms = {m["id"]: m for m in act["memories"]()}
+            if tool == "remember":
+                if not text:
+                    return "What should I remember?"
+                act["remember"](text)
+                self._changed()
+                return "I'll remember that."
+            if tool == "list_memories":
+                return ("I remember: " + "; ".join(m["text"] for m in list(ms.values())[:6]) + "."
+                        if ms else "You haven't asked me to remember anything yet.")
+            if tool == "memory_delete" and args.get("all"):
+                if not ms:
+                    return "There's nothing to forget."
+                self.make_offer("forget_memories", None, bare=True)
+                return f"Forget all {len(ms)} things you told me? Say yes."
+            m = ms.get(rid)
+            if not m:
+                return "Which one? I couldn't tell."
+            if tool == "memory_delete":
+                act["forget_memory"](m["id"])
+                self._changed()
+                return f"Forgotten: {m['text']}."
+            if not text:
+                return "Changed to what?"
+            act["update_memory"](m["id"], text)
+            self._changed()
+            return f"Now I remember: {text}."
+        return None
+
     def _use_tool(self, tool: str, args: dict, question: str, source: str, aid: str) -> bool:
         """Carry out the model's pick through the same code a spoken command uses.
         False = "answer it after all"."""
+        said = self._crud(tool, args)
+        if said is None and tool == "presence":
+            said = self._presence_line()
+        elif said is None and tool == "open" and args.get("view") == "memory":
+            self.publish({"type": "open_view", "view": "memory"})
+            said = "Here's what I keep for you."
+        elif said is None and tool == "open_app" and args.get("name") and "open_app" in self.actions:
+            said = self.actions["open_app"](str(args["name"]))
+        elif said is None and tool == "type" and not str(args.get("text") or "").strip():
+            said = "What should I type?"
+        elif said is None and tool in ("click", "type") and (args.get("target") or args.get("text")):
+            said = (self.actions["point"](str(args.get("target") or ""), str(args["text"]) if tool == "type" else None)
+                    if "point" in self.actions else "I can't do that from here.")
+        if said is not None:
+            self.publish({"type": "toast", "text": said, "icon": tool})
+            self.turns.append({"q": question, "a": said, "mode": "chat", "query": question, "ts": now_ms()})
+            if source == "voice" and self.speak:
+                self.speak(said)
+            return True
         cmd = {"close_ui": ("close_ui", None), "resume": ("resume", None), "unfocus": ("unfocus", None),
                "copy_screen": ("copy_screen", None), "open_page": ("open_url", None),
                "remember_face": ("enrol", None), "forget_face": ("unenrol", None),
@@ -1150,10 +1395,8 @@ class Asker:
             # Measured (D37): "when" comes back as "5" or "10 minutes from now", and the
             # text in Hindi. The model's English sentence parses best; else tidy the parts.
             eng = " ".join(str(args.get("english") or "").split())
-            when = re.sub(r"^(\d+\s*\w+) from now$", r"in \1", str(args.get("when") or "").strip(), flags=re.I)
-            if re.fullmatch(r"\d{1,2}(?::\d{2})?\s*(?:[ap]\.?m\.?)?", when, re.I):
-                when = f"at {when}"
-            question = eng if eng.lower().startswith("remind me") else f"remind me {when} to {args.get('text', '')}"
+            when = _when_phrase(str(args.get("when") or ""))
+            question =eng if eng.lower().startswith("remind me") else f"remind me {when} to {args.get('text', '')}"
             cmd = ("remind", None)
         if tool == "focus" and not (cmd and cmd[1]):
             cmd = None
@@ -1278,8 +1521,30 @@ class Asker:
             now = now_ms()
             last = self._conversation(now)
             mode, query = force or route(question, last, now)
+            wait = getattr(self, "_remind_wait", None)
+            if wait and now < wait[2] and not force and mode not in ("command", "nav"):
+                # D41: "set a reminder for tomorrow" -> "about what?" -> this is the what.
+                self._remind_wait = None
+                what = re.sub(r"^(?:to|about|that)\s+", "", polite(question).strip(" .?!"), flags=re.I)
+                self.actions["remind"](what, wait[0], wait[1])
+                self._state()
+                said = f"Okay: {what}, {_when_due({'due_ts': wait[0], 'app': wait[1]})}."
+                self.publish({"type": "toast", "text": said, "icon": "remind"})
+                if source == "voice" and self.speak:
+                    self.speak(said)
+                return
             hindi = not force and bool(_HINDI.search(question)) and mode not in ("command", "nav")
-            picks = hindi or (mode in ("chat", "recall") and not force and _ACTIONISH.match(polite(question)))
+            # D41: everything the rules don't place goes to the model, which sees Jimmy's
+            # own lists. Before, only instruction-shaped lines did, and "show me the
+            # reminders" / "navigate to timeline" were answered from old screens.
+            picks = not force and (hindi or mode in ("chat", "recall"))
+            pre: dict = {}
+            if picks and mode == "recall" and not hindi:
+                # ...while the search a question would need runs at the same time.
+                pre["q"] = query
+                pre["t"] = threading.Thread(target=lambda: pre.setdefault("ev", gather_evidence(self.store, query)),
+                                            daemon=True, name="prefetch")
+                pre["t"].start()
             if picks or mode in ("chat", "recall", "screen", "draft", "event"):
                 # D38: react now, before any model call; instant modes need no "thinking".
                 self.publish({"type": "thinking"})
@@ -1380,7 +1645,10 @@ class Asker:
                 elif mode == "screen":
                     items, label, terms = self._screen_evidence(), "now", []
                 else:
-                    items, label, terms = gather_evidence(self.store, query)
+                    if pre.get("q") == query:
+                        pre["t"].join()
+                    items, label, terms = pre.get("ev") if pre.get("q") == query and pre.get("ev") \
+                        else gather_evidence(self.store, query)
                 self.last_evidence, self.shown = items, 0
                 days = sorted({e["day"] for e in items})
                 self.publish({"type": "answer_evidence", "id": aid, "mode": mode, "evidence": items,
@@ -1402,8 +1670,10 @@ class Asker:
                     session = f"screen-{aid}" if mode == "screen" else self.session
                     voice = (SpeakAsItStreams(self.speak) if source == "voice" and self.speak
                              and config.VOICE_ANSWERS else None)
-                    for piece in jim.ask_stream(question, session=session,
-                                                snippets=to_snippets(items), instructions=style):
+                    # D41: a screen answer also looks at the screen, not only its text.
+                    image = screen_image(items[0]) if mode == "screen" and items else None
+                    for piece in jim.ask_stream(question, session=session, snippets=to_snippets(items),
+                                                instructions=style, **({"image": image} if image else {})):
                         text += piece
                         self.publish({"type": "answer_delta", "id": aid, "text": piece})
                         if voice:

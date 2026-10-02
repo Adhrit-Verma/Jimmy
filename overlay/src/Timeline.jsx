@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { BarChart3, ChevronLeft, ChevronRight, Globe, History, Mic, Search, X } from "lucide-react";
+import { BarChart3, Brain, ChevronLeft, ChevronRight, Globe, History, Mic, Search, X } from "lucide-react";
 import Insights, { Axis, Ribbon, colorOf, dayRange, hm } from "./Insights.jsx";
+import Memory from "./Memory.jsx";
 
 // Stage 5: "what was that thing I saw on Tuesday". A day of blurred thumbnails
 // on a scrub strip, the text each capture stored, speech nearby, and a search
@@ -209,7 +210,7 @@ function DayBar({ ins, frame, filter, setFilter, onPick }) {
 function Tabs({ view, setView }) {
   return (
     <div className="flex rounded-lg bg-white/[0.05] p-0.5 [-webkit-app-region:no-drag]">
-      {[["timeline", History, "Timeline"], ["insights", BarChart3, "Insights"]].map(([v, Icon, label], i) => (
+      {[["timeline", History, "Timeline"], ["insights", BarChart3, "Insights"], ["memory", Brain, "Memory"]].map(([v, Icon, label], i) => (
         <button key={v} onClick={() => setView(v)} title={`${label} (${i + 1})`}
           className={`relative flex items-center gap-1.5 rounded-md px-3 py-1 text-[12.5px] transition ${view === v ? "text-neutral-50" : "text-neutral-400 hover:text-neutral-200"}`}>
           {view === v && <motion.span layoutId="tab" className="absolute inset-0 rounded-md bg-white/10" transition={spring} />}
@@ -220,7 +221,7 @@ function Tabs({ view, setView }) {
   );
 }
 
-const startView = location.hash.startsWith("#insights") ? "insights" : "timeline";
+const startView = location.hash.startsWith("#insights") ? "insights" : location.hash.startsWith("#memory") ? "memory" : "timeline";
 
 // "chrome" -> "Chrome", whichever app on this day the words name; null if none.
 function appIn(frames, words) {
@@ -329,6 +330,7 @@ export default function Timeline() {
       else if (e.key === "]" && newer) load(newer);
       else if (e.key === "1") setView("timeline");
       else if (e.key === "2") setView("insights");
+      else if (e.key === "3") setView("memory");                      // D41
       else if (e.key === "/") { e.preventDefault(); input.current?.focus(); }
       else if (e.key === "Escape") bridge?.closeWindow();
     };
@@ -408,7 +410,7 @@ export default function Timeline() {
         <AnimatePresence>
           {results && <Results data={results} onPick={pick} onClose={() => setResults(null)} />}
         </AnimatePresence>
-        {view === "insights" ? (
+        {view === "memory" ? <Memory /> : view === "insights" ? (
           <Insights data={ins} loading={insLoading} onJump={jump} onDay={(d) => load(d)} />
         ) : (
           <main className="flex min-w-0 flex-1 flex-col pt-4">

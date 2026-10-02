@@ -332,7 +332,7 @@ def test_eye_contact_means_you_mean_jimmy():
     a, hear, _, clock = asker(**looking, call=lambda: ["Discord"])
     a.publish = events.append
     assert not hear("what's on my screen"), "on a call (Discord has the mic): the name is needed"
-    assert any("On a call (Discord)" in e.get("text", "") for e in events), "...and the pill says why"
+    assert any(e.get("type") == "heard" and "on a call (Discord)" in e.get("skip", "") for e in events),         "...and the pill says why (D41: as what it heard, and why it didn't take it)"
     print("ok  eye contact: looking + a request = no name; statements, others talking, calls, 'name only' don't")
 
 

@@ -1,8 +1,7 @@
 import { Component, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
-  BarChart3, Bell, CalendarClock, Check, Clock, ExternalLink, Eye, EyeOff, Globe, History, Lightbulb, MessageCircle,
-  MonitorSmartphone, MoveRight, Pause, Play, Power, RotateCcw, ScanFace, ShieldCheck, Target, Timer, Trash2, X,
+  AppWindow, BarChart3, Bell, Brain, CalendarClock, Check, Clock, Ear, ExternalLink, Eye, EyeOff, Globe, History, Keyboard, Lightbulb, MessageCircle, MonitorSmartphone, MousePointer2, MoveRight, Pause, Play, Power, RotateCcw, ScanFace, ShieldCheck, Target, Timer, Trash2, X,
 } from "lucide-react";
 import Answer from "./Answer.jsx";
 
@@ -35,6 +34,11 @@ const FLASH_ICON = {
   pause: Pause, resume: Play, focus: Target, unfocus: Target, open: ExternalLink, show: X, nav: MoveRight,
   remind: Bell, reminders: Bell, unremind: Bell, curtain: EyeOff, uncurtain: Eye, open_url: Globe,
   timer: Timer, timers: Timer, untimer: Timer, forget: Trash2, eyes: Eye, calibrate: Eye, notcall: Eye,
+  // D41
+  heard: Ear, skip: EyeOff, click: MousePointer2, type: Keyboard, open_app: AppWindow, act: MousePointer2,
+  reminder_update: Bell, reminder_delete: Bell, goal_add: Target, list_goals: Target, goal_done: Target,
+  goal_update: Target, goal_delete: Target, remember: Brain, list_memories: Brain, memory_update: Brain,
+  memory_delete: Brain,
 };
 
 // D32: every kind of card, and how long it stays if you don't touch it.
@@ -468,6 +472,32 @@ function EnrolPanel({ e }) {
   );
 }
 
+// D41: Jimmy's own cursor. It glides from the pill to the control Jimmy means and
+// rings it, so you see exactly what a "yes" would press. It never moves your mouse.
+function VirtualCursor({ c }) {
+  const [x, y, w, h] = c.box;
+  return (
+    <motion.div className="pointer-events-none absolute inset-0 z-[105]"
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.3 } }}>
+      <motion.div className="absolute rounded-lg ring-2 ring-sky-400/90 shadow-[0_0_0_6px_rgba(56,189,248,0.15)]"
+        initial={{ opacity: 0, scale: 1.2 }} animate={{ opacity: 1, scale: c.pressed ? 0.92 : 1 }}
+        transition={{ type: "spring", stiffness: 380, damping: 26, delay: c.pressed ? 0 : 0.35 }}
+        style={{ left: x - 4, top: y - 4, width: w + 8, height: h + 8 }} />
+      <motion.div className="absolute flex items-start"
+        initial={{ left: window.innerWidth / 2, top: 10 }} animate={{ left: x + w / 2, top: y + h / 2 }}
+        transition={{ type: "spring", stiffness: 140, damping: 20 }}>
+        <motion.svg width="24" height="24" viewBox="0 0 24 24" animate={{ scale: c.pressed ? 0.8 : 1 }}
+          className="-ml-[3px] -mt-[2px] drop-shadow-[0_2px_8px_rgba(56,189,248,0.7)]">
+          <path d="M3 2l7.5 19 2.6-7.6L21 11z" fill="#38bdf8" stroke="#082f49" strokeWidth="1.3" strokeLinejoin="round" />
+        </motion.svg>
+        <span className="mt-4 whitespace-nowrap rounded-full bg-sky-500/95 px-2 py-0.5 text-[11.5px] font-medium text-white shadow-lg">
+          {c.action === "type" ? "Type into" : "Jimmy"} · {c.label.length > 40 ? `${c.label.slice(0, 38)}…` : c.label}
+        </span>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 // D34: the privacy curtain. Opaque, over everything Jimmy can cover (the main
 // process grows the window to the whole display while it's down).
 function Curtain({ why }) {
@@ -500,6 +530,9 @@ export default function App() {
   const [recent, setRecent] = useState([]);    // this session's typed questions; never saved
   const [presence, setPresence] = useState({ state: "off", curtain: false });   // D34
   const [enrol, setEnrol] = useState(null);                                    // D37
+  const [cursor, setCursor] = useState(null);                                  // D41: Jimmy's own pointer
+  const cursorTimer = useRef(null);
+  const cursorN = useRef(0);
   const enrolTimer = useRef(null);
   const hideTimer = useRef(null);
   const flashTimer = useRef(null);
@@ -569,6 +602,31 @@ export default function App() {
       if (ev.type === "copy") say(ev.label || "Copied", "copy");
       if (ev.type === "close_all") { setOpenIndex(null); closeAnswer(); setCards([]); }   // "Jimmy, close your UI"
       if (ev.type === "presence") setPresence(ev);
+      if (ev.type === "cursor") {
+        clearTimeout(cursorTimer.current);
+        if (ev.hide) setCursor(null);
+        else if (ev.press) {
+          setCursor((c) => (c ? { ...c, pressed: true } : c));
+          cursorTimer.current = setTimeout(() => setCursor(null), 1400);
+        } else if (ev.box) {
+          setCursor({ id: ++cursorN.current, box: ev.box, label: ev.label || "", action: ev.action });
+          cursorTimer.current = setTimeout(() => setCursor(null), 30_000);    // the offer's wait (OFFER_WAIT_S)
+        }
+      }
+      // D41: you spoke while Jimmy could take it without its name: listening now,
+      // then what it heard, or why it didn't take it.
+      if (ev.type === "hearing") {
+        setMood((m) => (m === "thinking" || m === "answering" ? m : "listening"));
+        setPrompt("listening…");
+        setTimeout(() => setMood((m) => (m === "listening" ? null : m)), 8000);
+      }
+      if (ev.type === "heard") {
+        if (ev.via) say(`\u201c${ev.text}\u201d`, "heard");
+        else {
+          setMood((m) => (m === "listening" ? null : m));
+          say(`Not taken: ${ev.skip}. Say \u201cJimmy\u201d first`, "skip");
+        }
+      }
       if (ev.type === "thinking") { setMood("thinking"); setPrompt(null); }   // D38: react at once
       if (ev.type === "enrol") {
         clearTimeout(enrolTimer.current);
@@ -622,6 +680,7 @@ export default function App() {
   return (
     <>
       <AnimatePresence>{presence.curtain && <Curtain key="curtain" why={curtainWhy} />}</AnimatePresence>
+      <AnimatePresence>{cursor && !presence.curtain && <VirtualCursor key={cursor.id} c={cursor} />}</AnimatePresence>
       <AnimatePresence>{enrol && !presence.curtain && <EnrolPanel key="enrol" e={enrol} />}</AnimatePresence>
       <div className="relative z-[110]">
         <Pill state={state} mood={mood} prompt={prompt} typing={typing} setTyping={setTyping}

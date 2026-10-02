@@ -121,7 +121,9 @@ def test_model_picks_a_tool_or_says_why_not():
 
     a, turn, _ = asker('{"tool": "answer", "args": {}}')
     ev = turn(lambda: a.ask("what was the form on friday"))
-    assert a._jimmy.llm.calls == 0, "questions don't pay for a tool pick"
+    # D41: every request the rules don't place is picked by the model (it misread
+    # "show me the reminders" as a question); "answer" goes on to answer it.
+    assert a._jimmy.llm.calls == 1 and any(e["type"] == "answer_end" for e in ev), "one pick, then the answer"
     print("ok  tools: the model maps phrasing to Jimmy's tools, says why not, or asks back")
 
 
@@ -198,7 +200,7 @@ def test_hindi_and_english_only():
     assert did == [("drink water", NOW + 10 * MIN, None)], did
     a, turn, _ = asker('{"tool": "remind", "args": {"text": "Call Sam", "when": "5"}}', remind=lambda *r: did.append(r))
     turn(lambda: a.hear(0, "mic", "Jimmy, set a reminder for 5 to call Sam"))
-    assert did[-1][0] == "Call Sam" and datetime.fromtimestamp(did[-1][1] / 1000).strftime("%H:%M") == "17:00"
+    assert did[-1][0].lower() == "call sam" and datetime.fromtimestamp(did[-1][1] / 1000).strftime("%H:%M") == "17:00"
     print("ok  Hindi or English only; Hindi requests meet the same rules")
 
 

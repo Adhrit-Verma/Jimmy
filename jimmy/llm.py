@@ -80,9 +80,12 @@ class ThinkFilter:
 
 class LLM:
     def __init__(self, key: str | None = None, model: str = config.MODEL,
-                 base_url: str = config.BASE_URL, transport: httpx.BaseTransport | None = None):
+                 base_url: str = config.BASE_URL, transport: httpx.BaseTransport | None = None,
+                 attempts: int | None = None, read_timeout_s: float | None = None):
         self.key = key if key is not None else api_key()
         self.model = model
+        self.attempts = attempts or ATTEMPTS   # D41: a vision model with a fallback tries once
+        self.read_timeout_s = read_timeout_s or config.READ_TIMEOUT_S
         self.base_url = base_url.rstrip("/")
         self._transport = transport
         self._client: httpx.Client | None = None
@@ -96,7 +99,7 @@ class LLM:
             self._client = httpx.Client(
                 base_url=self.base_url, transport=self._transport,
                 headers={"Authorization": f"Bearer {self.key}", "Accept": "application/json"},
-                timeout=httpx.Timeout(config.READ_TIMEOUT_S, connect=config.CONNECT_TIMEOUT_S),
+                timeout=httpx.Timeout(self.read_timeout_s, connect=config.CONNECT_TIMEOUT_S),
                 limits=httpx.Limits(keepalive_expiry=config.KEEPALIVE_S))
         return self._client
 
@@ -146,15 +149,15 @@ class LLM:
         return self._stream(self._body(messages, True, max_tokens, temperature))
 
     def _once(self, body: dict) -> str:
-        for attempt in range(ATTEMPTS):
+        for attempt in range(self.attempts):
             try:
                 resp = self._http().post("/chat/completions", json=body)
             except httpx.HTTPError as exc:
-                if attempt == ATTEMPTS - 1:
+                if attempt == self.attempts - 1:
                     raise LLMError(f"LLM unreachable: {type(exc).__name__}: {exc}") from exc
                 time.sleep(config.RETRY_WAIT_S)
                 continue
-            if resp.status_code in config.RETRY_STATUSES and attempt < ATTEMPTS - 1:
+            if resp.status_code in config.RETRY_STATUSES and attempt < self.attempts - 1:
                 time.sleep(config.RETRY_WAIT_S)
                 continue
             if resp.status_code != 200:
@@ -164,7 +167,7 @@ class LLM:
             answer = (f.feed(msg.get("content") or "") + f.flush()).strip()
             if answer:
                 return answer
-            if attempt == ATTEMPTS - 1:
+            if attempt == self.attempts - 1:
                 raise LLMError(EMPTY)
             # Measured: ~1 in 5 calls to the hosted model came back 200 and empty.
         raise LLMError("LLM retry exhausted")
@@ -172,10 +175,10 @@ class LLM:
     def _stream(self, body: dict) -> Iterator[str]:
         f = ThinkFilter()
         sent = False  # once text has reached the user, a retry would repeat it
-        for attempt in range(ATTEMPTS):
+        for attempt in range(self.attempts):
             try:
                 with self._http().stream("POST", "/chat/completions", json=body) as resp:
-                    if resp.status_code in config.RETRY_STATUSES and attempt < ATTEMPTS - 1:
+                    if resp.status_code in config.RETRY_STATUSES and attempt < self.attempts - 1:
                         time.sleep(config.RETRY_WAIT_S)
                         continue
                     if resp.status_code != 200:
@@ -201,11 +204,11 @@ class LLM:
                         yield tail
                     if sent:
                         return
-                    if attempt == ATTEMPTS - 1:
+                    if attempt == self.attempts - 1:
                         raise LLMError(EMPTY)
                     # An empty answer: nothing reached the screen, so retrying is safe.
             except httpx.HTTPError as exc:
-                if attempt == ATTEMPTS - 1 or sent:
+                if attempt == self.attempts - 1 or sent:
                     raise LLMError(f"LLM stream broke: {type(exc).__name__}: {exc}") from exc
                 time.sleep(config.RETRY_WAIT_S)
         raise LLMError("LLM retry exhausted")

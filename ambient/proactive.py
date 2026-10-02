@@ -128,6 +128,12 @@ def parse_reminder(text: str, now: int) -> tuple[str, int | None, str | None]:
         n = float(m[1]) if m[1].isdigit() else _NUMS[m[1].lower()]
         due = now + int(n * (3600_000 if m[2][0].lower() == "h" else 60_000))
         cut(m)
+    elif m := re.search(rf"\b(?:(?:at|around|by)\s+({_T})|(\d{{1,2}}(?::\d{{2}})?\s*[ap]\.?m\.?))\s+(?:tomorrow|tmrw)\b",
+                        t, re.I):
+        # D41: "10 am tomorrow", "at 6 tomorrow": the time first (it came out 9:00).
+        mins = _minutes(m[1] or m[2])
+        due = _ms(midnight + timedelta(days=1, minutes=mins if mins is not None else 9 * 60))
+        cut(m)
     elif m := re.search(rf"\b(?:tomorrow|tmrw)(?:\s+(?:at|around|by)\s+({_T}))?\b", t, re.I):
         mins = _minutes(m[1]) if m[1] else 9 * 60
         due = _ms(midnight + timedelta(days=1, minutes=mins if mins is not None else 9 * 60))

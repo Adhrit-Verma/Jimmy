@@ -19,6 +19,14 @@ from .db import Store, now_ms
 from .redact import Exclusions, FaceStage
 
 
+def memory_lists(mem) -> dict:
+    """What the Memory tab shows (D41): waiting reminders, goals (active, then done),
+    and the facts you asked Jimmy to remember."""
+    from jimmy import config as jcfg
+    return {"reminders": mem.reminders(), "goals": mem.goals(None), "memories": mem.memories(),
+            "focus": mem.current_intent(jcfg.FOCUS_INTENT_MAX_H)}
+
+
 @dataclass
 class _Window:
     """A live capture window. `last_sig` is per-app so that returning to an
@@ -280,6 +288,46 @@ class ContextBus:
             self._proactive.on_capture(ts, prev)
 
     # --- audio -----------------------------------------------------------
+    def _on_speech_start(self, source: str) -> None:
+        """D41: you started speaking. If Jimmy may take it without its name (you're
+        looking at the screen, or it just answered you), the pill shows it's listening
+        now, not after the words are decoded."""
+        if source != "mic" or not self._api or not self._asker or getattr(self, "_speaking", False):
+            return
+        p = self._presence or {}
+        if (p.get("contact") and self._eyes_on()) or self._asker.awaiting():
+            self._api.publish({"type": "hearing"})
+
+    def _edit_memory(self, mem, b: dict) -> None:
+        """The Memory tab's add / edit / done / delete (D41). The page sends what you typed."""
+        op, kind, text = b.get("op"), b.get("kind"), " ".join(str(b.get("text") or "").split())
+        rid = int(b["id"]) if str(b.get("id", "")).isdigit() else None
+        if kind == "reminder":
+            due = None
+            if b.get("when"):
+                from .proactive import parse_reminder
+                due = parse_reminder(f"remind me {b['when']} to x", now_ms())[1]
+            if op == "add" and text:
+                mem.add_reminder(text, due)
+            elif op == "update" and rid:
+                mem.update_reminder(rid, text or None, due)
+            elif op == "delete" and rid:
+                mem.set_reminder_state(rid, "cancelled")
+        elif kind == "goal":
+            if op == "add" and text:
+                mem.add_goal(text)
+            elif rid:
+                mem.update_goal(rid, text or None, {"done": "done", "delete": "deleted", "reopen": "active"}.get(op))
+        elif kind == "memory":
+            if op == "add" and text:
+                mem.remember(text)
+            elif op == "update" and rid and text:
+                mem.update_memory(rid, text)
+            elif op == "delete" and rid:
+                mem.forget(rid)
+        if self._api:
+            self._api.publish({"type": "memory_changed"})
+
     def _on_audio(self, ts_start: int, ts_end: int, source: str, text: str) -> None:
         # "Jimmy, …" is a question for Jimmy: stored as a command, never evidence
         # (D27: "can you listen to me" once answered with itself), and not for the gate.
@@ -465,6 +513,44 @@ class ContextBus:
               f"database {before / 1e6:.1f} -> {after / 1e6:.1f} MB, pictures -{n['bytes'] / 1e6:.0f} MB")
         return f"Deleted {label}: freed {(n['bytes'] + max(0, before - after)) / 1e6:,.0f} MB."
 
+    # --- D41: the virtual cursor --------------------------------------------
+    def point(self, phrase: str, text: str | None = None) -> str:
+        """Find the control you named in the window in front, put Jimmy's cursor on
+        it, and ask. Nothing happens until you say yes (perform)."""
+        from . import act
+        aw = screen.active_window()
+        if not aw.hwnd or self.exclusions.check(app=aw.app, title=aw.title):
+            return "Not in this window: it's one I never touch."
+        try:
+            t = act.best(act.controls(aw.hwnd), phrase, typing=text is not None)
+        except Exception as exc:
+            print(f"[act] {type(exc).__name__}: {exc}")
+            return "I can't read this window's buttons."
+        if t is None:
+            return f"I can't find “{phrase}” in this window."
+        if text is not None and t.password:
+            return "I never type into password boxes."
+        if self._api:
+            self._api.publish({"type": "cursor", "rect": list(t.rect), "label": t.name,
+                               "action": "type" if text is not None else "click"})
+        if self._asker:
+            self._asker.make_offer("act", {"hwnd": aw.hwnd, "target": t, "text": text}, bare=True)
+        warn = " Careful: that can't be undone." if act.RISKY.search(f"{t.name} {phrase}") else ""
+        what = f"Type “{text[:40]}” into “{t.name}”" if text is not None else f"Press “{t.name}”"
+        return f"{what}?{warn} Say yes."
+
+    def perform(self, data: dict) -> str:
+        """Your yes: do it through the control's own pattern (act.perform)."""
+        from . import act
+        try:
+            said = act.perform(data["hwnd"], data["target"], data.get("text"))
+        except Exception as exc:
+            said = f"That didn't work: {type(exc).__name__}."
+        if self._api:
+            self._api.publish({"type": "cursor", "press": True})
+        print(f"[act] {data['target'].kind} {data['target'].name!r}: {said}")
+        return said
+
     def _maybe_compact(self) -> None:
         """D39: tidy the database while you're away, at most once a day."""
         since = getattr(self, "_dormant_since", None)
@@ -536,6 +622,7 @@ class ContextBus:
         if not (root / "dist" / "index.html").exists() or not exe.exists():
             print("[overlay] not built: cd overlay && npm install && npm run build")
             return
+        from .act import open_app
         from .ask import Asker, Voice
         from .audio import app_label, mic_holders, not_a_call
         from .recall import timeline_hooks
@@ -562,6 +649,9 @@ class ContextBus:
                                 "post_scroll_window": lambda b: screen.scroll_active(b.get("dir") != "up"),
                                 "post_accept": lambda b: self._api.publish(
                                     {"type": "toast", "text": self._asker.accept(), "icon": "yes"}),
+                                # D41: the Memory tab: reminders, goals, memories, editable
+                                "get_memory": lambda p: memory_lists(mem),
+                                "post_memory": lambda b: self._edit_memory(mem, b),
                                 **timeline_hooks(self.store)}).start()
         self._asker = Asker(self.store, self._api.publish,
                             speak=self._voice.say if self._voice else None,
@@ -572,6 +662,15 @@ class ContextBus:
                                      "remind": lambda what, due, app: mem.add_reminder(what, due, app),
                                      "reminders": lambda: mem.reminders(),
                                      "cancel_reminder": lambda rid: mem.set_reminder_state(rid, "cancelled"),
+                                     # D41: reminders, goals and memories, read and changed by voice
+                                     "update_reminder": mem.update_reminder,
+                                     "goals": lambda: mem.goals("active"), "add_goal": mem.add_goal,
+                                     "update_goal": mem.update_goal,
+                                     "memories": lambda: mem.memories(), "remember": mem.remember,
+                                     "update_memory": mem.update_memory, "forget_memory": mem.forget,
+                                     # D41: open an app; the virtual cursor (point, then your yes)
+                                     "open_app": open_app,
+                                     "point": self.point, "perform": self.perform,
                                      # D39: what the camera saw while a line was said; delete a span
                                      "spoke": lambda a, b: self._presence_obj.spoke(a, b) if self._presence_obj else None,
                                      "facing": lambda a, b: (self._presence_obj.facing_during(a, b)
@@ -736,7 +835,7 @@ class ContextBus:
 
         if self.want_audio:
             from .audio import AudioPipeline
-            self._audio = AudioPipeline(self._on_audio)
+            self._audio = AudioPipeline(self._on_audio, on_start=self._on_speech_start)
             try:
                 self._audio.start()
                 if verbose:

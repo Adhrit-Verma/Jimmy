@@ -150,16 +150,45 @@ class Jimmy:
         return answer
 
     def ask_stream(self, question: str, session: str = "default",
-                   snippets: list[Snippet] | None = None, instructions: str = "") -> Iterator[str]:
+                   snippets: list[Snippet] | None = None, instructions: str = "",
+                   image: str | None = None) -> Iterator[str]:
         """Answer a question token by token, for chat. Retrieval and the key check
-        happen now, not on first iteration; the answer is saved once it ends."""
+        happen now, not on first iteration; the answer is saved once it ends.
+        `image` (D41): a data: URL of the screen, for a vision model to look at too."""
         msgs = self.messages(question, session, snippets=snippets, instructions=instructions)
         self.memory.add_turn(session, "user", question)
         if not self.llm.configured:
             answer = self._offline_answer()
             self.memory.add_turn(session, "assistant", answer)
             return iter([answer])
-        return self._save_as_it_streams(self.llm.chat_stream(msgs), session)
+        pieces = self._with_image(msgs, image) if image else self.llm.chat_stream(msgs)
+        return self._save_as_it_streams(pieces, session)
+
+    def _with_image(self, msgs: list[dict], image: str) -> Iterator[str]:
+        """D41: the vision models in order, once each, then the text model alone.
+        The instructions and context go in the user turn beside the picture: one of
+        them rejects a system message alongside an image."""
+        system, *rest = msgs
+        text = f"{system['content']}\n\n{rest[-1]['content']}"
+        seen = [*rest[:-1], {"role": "user", "content": [{"type": "text", "text": text},
+                                                         {"type": "image_url", "image_url": {"url": image}}]}]
+        for model in config.VISION_MODELS:
+            vision = LLM(key=self.llm.key, model=model, base_url=self.llm.base_url,
+                         transport=self.llm._transport, attempts=1,
+                         read_timeout_s=config.VISION_READ_TIMEOUT_S)
+            sent = False
+            try:
+                for piece in vision.chat_stream(seen):
+                    sent = True
+                    yield piece
+                return
+            except LLMError as exc:
+                if sent:
+                    raise
+                print(f"[vision] {model}: {str(exc)[:120]}; trying the next")
+            finally:
+                vision.close()
+        yield from self.llm.chat_stream(msgs)
 
     def _save_as_it_streams(self, pieces: Iterator[str], session: str) -> Iterator[str]:
         parts: list[str] = []

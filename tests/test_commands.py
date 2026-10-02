@@ -129,6 +129,22 @@ MATRIX = [
     ("Jimmy erase the last hour", "command", "forget", "the last hour"),
     ("Jimmy delete the email from yesterday", "recall", None, None),     # not a forget: the tool pick says no
     ("Jimmy clear everything", "command", "close_ui", None),             # the UI, as before
+    # D41: the second live session's misses (2026-10-02 23:34-23:42), in its words
+    ("Jimmy show me the reminders", "command", "reminders", None),
+    ("Jimmy can you show me any reminders I have", "command", "reminders", None),
+    ("Jimmy can you show me the reminders I have", "command", "reminders", None),
+    ("Jimmy delete all the reminders", "command", "unremind", None),
+    ("Jimmy navigate to Timeline", "command", "open", "Timeline"),
+    ("Jimmy open Timelines", "command", "open", "Timelines"),
+    ("Jimmy open my memory", "command", "open", "memory"),
+    ("Jimmy Dewey Calibration", "command", "calibrate", None),
+    ("Jimmy do I calibration", "command", "calibrate", None),
+    ("Jimmy can you close the suggestions", "command", "close_ui", None),
+    ("Jimmy set a reminder for tomorrow", "command", "remind", None),
+    ("Jimmy can you see my eyes", "presence", None, None),
+    ("Jimmy click the login button", "command", "click", "login button"),
+    ("Jimmy type hello world into the search box", "command", "type", "hello world"),
+    ("Jimmy open chrome", "command", "open_app", "chrome"),
     ("Jimmy eye calibration", "command", "calibrate", None),
     ("Jimmy 2i calibration", "command", "calibrate", None),            # what Whisper wrote on 2026-10-02
     ("Jimmy calibrate my eyes", "command", "calibrate", None),
@@ -143,7 +159,7 @@ MATRIX = [
 ]
 
 # Unknown instructions: these go to the model's tool pick (they start like an instruction).
-TO_TOOLS = ["Jimmy turn this off", "Jimmy make it darker", "Jimmy click the login button",
+TO_TOOLS = ["Jimmy turn this off", "Jimmy make it darker",          # D41: "click …" is a command now
             "Jimmy type my password", "Jimmy close chrome", "Jimmy put the privacy thing over my stuff"]
 
 # Said near the mic without "Jimmy": never navigation, never a command.
@@ -183,7 +199,7 @@ def test_matrix():
 def test_unknown_instructions_reach_the_tool_pick():
     for text in TO_TOOLS:
         q = heard(text)
-        assert ask_mod.route(q, now=NOW)[0] in ("chat", "recall") and ask_mod._ACTIONISH.match(ask_mod.polite(q)), text
+        assert ask_mod.route(q, now=NOW)[0] in ("chat", "recall"), text      # D41: all of those go to the pick
     print(f"ok  {len(TO_TOOLS)} unknown instructions go to the model's tool pick")
 
 

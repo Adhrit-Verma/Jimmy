@@ -220,6 +220,12 @@ FOLLOWUP_S = 10              # after Jimmy answers you aloud, your next line nee
 OTHERS_QUIET_S = 30          # someone else spoke near the mic this recently (a call, a video, a
                              # person): eye contact alone isn't enough; say the name
 
+# --- seeing the screen (D41) ---------------------------------------------------
+# A question about the screen sends its latest picture (the stored thumbnail: faces
+# blurred, never an excluded window) with its text to a vision model in the cloud
+# (jimmy/config.py VISION_MODELS). False: text only, as before D41.
+VISION_SCREEN = True
+
 # --- ask by voice, answers come to you (D25) --------------------------------
 ASK_EVIDENCE = 6             # moments shown beside a spoken answer
 LISTEN_WINDOW_S = 8          # after "Jimmy" alone, the next thing said (within this) is the question

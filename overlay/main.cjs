@@ -35,7 +35,7 @@ let quitting = false;
 // frameless with its own drag bar, same page bundle at #timeline. D31: the same
 // window has an Insights view (#insights), and can open at a moment (?ts=).
 function openTimeline(view, params) {
-  view = view === "insights" ? "insights" : "timeline";
+  view = ["insights", "memory"].includes(view) ? view : "timeline";
   const p = params || {};
   const deep = {};                                   // only what the page understands
   if (Number.isFinite(Number(p.ts)) && p.ts) deep.ts = String(Number(p.ts));
@@ -107,6 +107,16 @@ function send(event) {
     }
   }
   if (event.type === "close_all" && timeline && !timeline.isDestroyed()) timeline.close();   // D35
+  // D41: the Memory tab follows changes made by voice.
+  if (event.type === "memory_changed" && timeline && !timeline.isDestroyed()) timeline.webContents.send("event", event);
+  // D41: the virtual cursor. UI Automation gives physical pixels; the page draws in
+  // DIPs, relative to the overlay window.
+  if (event.type === "cursor" && Array.isArray(event.rect) && win && !win.isDestroyed()) {
+    const [l, t, r, b] = event.rect;
+    const d = screen.screenToDipRect(null, { x: l, y: t, width: r - l, height: b - t });
+    const wb = win.getBounds();
+    event = { ...event, box: [d.x - wb.x, d.y - wb.y, d.width, d.height] };
+  }
   // D40: history was deleted. The timeline window only ever hides, so it still held the
   // deleted days and pictures; the next open builds it fresh.
   if (event.type === "data_changed" && timeline && !timeline.isDestroyed()) { timeline.destroy(); return; }
@@ -260,7 +270,7 @@ app.whenReady().then(() => {
   globalShortcut.register(CURTAIN_HOTKEY, () => call("curtain", { on: !curtain }).catch(() => {}));
 
   if (OPEN_TIMELINE) {
-    const t = openTimeline(process.argv.includes("--insights") ? "insights" : "timeline");
+    const t = openTimeline(process.argv.includes("--insights") ? "insights" : process.argv.includes("--memory") ? "memory" : "timeline");
     if (SNAPSHOT) {
       t.webContents.once("did-finish-load", () => setTimeout(async () => {
         const img = await t.webContents.capturePage();

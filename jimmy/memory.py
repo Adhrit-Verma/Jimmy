@@ -70,6 +70,16 @@ CREATE TABLE IF NOT EXISTS reminders (
     id INTEGER PRIMARY KEY, created INT NOT NULL, text TEXT NOT NULL,
     due_ts INT, app TEXT, state TEXT DEFAULT 'waiting'
 );
+-- D41: editing a remembered fact keeps the search index in step.
+CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE ON memories BEGIN
+    INSERT INTO memories_fts(memories_fts, rowid, text) VALUES ('delete', old.id, old.text);
+    INSERT INTO memories_fts(rowid, text) VALUES (new.id, new.text);
+END;
+-- D41: what you're working towards, in your words. "Focus on X" also makes X a goal.
+CREATE TABLE IF NOT EXISTS goals (
+    id INTEGER PRIMARY KEY, created INT NOT NULL, text TEXT NOT NULL,
+    state TEXT DEFAULT 'active', done_ts INT
+);
 """
 
 
@@ -102,6 +112,56 @@ class Memory:
     def forget(self, memory_id: int) -> None:
         self._write("DELETE FROM memories WHERE id=?", (memory_id,))
 
+    # --- D41: reading and editing what Jimmy keeps, by voice or in the Memory tab ---
+    def memories(self, limit: int = 100) -> list[dict]:
+        """Facts you asked Jimmy to remember, newest first (focus history excluded)."""
+        with self._lock:
+            return [dict(r) for r in self.conn.execute(
+                "SELECT id, ts, text FROM memories WHERE source != 'intent' ORDER BY id DESC LIMIT ?", (limit,))]
+
+    def update_memory(self, memory_id: int, text: str) -> bool:
+        text = (text or "").strip()
+        if not text:
+            return False
+        with self._lock:
+            n = self.conn.execute("UPDATE memories SET text=? WHERE id=? AND source != 'intent'",
+                                  (text, memory_id)).rowcount
+            self.conn.commit()
+        return bool(n)
+
+    def add_goal(self, text: str) -> int | None:
+        """A goal, unless the same one is already active (then its id)."""
+        text = " ".join((text or "").split())
+        if not text:
+            return None
+        with self._lock:
+            row = self.conn.execute("SELECT id FROM goals WHERE state='active' AND lower(text)=lower(?)",
+                                    (text,)).fetchone()
+        return row[0] if row else self._write("INSERT INTO goals(created, text) VALUES (?,?)",
+                                              (int(time.time() * 1000), text))
+
+    def goals(self, state: str | None = "active") -> list[dict]:
+        with self._lock:
+            sql = "SELECT id, created, text, state, done_ts FROM goals"
+            rows = (self.conn.execute(sql + " WHERE state=? ORDER BY id", (state,)) if state
+                    else self.conn.execute(sql + " WHERE state != 'deleted' ORDER BY state, id"))
+            return [dict(r) for r in rows]
+
+    def update_goal(self, goal_id: int, text: str | None = None, state: str | None = None) -> bool:
+        sets, args = [], []
+        if text and text.strip():
+            sets.append("text=?")
+            args.append(" ".join(text.split()))
+        if state in ("active", "done", "deleted"):
+            sets += ["state=?", "done_ts=?"]
+            args += [state, int(time.time() * 1000) if state == "done" else None]
+        if not sets:
+            return False
+        with self._lock:
+            n = self.conn.execute(f"UPDATE goals SET {', '.join(sets)} WHERE id=?", (*args, goal_id)).rowcount
+            self.conn.commit()
+        return bool(n)
+
     def recall(self, question: str, limit: int = 5) -> list[dict]:
         q = fts_query(question)
         if not q:
@@ -117,10 +177,13 @@ class Memory:
     _NO_INTENT = "(no current focus)"
 
     def set_intent(self, text: str | None) -> None:
-        """State what you mean to be doing, or clear it with None/empty."""
+        """State what you mean to be doing, or clear it with None/empty. D41: a stated
+        focus is also a goal, so it shows (and can be finished) in the goals list."""
         self._write("INSERT INTO memories(ts, source, text) VALUES (?,?,?)",
                     (int(time.time() * 1000), "intent",
                      (text or "").strip() or self._NO_INTENT))
+        if text and text.strip():
+            self.add_goal(text)
 
     def current_intent(self, max_age_h: float, now_ms: int | None = None) -> dict | None:
         now_ms = now_ms or int(time.time() * 1000)
@@ -150,6 +213,23 @@ class Memory:
         with self._lock:
             return [dict(r) for r in self.conn.execute(
                 "SELECT id, text, due_ts, app FROM reminders WHERE state = 'waiting' ORDER BY COALESCE(due_ts, 1e18)")]
+
+    def update_reminder(self, rid: int, text: str | None = None, due_ts: int | None = None) -> bool:
+        """D41: "move that reminder to 10 tomorrow", "change it to call Sam"."""
+        sets, args = [], []
+        if text and text.strip():
+            sets.append("text=?")
+            args.append(text.strip())
+        if due_ts:
+            sets.append("due_ts=?")
+            args.append(due_ts)
+        if not sets:
+            return False
+        with self._lock:
+            n = self.conn.execute(f"UPDATE reminders SET {', '.join(sets)} WHERE id=? AND state='waiting'",
+                                  (*args, rid)).rowcount
+            self.conn.commit()
+        return bool(n)
 
     def set_reminder_state(self, rid: int | None, state: str) -> None:
         """One reminder, or every waiting one when `rid` is None."""

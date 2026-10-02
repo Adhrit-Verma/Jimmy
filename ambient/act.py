@@ -1,0 +1,213 @@
+"""Jimmy's hands, with a virtual cursor (D41).
+
+"Jimmy, click Sign in" / "type hello into the search box": the window in front is
+read through UI Automation for things that can be pressed, ticked, picked, opened
+or typed into; the best match by name is shown with a cursor of Jimmy's own (the
+overlay draws it); only after your yes is it done, through the control's own
+pattern (Invoke, Toggle, Select, Expand, SetValue). Your mouse and keyboard are
+never touched and no click event is sent, so nothing lands anywhere else.
+
+Never in excluded windows (banking, password managers, Jimmy itself: the bus
+checks), never typing into a password box. Control names are screen content,
+so untrusted: they are matched, never followed as instructions, and every
+action waits for a yes.
+"""
+from __future__ import annotations
+
+import difflib
+import os
+import re
+from dataclasses import dataclass
+from pathlib import Path
+
+_FILLER = {"the", "a", "an", "on", "in", "into", "button", "link", "box", "field", "tab", "menu", "option",
+           "checkbox", "check", "icon", "item", "that", "this", "please", "called", "named", "says", "labelled",
+           "labeled", "one"}
+_HINTS = {"button": "ButtonControl", "link": "HyperlinkControl", "box": "EditControl", "field": "EditControl",
+          "search": "EditControl", "tab": "TabItemControl", "menu": "MenuItemControl",
+          "checkbox": "CheckBoxControl", "check": "CheckBoxControl"}
+# Words that mean "can't take it back": the yes is asked with a warning (D41).
+RISKY = re.compile(r"\b(?:send|delete|remove|submit|pay|buy|purchase|order|post|publish|confirm|transfer|"
+                   r"sign out|log ?out|uninstall|discard|erase|reset|format|close account)\b", re.I)
+
+
+@dataclass
+class Target:
+    name: str
+    kind: str                      # UIA control type name, e.g. "ButtonControl"
+    rect: tuple[int, int, int, int]  # left, top, right, bottom (physical screen pixels)
+    can: frozenset                 # patterns: invoke / toggle / select / expand / value
+    password: bool = False
+
+    @property
+    def center(self) -> tuple[int, int]:
+        return (self.rect[0] + self.rect[2]) // 2, (self.rect[1] + self.rect[3]) // 2
+
+
+def _words(text: str) -> list[str]:
+    return [w for w in re.findall(r"[\w']+", (text or "").lower()) if w not in _FILLER]
+
+
+def score(phrase: str, t: Target) -> float:
+    """How well a spoken name fits a control: words in common, then spelling."""
+    want, have = _words(phrase), _words(t.name)
+    if not want or not have:
+        return 0.0
+    overlap = len(set(want) & set(have)) / len(set(want))
+    close = difflib.SequenceMatcher(None, " ".join(want), " ".join(have)).ratio()
+    s = 0.6 * overlap + 0.4 * close
+    hint = next((_HINTS[w] for w in re.findall(r"[a-z]+", phrase.lower()) if w in _HINTS), None)
+    if hint and t.kind == hint:
+        s += 0.1
+    return s
+
+
+def best(targets: list[Target], phrase: str, typing: bool = False) -> Target | None:
+    """The control the phrase names, or None if nothing fits well enough."""
+    # Typing needs a box that takes text; pressing needs something other than that.
+    pool = [t for t in targets if ("value" in t.can if typing else t.can - {"value"})]
+    if typing and not _words(phrase) and len(pool) == 1:
+        return pool[0]                       # "type hello": the one box there is
+    ranked = sorted(pool, key=lambda t: -score(phrase, t))
+    return ranked[0] if ranked and score(phrase, ranked[0]) >= 0.45 else None
+
+
+def _patterns(ctrl, auto) -> frozenset:
+    el, out = ctrl.Element, set()
+    for name, prop in (("invoke", "IsInvokePatternAvailableProperty"), ("toggle", "IsTogglePatternAvailableProperty"),
+                       ("select", "IsSelectionItemPatternAvailableProperty"),
+                       ("expand", "IsExpandCollapsePatternAvailableProperty"),
+                       ("value", "IsValuePatternAvailableProperty")):
+        try:
+            if el.GetCurrentPropertyValue(getattr(auto.PropertyId, prop)):
+                out.add(name)
+        except Exception:
+            pass
+    return frozenset(out)
+
+
+def controls(hwnd: int, limit: int = 600) -> list[Target]:
+    """What in this window can be pressed, ticked, picked, opened or typed into."""
+    import uiautomation as auto
+    from uiautomation.uiautomation import _AutomationClient
+
+    from .screen import wake_accessibility
+    out: list[Target] = []
+    with auto.UIAutomationInitializerInThread():
+        wake_accessibility(hwnd)
+        root = auto.ControlFromHandle(hwnd)
+        uia = _AutomationClient.instance().IUIAutomation
+        conds = [uia.CreatePropertyCondition(getattr(auto.PropertyId, p), True) for p in (
+            "IsInvokePatternAvailableProperty", "IsTogglePatternAvailableProperty",
+            "IsSelectionItemPatternAvailableProperty", "IsExpandCollapsePatternAvailableProperty",
+            "IsValuePatternAvailableProperty")]
+        cond = conds[0]
+        for c in conds[1:]:
+            cond = uia.CreateOrCondition(cond, c)
+        found = root.Element.FindAll(4, cond)            # 4: all descendants
+        for i in range(min(found.Length, limit)):
+            try:
+                c = auto.Control.CreateControlFromElement(found.GetElement(i))
+                if c.IsOffscreen:
+                    continue
+                r = c.BoundingRectangle
+                if r.width() <= 2 or r.height() <= 2:
+                    continue
+                name = (c.Name or "").strip()
+                if not name and c.ControlTypeName == "EditControl":
+                    name = (c.GetPropertyValue(auto.PropertyId.HelpTextProperty) or "").strip() or "text box"
+                if not name:
+                    continue
+                out.append(Target(name[:120], c.ControlTypeName, (r.left, r.top, r.right, r.bottom),
+                                  _patterns(c, auto), bool(c.Element.CurrentIsPassword)))
+            except Exception:
+                continue
+    return out
+
+
+def perform(hwnd: int, t: Target, text: str | None = None) -> str:
+    """Do it, after your yes. The control is found again (same name, type, place):
+    the window may have changed while you decided. Returns what to say."""
+    import uiautomation as auto
+    from uiautomation.uiautomation import _AutomationClient
+    with auto.UIAutomationInitializerInThread():
+        root = auto.ControlFromHandle(hwnd)
+        uia = _AutomationClient.instance().IUIAutomation
+        found = root.Element.FindAll(4, uia.CreatePropertyCondition(auto.PropertyId.NameProperty, t.name))
+        best_c, best_d = None, 1e9
+        for i in range(found.Length):
+            c = auto.Control.CreateControlFromElement(found.GetElement(i))
+            if c.ControlTypeName != t.kind:
+                continue
+            r = c.BoundingRectangle
+            d = abs((r.left + r.right) // 2 - t.center[0]) + abs((r.top + r.bottom) // 2 - t.center[1])
+            if d < best_d:
+                best_c, best_d = c, d
+        if best_c is None:
+            return f"“{t.name}” isn't there any more."
+        c = best_c
+        if text is not None:
+            if c.Element.CurrentIsPassword:
+                return "I never type into password boxes."
+            vp = c.GetPattern(auto.PatternId.ValuePattern)
+            if not vp or vp.IsReadOnly:
+                return f"I can't type into “{t.name}”."
+            vp.SetValue(text)
+            return f"Typed into “{t.name}”."
+        for pid, verb in ((auto.PatternId.InvokePattern, "Invoke"), (auto.PatternId.TogglePattern, "Toggle"),
+                          (auto.PatternId.SelectionItemPattern, "Select")):
+            p = c.GetPattern(pid)
+            if p:
+                getattr(p, verb)()
+                return f"Done: “{t.name}”."
+        p = c.GetPattern(auto.PatternId.ExpandCollapsePattern)
+        if p:
+            (p.Collapse if p.ExpandCollapseState == 1 else p.Expand)()     # 1: expanded
+            return f"Opened “{t.name}”."
+        return f"I can't press “{t.name}” without your mouse."
+
+
+# --- opening apps ----------------------------------------------------------------
+
+def _start_menu() -> list[Path]:
+    roots = [Path(os.environ.get("APPDATA", "")) / "Microsoft/Windows/Start Menu/Programs",
+             Path(os.environ.get("PROGRAMDATA", "")) / "Microsoft/Windows/Start Menu/Programs"]
+    return [p for r in roots if r.exists() for p in r.rglob("*.lnk")]
+
+
+def find_app(name: str, shortcuts: list[Path] | None = None) -> Path | None:
+    """A Start-menu shortcut for "Chrome", "spotify", "VS Code": exact, then starts
+    with, then the closest spelling. Uninstallers and help links are never picked."""
+    want = re.sub(r"[^a-z0-9 ]", "", name.lower()).strip()
+    want = {"vs code": "visual studio code", "vscode": "visual studio code", "chrome": "google chrome",
+            "word": "word", "excel": "excel"}.get(want, want)
+    if not want:
+        return None
+    links = [p for p in (shortcuts if shortcuts is not None else _start_menu())
+             if not re.search(r"uninstall|help|readme|documentation|release notes", p.stem, re.I)]
+    names = {p: re.sub(r"[^a-z0-9 ]", "", p.stem.lower()) for p in links}
+    for test in (lambda n: n == want, lambda n: n.startswith(want), lambda n: want in n.split()):
+        hits = sorted((p for p, n in names.items() if test(n)), key=lambda p: len(p.stem))
+        if hits:
+            return hits[0]
+    close = difflib.get_close_matches(want, list(names.values()), n=1, cutoff=0.8)
+    return next((p for p, n in names.items() if close and n == close[0]), None)
+
+
+def open_app(name: str) -> str:
+    """Start an app you named. Opening isn't input to another app; it's what you asked."""
+    link = find_app(name)
+    if link:
+        os.startfile(str(link))
+        return f"Opening {link.stem}."
+    # Store apps (Spotify, WhatsApp) have no shortcut but register a link type
+    # ("spotify:"); only one that exists is opened, or Windows asks for an app.
+    proto = re.sub(r"[^a-z0-9]", "", name.lower())
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, proto) as k:
+            winreg.QueryValueEx(k, "URL Protocol")
+    except OSError:
+        return f"I couldn't find an app called “{name}”."
+    os.startfile(f"{proto}:")
+    return f"Opening {name.strip().title()}."

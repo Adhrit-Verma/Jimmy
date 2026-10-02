@@ -13,7 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from ambient.ask import TOOLS_Q, _json_obj, route  # noqa: E402
+from ambient.ask import _json_obj, route, tool_messages  # noqa: E402
 from jimmy.llm import LLM  # noqa: E402
 
 CASES = [
@@ -24,8 +24,8 @@ CASES = [
     ("make your voice a bit quieter", {"volume"}),
     ("turn the volume way down", {"volume"}),
     ("close the chrome window", {"cannot"}),
-    ("click the login button", {"cannot"}),
-    ("type my password in", {"cannot"}),
+    ("click the login button", {"click"}),            # D41: the virtual cursor
+    ("type my password in", {"cannot", "type"}),     # D41: code refuses password boxes
     ("get rid of all your windows", {"close_ui"}),
     ("take me to the timeline", {"open"}),
     ("stop recording me for a bit", {"pause"}),
@@ -62,7 +62,37 @@ CASES = [
     # D40
     ("set up the eye tracking thing again", {"calibrate_eyes"}),
     ("मेरी आँखों का कैलिब्रेशन करो", {"calibrate_eyes"}),
+    # D41: the second live session's misses, and editing Jimmy's own lists (STATE below)
+    ("Give me open Chrome.", {"open_app"}),
+    ("Change the reminder time to 10 am tomorrow", {"reminder_update"}),
+    ("move the railway reminder to 6 pm", {"reminder_update"}),
+    ("I am only telling you to delete reminder.", {"reminder_delete", "ask_back"}),
+    ("delete the railway booking reminder", {"reminder_delete"}),
+    ("show me the reminders I have", {"list_reminders"}),
+    ("Can you see my eyes?", {"presence"}),
+    ("mark the essay goal as done", {"goal_done"}),
+    ("my new goal is to learn the AWS basics", {"goal_add"}),
+    ("what are my goals", {"list_goals"}),
+    ("remember that my standup moved to 11", {"remember", "memory_update"}),
+    ("I don't take the 8:15 train anymore, forget that", {"memory_delete"}),
+    ("what do you know about me", {"list_memories"}),
+    ("hit the sign in button", {"click"}),
+    ("put my email in the login box", {"ask_back", "type", "cannot"}),
+    ("open my reminders list", {"open"}),
+    ("रेलवे वाला रिमाइंडर कल सुबह 10 बजे कर दो", {"reminder_update"}),
+    ("क्रोम खोलो", {"open_app"}),
 ]
+# What the model sees as Jimmy's own lists (D41), the same shape the Asker sends.
+STATE = """reminders:
+  #3 "check the railway booking" at 10:00 on Sat
+  #4 "call mom" at 18:00
+goals:
+  #1 "finish the fellowship essay"
+  #2 "ship the timeline redesign"
+memories:
+  #7 "I take the 8:15 train on Mondays"
+  #8 "standup is at 10:30 on weekdays"
+"""
 
 
 def main() -> int:
@@ -74,8 +104,7 @@ def main() -> int:
     for text, ok in CASES:
         t0 = time.time()
         try:
-            got = _json_obj(llm.chat([{"role": "system", "content": TOOLS_Q}, {"role": "user", "content": text}],
-                                     max_tokens=160, temperature=0.0)) or {}
+            got = _json_obj(llm.chat(tool_messages(text, STATE), max_tokens=200, temperature=0.0)) or {}
         except Exception as exc:
             got = {"tool": f"error {type(exc).__name__}"}
         times.append(time.time() - t0)

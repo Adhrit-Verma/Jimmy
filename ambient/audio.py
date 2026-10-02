@@ -158,6 +158,8 @@ class VadChunker:
     the first word of every utterance is clipped and transcription suffers.
     """
 
+    on_start: Callable[[str], None] | None = None   # D41: called when someone starts speaking
+
     def __init__(self, source: str,
                  aggressiveness: int = config.VAD_AGGRESSIVENESS,
                  frame_ms: int = config.VAD_FRAME_MS,
@@ -205,6 +207,8 @@ class VadChunker:
                 if not self._cur:
                     self._cur = list(self._pre)
                     self._start_ms = f_ms - len(self._pre) * self.frame_ms
+                    if self.on_start:
+                        self.on_start(self.source)     # D41: "listening…" now, not after Whisper
                 self._cur.append(frame)
                 self._quiet = 0
             elif self._cur:
@@ -339,10 +343,10 @@ class SilenceWatch:
 
 class _CaptureThread(threading.Thread):
     def __init__(self, pa, device: dict, source: str, sink: queue.Queue, stop: threading.Event,
-                 paused: threading.Event):
+                 paused: threading.Event, on_start: Callable[[str], None] | None = None):
         super().__init__(daemon=True, name=f"audio-{source}")
         self.pa, self.device, self.source, self.sink, self.stop = pa, device, source, sink, stop
-        self.paused = paused
+        self.paused, self.on_start = paused, on_start
         self.error: str | None = None
 
     def run(self) -> None:
@@ -350,6 +354,7 @@ class _CaptureThread(threading.Thread):
         ch = min(2, int(self.device["maxInputChannels"]))
         block = int(rate * config.VAD_FRAME_MS / 1000) * 4
         chunker = VadChunker(self.source)
+        chunker.on_start = self.on_start
         watch = SilenceWatch()
         try:
             stream = self.pa.open(format=self.pa.get_format_from_width(2),  # int16
@@ -397,8 +402,9 @@ class AudioPipeline:
 
     def __init__(self, on_segment: Callable[[int, int, str, str], None],
                  mic: bool = config.CAPTURE_MIC,
-                 loopback: bool = config.CAPTURE_LOOPBACK):
-        self.on_segment = on_segment
+                 loopback: bool = config.CAPTURE_LOOPBACK,
+                 on_start: Callable[[str], None] | None = None):
+        self.on_segment, self.on_start = on_segment, on_start
         self.want_mic, self.want_loopback = mic, loopback
         self._q: queue.Queue = queue.Queue(maxsize=64)
         self._stop = threading.Event()
@@ -436,7 +442,7 @@ class AudioPipeline:
         self._pa = pa.PyAudio()
         self.transcriber = Transcriber()
         for dev, source in self._devices():
-            t = _CaptureThread(self._pa, dev, source, self._q, self._stop, self.paused)
+            t = _CaptureThread(self._pa, dev, source, self._q, self._stop, self.paused, self.on_start)
             t.start()
             self._threads.append(t)
         self._worker = threading.Thread(target=self._drain, daemon=True, name="transcribe")
