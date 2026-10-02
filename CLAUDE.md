@@ -19,9 +19,12 @@ to stay quiet. Build for six good interruptions an evening, not for throughput.
 cards Jimmy writes itself (D32), hands-free UI (D33), the privacy curtain (D34), fixes from
 the first real session (D35), English + Hindi only (D36), "remember my face" (D37), a
 performance pass (D38), "live" (D39: a curtain that follows you, resting while away,
-asking without the name, forget a span, timers) and its first-session fixes (D40: calls,
-eye calibration, UIA scroll, fresh timeline after a forget). Next: mouse/keyboard control, waiting
-on two human decisions (`TIMELINE.md` → Next).** "Jimmy, …" → an
+asking without the name, forget a span, timers), its first-session fixes (D40: calls,
+eye calibration, UIA scroll, fresh timeline after a forget) and D41: every unplaced request
+picked by the model with your lists in context, reminders/goals/memories by voice and in a
+Memory tab, "listening…/heard" feedback, seeing the screen (vision model), and a virtual
+cursor that presses or types after a yes. Next: multi-step tasks, waiting on the human's
+approval-level decision (`TIMELINE.md` → Next).** "Jimmy, …" → an
 evidence panel and a spoken answer, with no typing needed. Stage 3 (trigger gate) passed its 5-check
 list, blind-judged (D19–D22). Stage 4 is the Electron overlay (D23). Stage 5 is hybrid
 keyword + meaning recall and a timeline window (D24). Remaining work lives in
@@ -94,10 +97,11 @@ cd overlay; npm install; npm run build   # once, and after any change under over
 .\.venv\Scripts\python.exe tests\test_stage8.py   # 7 checks: the first real session's misses, tools, ask-back
 .\.venv\Scripts\python.exe tests\test_face.py     # 6 checks: remember-my-face capture, template, tracker
 .\.venv\Scripts\python.exe tests\test_stage9.py   # 14 checks: curtain follows you, presence thread, no-name asks, calls, calibration, forget, timers
-.\.venv\Scripts\python.exe tests\test_commands.py # the command matrix: 154 utterances, talk, a drill
+.\.venv\Scripts\python.exe tests\test_stage10.py  # 7 checks: lists by voice, remind asks what, heard feedback, cursor, Memory tab, vision fallback
+.\.venv\Scripts\python.exe tests\test_commands.py # the command matrix: 169 utterances, talk, a drill
 .\.venv\Scripts\python.exe -m ambient forget "1 to 15 September"   # shows what goes, asks first
 .\.venv\Scripts\python.exe -m ambient compact      # VACUUM + FTS optimize (also runs while you're away)
-.\.venv\Scripts\python.exe tests\eval_tools.py    # live: the model's tool pick (34 cases, needs the key)
+.\.venv\Scripts\python.exe tests\eval_tools.py    # live: the model's tool pick (59 cases, with sample lists; needs the key)
 .\.venv\Scripts\python.exe tests\equiv_db.py snap before   # then change code, snap after, diff
 ```
 
@@ -150,6 +154,9 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `tests/test_stage8.py` | D35 check: the human's real misses from 2026-10-02, tool picking, ask-back. |
 | `tests/test_face.py` | D37: guidance, capture steps, DPAPI template, tracker with your face. No webcam. |
 | `tests/test_stage9.py` | D39: follow on drawn scenes, identity per track, the presence thread on a fake camera, eyes/lips, follow-up and eye-contact asks, timers, forget + compact, date spans, resting. |
+| `ambient/act.py` | D41: the virtual cursor's hands: UI Automation controls of the window in front, name matching, `perform` (Invoke/Toggle/Select/Expand/SetValue) after a yes; opening apps by Start-menu shortcut. |
+| `overlay/src/Memory.jsx` | D41: the Memory tab: reminders, goals, memories; edit, done, delete, select. |
+| `tests/test_stage10.py` | D41 check: lists by voice through the tool pick, reminder ask-back, heard feedback, cursor offer/yes, Memory API, vision fallback. |
 | `tests/equiv_db.py` | D38: before/after equivalence of 43 read paths on a frozen copy of the real DB. Use it for any change to db/recall/insights/gate. |
 | `overlay/src/main.jsx` | picks the page by hash: the overlay, or `#timeline` / `#insights`; reduced motion respected. |
 | `overlay/src/index.css` | the transparent sheet, and the transform-only keyframes (equalizer, shimmer, progress). |
@@ -213,10 +220,11 @@ setting that defaults to off.
 11. **Jimmy proposes; you approve** (D32). Focus, page, draft, calendar event:
    each waits for your yes, and drafts/events go no further than your
    clipboard or your calendar app's own confirm.
-12. **Scroll is the only input Jimmy sends to another app** (D35), and only when
-   asked. No clicks, no typing. Anything more needs its own approval design.
-   D40: done through UI Automation's ScrollPattern where the window has one, so
-   it's still only a scroll, just not dependent on where the pointer is.
+12. **Jimmy acts on another app only through UI Automation patterns, one action
+   per yes** (D35 scroll, widened by D41). Scroll when asked; press / tick / pick /
+   open / type only after Jimmy's virtual cursor has shown the control and you said
+   yes. No mouse or key events, never in excluded windows, never into a password
+   box. Multi-step tasks need their own approval design (the human's call).
 
 ---
 
@@ -279,6 +287,14 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   and leaked its reasoning as plain text. Don't switch models without measuring.
 - **The hosted model sometimes returns 200 with an empty answer** (1 in 5 in the
   benchmark), and on 2026-09-25 came in runs. `LLM` makes 3 attempts, then raises.
+  On 2026-10-03, 6 of 59 eval calls in one run.
+- **Vision models usable by this key (2026-10-03, D41):** only
+  `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` (0.7–3.5 s; once 503 "request
+  limit") and `meta/llama-3.2-11b-vision-instruct` (1.1–9 s). Gemma 4, Kimi K3,
+  GLM-5.3, llama-3.2-90b-vision time out; phi-3-vision, gemma-3, vila, cosmos 404.
+- **UI Automation controls (D41):** one `FindAll` on pattern availability: the
+  Claude app, 113 actionable controls in 0.43 s. WinForms buttons and boxes take
+  Invoke / SetValue; Tk windows expose nothing.
 
 ---
 
@@ -389,6 +405,13 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
 - **UI Automation off the main thread needs `auto.UIAutomationInitializerInThread()`**
   (the scroll runs on an API thread). `uiautomation`'s client is in
   `uiautomation.uiautomation._AutomationClient`; `TreeScope_Descendants` is 4.
+- **Every unplaced request now costs one tool pick** (D41). Keep the rules for the
+  fast, unambiguous phrases; the model resolves the rest with `<state>`. A failed
+  pick pauses picks for 60 s (`_pick_down_until`). Re-run `tests/eval_tools.py`
+  after any change to `TOOLS_Q`: a reworded line made "start watching again" and a
+  Hindi "delete September" fall to "cannot".
+- **A follow-up window takes statements too** (D39): a test of "this isn't a
+  request" must close `followup_until` first, or it tests the follow-up.
 - **The curtain's thresholds are from drawn scenes** (D39): turned head 0.55–0.69,
   empty chair 0.42, `FOLLOW_MIN` 0.5. The console prints the last match when it
   decides you left; tune from that, not from the drawings.

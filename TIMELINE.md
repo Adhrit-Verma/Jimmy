@@ -213,13 +213,25 @@ call, an unmeasured lip veto, no visible calibration, a flickering eye, a stale
 timeline after a forget, scroll in Claude). Checks: `tests\test_stage9.py` (14),
 matrix (154), eval 41/41.
 
+## Hands and eyes · **built 2026-10-03 (D41)**
+
+Understanding in context (every unplaced request picked by the model with the
+user's lists), reminders / goals / memories by voice and in a Memory tab,
+"listening… / heard" feedback, screen answers that see the picture, and the
+virtual cursor: stage (a) of mouse/keyboard control, one action per yes. Checks:
+`tests\test_stage10.py` (7), matrix (169), eval 59 cases (every answered case
+right in two runs). Live acceptance on the human's apps is open.
+
 ---
 
 ## Next, in order
 
 **As of 2026-10-02 (end of the D31–D39 sessions):**
 
-1. **Mouse/keyboard control ("agentic") — designed, NOT started, waiting on the human.**
+1. **Mouse/keyboard control ("agentic") — stage (a), single confirmed actions, BUILT
+   (D41: the virtual cursor, every action waits for a yes, all apps except excluded
+   windows). Stage (b), multi-step tasks with plan approval, waits on the human's
+   approval-level answer.** The original design, kept for history:
    Agreed with the human: yes it's possible; do performance first (done, D38).
    The design proposed:
    - **How:** UI Automation, not vision. Read the foreground window's actionable

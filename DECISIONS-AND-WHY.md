@@ -1619,3 +1619,107 @@ the old wheel / Page Down.
 
 Checks: `tests\test_stage9.py` (14), the command matrix (154), `tests\eval_tools.py`
 41/41. DB read paths identical (43). Scroll: by hand on Chrome and VS Code.
+
+
+### D41 — Understanding in context, your lists by voice, seeing the screen, a virtual cursor
+
+**Source:** the human's session on 2026-10-02 (23:34–23:42) and their asks: "it
+sometimes doesn't understand if I'm asking about the timeline or asking it to do
+something"; a virtual cursor; image and context understanding "like a frontier
+model"; select and edit memories, reminders and goals; "when I'm looking at the
+camera I don't know if it took my command".
+
+**What the session got wrong, in its words:** "Show me the reminders" and "Can
+you show me the reminders I have?" read *captured* reminder text from old screens;
+"Change the reminder time to 10 am tomorrow" made a new reminder called that,
+as did "set a reminder for tomorrow"; "delete all the reminders" matched nothing;
+"Navigate to Timeline" got "I can't navigate"; "Can you see my eyes?" got "No"
+from the chat model; "Dewey Calibration" (Whisper's "do eye calibration") was
+answered as a question. All are rows in the command matrix now (169).
+
+**Why: the rules decided, and the model only saw instruction-shaped lines.**
+Anything the rules didn't recognise became a chat or a history search. Now:
+- **Every request the rules don't place goes to the model's tool pick** (D35's
+  pick), not just ones starting like an instruction, with **`<state>`**: the
+  user's reminders, goals and memories with ids, and the last turn. "Move that
+  reminder to 10" names an id from the list; an id that isn't there is refused,
+  never guessed. Captured text never goes in, only what the user told Jimmy.
+- For a question the pick says "answer" to, the search it needs runs at the same
+  time as the pick, so the extra call costs ~0 for recall questions.
+- After a failed pick (the endpoint's empty answers come in runs: 6 of 59 in one
+  eval run), picks pause for 60 s and the rules route alone, so an outage doesn't
+  add ~3 s of retries to every question.
+- Rules fixed for the session's words (reminders list, delete all reminders,
+  navigate/open timelines, "see my eyes", two words + "calibration", "close the
+  suggestions", "set a reminder for …" with "for 5" as a time and asking
+  "about what?" when there's no what, "10 am tomorrow").
+- **Live eval:** 59 cases (English, Hindi, the session's misses, edits of a
+  sample state): every case the endpoint answered was right in two runs (57/57,
+  53/53); the rest were empty answers. Prompt changes measured: "start watching
+  again" and Hindi "delete September's data" first fell to "cannot" until their
+  tool lines said so plainly.
+
+**Your lists (`jimmy/memory.py`, `ambient/ask.Asker._crud`, the Memory tab):**
+- **Goals** are new (`goals` table: text, active/done/deleted). "Focus on X" also
+  makes X a goal. Memories gain edit (an UPDATE trigger keeps the search index in
+  step); reminders gain edit (text and/or time).
+- By voice through tools: reminder_update / reminder_delete, goal_add /
+  list_goals / goal_done / goal_update / goal_delete, remember / list_memories /
+  memory_update / memory_delete. Deleting *all* of a kind waits for a yes.
+- **The Memory tab** (timeline window, key 3): three lists, click a line to edit
+  it, a reminder's time in words ("tomorrow at 10"), done/undo for goals, delete,
+  checkboxes and "Delete selected". It refreshes when Jimmy changes them by voice.
+
+**Feedback when you ask without the name:** when you start speaking (the VAD's
+first voiced frame) while Jimmy sees you looking at the screen or is waiting for
+a reply, the pill shows **"listening…" at once**, then **the words it heard**
+("“what's on my screen”", with an ear) when it takes them, or **why it didn't**
+("Not taken: didn't sound like a request / someone else is talking / on a call
+(Discord). Say “Jimmy” first"). Only when you were looking: room talk shows
+nothing.
+
+**Seeing the screen.** A screen question now sends the window's latest picture
+with its text. Probed with drawn images on 2026-10-03: of 81 listed models, two
+answered for this key: `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` (0.7–3.5 s,
+read an editor's error and proposed a fix; once 503 "request limit reached") and
+`meta/llama-3.2-11b-vision-instruct` (1.1–9 s, vaguer). Gemma 4, Kimi K3,
+GLM-5.3 and llama-3.2-90b-vision timed out; the rest 404. Tried in that order,
+**one attempt each**, then the text model alone (`Jimmy._with_image`). The picture
+is the stored thumbnail: faces already blurred, never an excluded window (never
+captured), 1280 px. **New data leaving the laptop**, by the human's ask:
+`VISION_SCREEN = False` turns it off. The models are mid-size; "frontier" quality
+needs a model this key can't reach today. Neither read code pixels exactly; the
+window's text (UI Automation) is what makes the answer exact.
+
+**The virtual cursor (`ambient/act.py`)**: TIMELINE's "mouse/keyboard control",
+stage (a), single confirmed actions, built on the human's ask with the most
+careful of the three approval options: **every action waits for a yes**.
+- "Jimmy, click Sign in", "press the play button", "type hello into the search
+  box" (or the model's click/type tools): UI Automation lists what in the window
+  in front can be pressed, ticked, picked, opened or typed into (one FindAll on
+  pattern availability: 113 controls in 0.43 s in the Claude app); the best name
+  match is chosen (word overlap + spelling, a type hint from "button/box/link");
+  nothing close enough, no guess.
+- **Jimmy's own cursor** (the overlay, never your mouse) glides from the pill to
+  it and rings it, with its name; "Press “Sign in”? Say yes." Risky words (send,
+  delete, pay, submit, post…) add "Careful: that can't be undone."
+- **On yes**, the control is found again (same name, type, nearest place) and
+  driven through its own pattern: Invoke, Toggle, Select, Expand/Collapse, or
+  SetValue for typing. No click or key event is sent, so nothing lands anywhere
+  else and the user's pointer never moves. Verified on a WinForms window: the
+  button's handler ran and the box held the text. Tk windows expose nothing to
+  UI Automation, and some controls have no pattern ("I can't press that without
+  your mouse").
+- Never in excluded windows (banking, password managers, Jimmy), never typing
+  into a password box, control names treated as untrusted (matched, never
+  followed). **Invariant 12 widens** from "scroll only" to these, each confirmed.
+- **Opening apps**: "open Chrome" (a rule for common apps; the model's open_app
+  for the rest) starts the Start-menu shortcut, or a Store app's registered link
+  ("spotify:"). Asked for by name, so it runs without a second yes.
+
+**Not built:** multi-step tasks with plan approval (stage (b): the other open
+question, how much to approve, is still the human's); real mouse clicks for
+controls without patterns; scrolling or pressing inside canvas apps; a local
+vision model (none fits beside Whisper and qwen in 6 GB).
+
+Checks: `tests\test_stage10.py` (7), matrix 169, `tests\eval_tools.py` 59 cases.

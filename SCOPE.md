@@ -252,6 +252,22 @@ optimised JPEG, face detection at thumbnail size.
 
 ---
 
+## Hands and eyes (D41) — built, and NOT built
+
+Built: every unplaced request picked by the model with the user's lists in
+`<state>`; reminders (edit, delete), goals (new), memories (edit, delete) by voice
+and in the Memory tab; "listening…" / "heard" / "not taken: why" in the pill;
+screen answers that see the picture (two vision models, then text); the virtual
+cursor (press, tick, pick, open, type, one action per yes); opening apps by name.
+
+| Not built | Why / what it needs |
+|---|---|
+| Multi-step tasks ("book the 8:15 train") | Stage (b): how much of a plan to approve at once is the human's call. |
+| Real mouse clicks for controls without patterns | Moves the user's pointer and can land elsewhere; needs its own design. |
+| A local vision model | None fits beside Whisper and qwen2.5:3b in 6 GB. |
+| A stronger vision model | Only two answer for this key; re-probe when the account changes. |
+| Picking among same-named controls by position ("the second link") | Ask back, or name it differently; add ordinals if it matters in use. |
+
 ## Live: curtain, resting, no-name asks, forget, timers (D39) — built, and NOT built
 
 Built: the curtain follows where you sit (only leaving the picture curtains, in

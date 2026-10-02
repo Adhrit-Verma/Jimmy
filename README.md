@@ -155,6 +155,16 @@ enough and the pill says so; *"Jimmy, I'm not on a call"* if you aren't.
   <td>Says what it would delete (screenshots, lines heard, MB) and waits for your <i>"yes"</i>. Then the space comes back.</td>
 </tr>
 <tr>
+  <td><b>Your lists</b></td>
+  <td><i>"show me my reminders"</i> · <i>"move the railway reminder to 10 tomorrow"</i> · <i>"my new goal is to learn AWS"</i> · <i>"mark the essay done"</i> · <i>"remember my standup moved to 11"</i> · <i>"what do you know about me?"</i></td>
+  <td>Reminders, goals and the things you told it, read and changed by voice. The <b>Memory</b> tab (timeline window, key 3) lists them to edit, tick off, select and delete.</td>
+</tr>
+<tr>
+  <td><b>Hands</b></td>
+  <td><i>"click Sign in"</i> · <i>"press the play button"</i> · <i>"type hello into the search box"</i> · <i>"open Chrome"</i></td>
+  <td>Jimmy's own cursor glides to the control and rings it; it presses or types only after your <i>"yes"</i>, through Windows' accessibility, never your mouse. Apps open by name.</td>
+</tr>
+<tr>
   <td><b>Proposals</b></td>
   <td><i>"draft a reply to this"</i> · <i>"add this to my calendar"</i> · <i>"open that page"</i></td>
   <td>A draft goes to your clipboard; an event goes to your calendar app, which asks once more; a page opens in your browser. Nothing goes further without your <i>"yes"</i>.</td>
@@ -464,11 +474,14 @@ These are **absent code paths**, not settings that happen to be off.
   is dropped. For your face only, it notes whether you're looking at the screen and whether your lips
   are moving, as yes/no values kept in memory for two minutes, so you can ask without the name. No
   frame is kept.
-- **Jimmy proposes; you approve.** The only input it ever sends to another app is a scroll, and only
-  when you ask for one. It never clicks or types for you.
+- **Jimmy proposes; you approve.** It acts on another app only when you ask, one action per
+  *"yes"*: a scroll, or pressing / typing into the control its cursor is showing you. It never moves
+  your mouse, never acts in banking or password-manager windows, and never types into a password box.
 - **What leaves the laptop:** only the evidence shown with an answer (at most 6,000 characters, and
-  only with a key set), plus the rare RECALL candidates the cloud double-checks. Set
-  `JIMMY_RECALL_VERIFY=none` to keep cards fully local.
+  only with a key set), the rare RECALL candidates the cloud double-checks, and, for a question about
+  your screen, that window's latest picture (faces already blurred; never an excluded window). Set
+  `JIMMY_RECALL_VERIFY=none` to keep cards fully local, and `VISION_SCREEN = False` for text-only
+  screen answers.
 
 A face embedding is a biometric template under India's DPDP Act whether or not it's persisted.
 This design shrinks that exposure substantially; it does not take it to zero. The one stored
@@ -527,15 +540,16 @@ The performance pass (D38) was checked for **equivalence on a frozen copy of the
 | + · First real session | Routing, tool picking, ask-back, scroll, volume, decluttering | ✅ |
 | + · Polish | Remember my face, English + Hindi, a performance pass | ✅ |
 | + · Live | A curtain that follows you, resting while you're away, asking without the name, timers, forgetting a span | ✅ |
-| **Next** · Hands on the controls | Mouse and keyboard through UI Automation, with a visible "Jimmy is driving" mode, plan approval and a hard stop before anything irreversible | 🧭 designed |
+| + · Hands and eyes | Understanding in context, your lists by voice and in a Memory tab, seeing the screen, a virtual cursor (one action per yes) | ✅ |
+| **Next** · Multi-step tasks | Plans of several actions with a visible "Jimmy is driving" mode, plan approval and a hard stop before anything irreversible | 🧭 designed |
 
-The next step is designed but waits on two decisions: how much approval to require, and which apps
-come first ([`TIMELINE.md`](TIMELINE.md) → Next). Other ideas are in [`SCOPE.md`](SCOPE.md) →
-*Possible future changes*. The biggest known gap: the model reads text, not pixels, so windows
-UI Automation can't reach (canvases, video) aren't described yet.
+Single actions are built, each confirmed. Multi-step tasks wait on one decision: how much of a plan
+to approve at once ([`TIMELINE.md`](TIMELINE.md) → Next). Other ideas are in [`SCOPE.md`](SCOPE.md) →
+*Possible future changes*. The biggest known gap: the vision models this key can reach are
+mid-size, so a picture alone (canvases, video) is described less exactly than a window's text.
 
 <details>
-<summary><b>Checks</b>: 107 assert-based checks and a 154-utterance command matrix, no test framework</summary>
+<summary><b>Checks</b>: 114 assert-based checks and a 169-utterance command matrix, no test framework</summary>
 
 ```powershell
 .\.venv\Scripts\python.exe tests\test_stage1.py    # 15 · capture, blur, store
@@ -547,8 +561,9 @@ UI Automation can't reach (canvases, video) aren't described yet.
 .\.venv\Scripts\python.exe tests\test_stage7.py    # 11 · own cards, hands-free, curtain
 .\.venv\Scripts\python.exe tests\test_stage8.py    #  7 · the first real session's misses
 .\.venv\Scripts\python.exe tests\test_stage9.py    # 14 · curtain that follows you, no-name asks, calibration, forget, timers
+.\.venv\Scripts\python.exe tests\test_stage10.py   #  7 · your lists by voice, heard feedback, cursor, Memory tab, vision
 .\.venv\Scripts\python.exe tests\test_face.py      #  6 · remember my face
-.\.venv\Scripts\python.exe tests\test_commands.py  #  4 · 154 commands, talk that mustn't trigger, a drill
+.\.venv\Scripts\python.exe tests\test_commands.py  #  4 · 169 commands, talk that mustn't trigger, a drill
 .\.venv\Scripts\python.exe tests\eval_tools.py     #  live: the model's tool pick, English + Hindi
 .\.venv\Scripts\python.exe tests\equiv_db.py snap before   # then change code, snap after, diff
 ```
@@ -574,6 +589,7 @@ Jimmy/
 │   ├── proactive.py      resume / suggest / remind / deadline / recap cards
 │   ├── insights.py       where the day went, estimated from captures
 │   ├── presence.py       webcam presence for the privacy curtain
+│   ├── act.py            the virtual cursor's hands (UI Automation, one action per yes)
 │   ├── api.py            127.0.0.1 API for the overlay (stdlib only)
 │   └── config.py         every tunable, with its reasoning
 ├── jimmy/              the core: the one LLM client, memory, card engine

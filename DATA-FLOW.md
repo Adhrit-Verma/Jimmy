@@ -274,8 +274,15 @@ the activity timeline instead.
 
 ```sql
 memories(id INT PK, ts INT, source TEXT, text TEXT)   -- + memories_fts (external content)
+                                                      -- D41: + an UPDATE trigger, so edits re-index
 turns(id INT PK, ts INT, session TEXT, role TEXT /* 'user' | 'assistant' */, text TEXT)
+goals(id INT PK, created INT, text TEXT, state TEXT /* active|done|deleted */, done_ts INT)  -- D41
 ```
+
+D41: the tool pick sends the model the request, the last turn, and `<state>`: the
+waiting reminders, active goals and memories (text + id, ≤ 12 each). A screen
+question sends the window's latest thumbnail (blurred, never excluded) to a vision
+model with its text. Both only with a key set.
 
 A separate file from `ambient.db` on purpose: captures will be pruned by a
 retention policy one day, and memory must not be.

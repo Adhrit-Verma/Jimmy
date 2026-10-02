@@ -102,6 +102,7 @@ every screen reader charges.
 | `bus.py` | the one loop, capture-window lifecycle | screen on the calling thread, audio on its own |
 | `insights.py` | where the day went (D31) | estimated from frame times, gap-capped; no model, no new capture |
 | `proactive.py` | cards Jimmy writes itself (D32) | resume, focus offer, reminders, deadlines, recap; acts only on Jimmy |
+| `act.py` | the virtual cursor's hands (D41) | UI Automation controls of the window in front, matched by name, driven by their own patterns after a yes; no mouse or key events; apps opened by Start-menu shortcut |
 | `presence.py` | webcam presence for the curtain (D34, D37, D39) | finds your face once, then follows where you sit (template match when the face is lost); identity per track; resting looks while you're away; for your face only, "looking at the screen" and "lips moving" as yes/no history |
 | `__main__.py` | `run` / `search` / `stats` / `doctor` | `doctor` reports what actually works on this machine |
 
@@ -280,6 +281,14 @@ strip thumbnails (`/thumb?w=`), and deep links: `open_view` events and
    follow-ups, and the pill says so; lips veto only after "eye calibration"
    (Presence._calib_tick → presence.calibrate → settings); "scroll" → overlay →
    POST /scroll_window → screen.scroll_active → UI Automation ScrollPattern, else wheel
+ D41: route() places the clear phrases; everything else in chat/recall → the tool pick
+   with <state> (reminders, goals, memories with ids + the last turn), while recall
+   evidence is fetched in parallel; "answer" → on as before. Lists by voice →
+   Asker._crud → jimmy.memory. Screen answers → Jimmy.ask_stream(image=thumbnail) →
+   vision models in order, once each → text model. "click X" / "type Y into X" →
+   bus.point → act.controls + act.best → overlay cursor + an offer → "yes" →
+   bus.perform → act.perform (UIA pattern). VAD speech start → bus._on_speech_start →
+   "hearing"; hear() → "heard" (taken / why not)
 ```
 
 ## Boundaries for later stages
