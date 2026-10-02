@@ -53,9 +53,11 @@ While `ambient run` is going, say **"Jimmy,"** and then your question.
 | *"Jimmy, what's on my screen?"* | Describes the window in front of you, with a large view of it. |
 | *"Jimmy, what's this?"* | Can't tell if you mean **now** or **earlier**, so it asks, then waits for your answer. No wake word needed for the reply. |
 | *"Jimmy, can you hear me?"* · *"what can you do?"* | Just talks. No search. |
+| *"Jimmy, how was my day?"* · *"how long was I on YouTube?"* | One line from your captures, with a chart: apps, a day map, totals. No model, instant. *"And yesterday?"* follows on. |
+| *"Jimmy, pause for 30 minutes"* · *"focus on the essay"* · *"open insights"* · *"never mind"* | Does it, and says so in the pill. |
 
 It understands days and times: *today*, *yesterday afternoon*, *on Tuesday*,
-*between 2 and 3*, *the last 20 minutes*. Say just **"Jimmy"** and pause if you
+*between 2 and 3*, *the last 20 minutes*, *an hour ago*, *last Friday*. Say just **"Jimmy"** and pause if you
 want to think first. To type instead, press **Ctrl + Alt + Space**.
 
 ---
@@ -155,6 +157,9 @@ downloads its weights on the first run and caches them after that.
 | Ask | Say *"Jimmy, …"*, or **Ctrl + Alt + Space** to type |
 | Pause capture (and resume) | **Ctrl + Alt + J**, or hover the pill → **Pause 2h** |
 | Open the timeline | **Ctrl + Alt + T**, or hover the pill → **Timeline** |
+| See where the day went | **Ctrl + Alt + I**, or hover the pill → **Insights** |
+| Set or clear a focus | Hover the pill → **Focus** / **Unfocus**, or say *"Jimmy, focus on …"* |
+| Copy or follow up an answer | **Copy** / **Follow up** under the answer |
 | Silence an answer | **Stop voice** on the answer panel |
 | Dismiss a card | Hover it, click **×**. Jimmy then stays quiet for 30 minutes |
 | Quit cleanly | Hover the pill → **Quit**, or **Ctrl + C** in the terminal |
@@ -297,13 +302,14 @@ take it to zero.
 | 4 · Overlay | The pill, cards and answers: transparent, click-through, never steals focus | ✅ |
 | 5 · Recall | Hybrid keyword + meaning search and the timeline | ✅ |
 | + · Voice | "Jimmy, …", spoken answers, conversation, asking back | ✅ |
+| + · Insights | Day map, time per app, usage answers, voice commands | ✅ |
 
 What's next lives in [`SCOPE.md`](SCOPE.md) → *Possible future changes*. The
 biggest one: the model reads text, not pixels, so windows that UI Automation
 can't reach (canvases, video, some apps' main panes) aren't described yet.
 
 <details>
-<summary><b>Checks</b>: 59 assert-based checks, no framework</summary>
+<summary><b>Checks</b>: 65 assert-based checks, no framework</summary>
 
 ```powershell
 .\.venv\Scripts\python.exe tests\test_stage1.py    # 15 · capture, blur, store
@@ -311,6 +317,7 @@ can't reach (canvases, video, some apps' main panes) aren't described yet.
 .\.venv\Scripts\python.exe tests\test_stage3.py    # 11 · trigger gate, no network
 .\.venv\Scripts\python.exe tests\test_stage4.py    #  5 · overlay API and window flags
 .\.venv\Scripts\python.exe tests\test_stage5.py    # 14 · recall, voice, ask-back, demo
+.\.venv\Scripts\python.exe tests\test_stage6.py    #  6 · insights, usage answers, commands
 ```
 
 OpenCV prints `net_impl_backend ... Targets are not supported` on import. It's harmless.

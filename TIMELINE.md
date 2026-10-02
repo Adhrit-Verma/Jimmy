@@ -11,6 +11,7 @@ result whenever either changes.
  [x] 3  Trigger gate + cards    done 2026-09-25: all 5 checks pass, blind-judged (D22)
  [x] 4  Overlay                 built 2026-09-25: Electron pill + cards, pause, hotkey (D23)
  [x] 5  Recall timeline         done 2026-09-25: hybrid search + timeline window, acceptance met (D24)
+ [x] +  Insights + commands     built 2026-10-02: day map, usage answers, voice/typed commands (D31)
 ```
 
 ---
@@ -155,7 +156,7 @@ writes every card from the evidence.)
 
 ---
 
-## Stage 4 — Overlay · **not started · gated**
+## Stage 4 — Overlay · **built (D23)**
 
 Electron, transparent, always-on-top, `WS_EX_TRANSPARENT` click-through,
 per-monitor DPI, no taskbar entry. Pill at top-centre, cards top-right. Must
@@ -165,13 +166,22 @@ include "pause for 2 hours" and a global pause hotkey.
 
 ---
 
-## Stage 5 — Recall timeline · **not started · mostly free**
+## Stage 5 — Recall timeline · **done (D24)**
 
 > **Acceptance:** answers "what was that thing I saw on Tuesday".
 
 Most of it already exists: FTS5 is in place over both screen text and speech, and
 the thumbnails are already blurred, timestamped and on disk. What is missing is
 embeddings for semantic hits and a scrub UI.
+
+---
+
+## Insights and commands · **built 2026-10-02 (D31)**
+
+Local only, from captures already on disk: the Insights tab (day map, apps,
+hours, week), usage questions answered in code, voice/typed commands, shorter
+answers, and the overlay feedback pass. Checks: `tests\test_stage6.py` (6).
+Live acceptance (the human's run-through, list in the D31 hand-off) is open.
 
 ---
 

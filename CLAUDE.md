@@ -15,7 +15,7 @@ and what not to build*. Everything else, including this file, is downstream of i
 **Thesis:** continuous capture is commodity. The product is the gate that decides
 to stay quiet. Build for six good interruptions an evening, not for throughput.
 
-**Current state: all five stages are done, plus voice Q&A (D25):** "Jimmy, …" → an
+**Current state: all five stages are done, plus voice Q&A (D25) and Insights + commands (D31):** "Jimmy, …" → an
 evidence panel and a spoken answer, with no typing needed. Stage 3 (trigger gate) passed its 5-check
 list, blind-judged (D19–D22). Stage 4 is the Electron overlay (D23). Stage 5 is hybrid
 keyword + meaning recall and a timeline window (D24). Remaining work lives in
@@ -81,9 +81,12 @@ cd overlay; npm install; npm run build   # once, and after any change under over
 .\.venv\Scripts\python.exe -m ambient index       # backfill meaning-search vectors (bge-m3)
 .\.venv\Scripts\python.exe -m ambient search "consulting application on Friday"   # keywords + meaning
 .\.venv\Scripts\python.exe tests\test_stage5.py   # 14 checks: recall, voice ask, router, clarify, screen, commands, self-exclusion, demo
+.\.venv\Scripts\python.exe tests\test_stage6.py   # 6 checks: insights estimate, usage answers, commands, time phrases, small thumbs
+.\.venv\Scripts\python.exe -m ambient.insights    # self-check for the time estimate
 ```
 
-Timeline window: pill → **Timeline**, or **Ctrl+Alt+T**. Snapshot it on real data
+Timeline window: pill → **Timeline**, or **Ctrl+Alt+T**; its Insights tab: **Ctrl+Alt+I**
+(`electron . --timeline --insights --snapshot shot.png` renders it). Snapshot it on real data
 by serving the API (see `tests/test_stage5.py` for the hooks) and running
 `electron . --timeline --snapshot shot.png`.
 
@@ -120,6 +123,9 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `jimmy/cards.py` | Stage 3 Tier 2: typed questions to the local model (default) or cloud; code writes the ≤7-word card. |
 | `ambient/ask.py` | D25/D27/D28: wake word, `route()` (chat / screen / recall / clarify / show + follow-ups), `interpret()`, evidence, `Asker` (conversation, ask-back, overlay events), `Voice` (SAPI). |
 | `ambient/demo.py` | D28: `ambient run --demo`, scripted questions through the real Asker, for screen recordings. |
+| `ambient/insights.py` | D31: where the day went: gap-capped time per app, runs, hours, week; usage answers written in code. |
+| `overlay/src/Insights.jsx` | D31: the Insights tab, plus the shared chart pieces (colours, bars, day ribbon) the overlay reuses. |
+| `tests/test_stage6.py` | D31 check: insights, usage answers, commands, time phrases, small thumbnails. |
 | `overlay/src/Answer.jsx` | the answer view: evidence left (best match focused), streamed answer right. |
 | `ambient/recall.py` | Stage 5: chunk + index (bge-m3), meaning search, hybrid (RRF) with furniture filter, timeline API reads. |
 | `overlay/src/Timeline.jsx` | the timeline window: day nav, search, preview, minute scrub strip. |
@@ -258,6 +264,10 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   `scrollIntoView()` returns a Promise. Returned from an effect, React called it
   as a cleanup and the whole overlay went blank (D26). A test now scans
   `overlay/src` for this.
+- **`ELECTRON_RUN_AS_NODE=1` is inherited from VS Code / Claude terminals** and makes
+  the overlay's electron.exe run as plain Node (`Cannot read properties of undefined
+  (reading 'whenReady')`). `bus._start_overlay` strips it; anything else that launches
+  Electron must too.
 - **Electron's console only reaches the terminal when piped.** `bus._start_overlay`
   pipes and relays it; page errors are logged via `console-message`. To debug a
   blank overlay, build unminified (`npx vite build --minify false`) to get real
@@ -287,6 +297,12 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   per call; let code write anything the user sees (D20).
 - **Escaping in shell heredocs mangles backslashes** (`\t` became a tab). Edit
   docs with Windows paths using the Edit tool, not a heredoc'd script.
+- **Usage numbers are estimates.** Frames are change-driven, so each counts until
+  the next, capped at `ACTIVE_GAP_S`. Returning to an unchanged window writes a
+  "switched" row (D31); without it, time kept counting for the app you'd left.
+- **Commands and usage questions route before everything else** (`ask.route`).
+  A new pattern there can swallow real questions: add its negative case to
+  `test_router_commands_and_stats` first.
 - Our own recording process shows up in Windows' mic-in-use registry. Anything
   asking "is someone else on the mic" must skip `sys.executable` /
   `sys._base_executable`, as `audio.other_app_using_mic` does.

@@ -177,8 +177,25 @@ spoken answers (Windows SAPI), typed Ask, Quit.
 |---|---|
 | A dedicated wake-word engine | Whisper's transcripts are enough; revisit if "Jimmy" is missed often or latency bothers. |
 | Neural / Hindi TTS voices | Windows' SAPI voices are English and robotic but need nothing installed. |
-| Follow-up questions in the panel | Each question is answered fresh (history leaked into answers before, D18). |
 | Deleting the 7 self-captured frames | Skipped at read time; deleting data needs the human's say-so. |
+
+---
+
+## Insights and commands (D31) — built, and NOT built
+
+Built: the Insights tab (day map, per-app bars, hour bars, week heatmap, tiles),
+usage questions answered in code (`stats`), voice/typed commands (pause, resume,
+focus, open, hush), shorter prompts, a switch row on returning to an unchanged
+window, small lazy strip thumbnails, and the overlay feedback pass.
+
+| Not built | Why |
+|---|---|
+| Exact time tracking | Frames are change-driven; time is estimated with a 5-min gap cap. Good to the minute. |
+| Categories ("work" vs "social") and goals | Needs the human's own labels; a guessed category would be wrong often. |
+| A topic map (clusters of what you worked on) | Possible with bge-m3 vectors already stored; needs a design for naming clusters without a model writing them. |
+| Earcons (a chime on "Jimmy") | The mic would hear them; Whisper invents text from tones. |
+| Persisting typed questions for suggestions | They're personal; kept in memory for the session only. |
+| Voice resume while paused | Pausing stops the mic by design; resume from the pill, Ctrl+Alt+J, or typing. |
 
 ---
 
@@ -207,8 +224,6 @@ human call before it moves into a stage. When one is adopted, log it in
 - **One warm HTTP/2 connection** to the NVIDIA API, reused, to skip the TLS
   handshake on every call.
 - **Stream every cloud response** into the overlay token by token.
-- **Overlay reacts before the answer does:** listening → thinking → streaming,
-  with animations on `transform`/`opacity` only (GPU-composited, 60 fps).
 - **Battery mode.** On battery, drop OCR and the local LLM, stretch the tick
   interval, and lean on the cloud. Always-on GPU drains a laptop.
 

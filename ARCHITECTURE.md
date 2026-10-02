@@ -100,6 +100,7 @@ every screen reader charges.
 | `screen.py` | frames, change gate, text, thumbnails | pull-based DXGI; Win32 for window identity, UIA only for content |
 | `audio.py` | capture, VAD, transcription | loopback off by default; decoder output filtered for hallucinations |
 | `bus.py` | the one loop, capture-window lifecycle | screen on the calling thread, audio on its own |
+| `insights.py` | where the day went (D31) | estimated from frame times, gap-capped; no model, no new capture |
 | `__main__.py` | `run` / `search` / `stats` / `doctor` | `doctor` reports what actually works on this machine |
 
 ---
@@ -230,7 +231,9 @@ Electron main → IPC → the page. Dismissal flows back: × → IPC → main �
 The timeline window is a second Electron window (same bundle, `#timeline`),
 focusable and frameless. It reads `/timeline`, `/frame`, `/thumb` and
 `/search` through the main process like everything else; the page still has
-no network access.
+no network access. D31 adds an Insights tab (`#insights`, `/insights`), small
+strip thumbnails (`/thumb?w=`), and deep links: `open_view` events and
+`openTimeline(view, {ts, day, q})` reach an open window as a `goto` event.
 
 ## Ask by voice (D25)
 
@@ -246,6 +249,9 @@ no network access.
  unclear ("what's this?") → clarify: ask back, pending + 20 s listen, no wake word needed (D28)
    spoken reply / button (POST /clarify) → interpret → screen or recall, forced
  ambient run --demo → demo.run thread → the same Asker.hear, scripted (D28)
+ D31: route() first checks command() (pause/resume/focus/open/hush → Asker._do → bus
+   actions; a toast, no panel) and usage questions (stats → insights.answer: one line
+   written in code + chart data; no model)
 ```
 
 ## Boundaries for later stages

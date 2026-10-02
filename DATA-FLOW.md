@@ -16,6 +16,9 @@ step can write it.
                                  expires idle/aged windows + their faces  │
  5. signature vs window.last_sig  grey 160x90; < 0.25 % of pixels moved  │
                                  by > 12 levels? ─► STOP (unchanged) ─────┤
+                                 ...unless app/title differs from the     │
+                                 last row: one frame row, last thumb, no  │
+                                 text, no gate (D31, "switched") ────────┤
  6. window_text(hwnd)            wake_accessibility once, then a bounded  │
                                  BFS: <=1200 nodes, depth 30, 0.6 s;      │
                                  button and menu-item names skipped       │
@@ -47,6 +50,17 @@ Three things to notice:
 `FaceStage.process` returns a copy and leaves the source frame untouched, so the
 unblurred frame stays available in memory for consumers that legitimately need it
 (shoulder-surf warning) while never being persistable.
+
+---
+
+## Insights (D31)
+
+Read-only, from `frames` (and counts from `text_blocks`, `audio_segments`,
+`cards`). Each frame lasts until the next one, at most `ACTIVE_GAP_S`; Jimmy's
+own windows are skipped. Pieces → per app, per hour, contiguous runs, top
+titles, switches, longest run; the week heatmap is the same over 7 days.
+Served as `GET /insights?day=`; a usage question uses the same pieces for its
+time window and matches its term against app names and window titles.
 
 ---
 

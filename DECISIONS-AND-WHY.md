@@ -1061,3 +1061,77 @@ rather than guessed at.
 invented pages, rendered by Electron into a throwaway DB
 (`JIMMY_AMBIENT_DATA` / `JIMMY_DATA`). Real captures hold personal data (an
 email address showed up in a live answer), so they never go in the repo.
+
+### D31 — Where the day went, things to do, and shorter answers
+
+**Asked for:** more features that run locally (an on-screen map, infographics of
+the apps used), tighter logic, shorter answers, and a livelier, more responsive UI.
+
+**Built, all from data already captured; no new API, no new dependency:**
+
+- **Insights** (`ambient/insights.py`, the Insights tab of the timeline window,
+  Ctrl+Alt+I): time on screen, time per app, a **day map** (one lane per app),
+  hour-by-hour bars, a week heatmap, longest stretch, app switches, speech heard,
+  new words seen, top windows. The day map is the "on-screen map": where you
+  were, when.
+- **Usage questions answered in code** (`stats` route): *"how was my day?"*,
+  *"how long was I on YouTube?"*, *"what apps did I use yesterday?"*. One line
+  composed from numbers, plus the chart in the overlay. No model, so it's
+  instant, private and can't invent anything. *"And yesterday?"* /
+  *"what about Discord?"* continue it.
+- **Commands** (`command` route): pause [for N], resume, focus on X, clear
+  focus, open timeline/insights, stop / never mind. They come only from the
+  user's mic or typing, like every question. They show as a flash in the pill,
+  not an answer panel. Invariant 1 holds: each is the user's own explicit
+  instruction, and none touches anything outside Jimmy.
+- **Overlay:** listening equalizer, thinking/answering shimmer, an
+  indeterminate bar while working, flashes for every action (paused, focus
+  set, copied), a focus chip with elapsed time, typed suggestions plus recent
+  questions (↑↓/Tab/Enter), Copy / Follow up / Timeline on answers, lightbox
+  arrows, "Show me then" on RECALL cards, two-step Quit. Animations use
+  transform/opacity where possible and respect reduced motion.
+- **Timeline:** a coloured day bar with the selected moment marked, app
+  filter chips, keyboard (←/→, Shift ×10, [ ] days, / search, 1/2 tabs),
+  deep links (`?ts=`, `?day=`, `?q=`) from evidence, cards and the day map.
+
+**How time is estimated.** Frames are written only when the screen changes, so
+each frame counts until the next, capped at `ACTIVE_GAP_S` (300 s). A longer gap
+is away, paused or a sensitive surface and counts as nothing. A fixed cap is
+crude: a page read for 7 minutes without scrolling counts as 5. Good to the
+minute, not the second; the UI says "estimated".
+
+**A capture change that makes the estimate honest.** Switching back to a window
+whose pixels hadn't changed wrote nothing, so the time kept counting for the app
+you'd left. Now that switch writes one frame row reusing the window's last
+(already blurred) thumbnail, with no text and no gate call. An excluded surface
+resets this, so coming back from one is always a switch. Nothing new reaches disk.
+
+**Shorter answers.** Recall: one or two sentences, under 35 words, answer first.
+Screen: under 40 words. Chat: one sentence. The shared system prompt drops "a few
+short sentences" for "one or two". Spoken answers are cut at 220 characters
+(was 320). The ask-back is now "Your screen right now, or something from
+earlier?" Fixed replies are a few words each.
+
+**Logic fixes found on the way:**
+- A stale ask-back (`pending`) survived into unrelated questions and carried its
+  count, so a new unclear question could skip straight to "assume earlier". Any
+  new question now drops it; only a re-ask keeps the count.
+- "Jimmy, stop" / "Jimmy, pause" (one word) were heard as a bare "Jimmy" and
+  started listening for a question instead.
+- "Show me the fifth one" past the end did nothing at all; now it says so.
+- "What is this?" right after a usage answer was being read as a usage
+  follow-up; usage follow-ups now need "and / what about …" or a new time.
+- Time phrases: "an hour ago" / "20 minutes ago" / "2 days ago" mean around
+  then (they fell through to all-time search); "last Friday" on a Friday is a
+  week back, not today; "this month" is the last 30 days.
+
+**Responsiveness.** The timeline strip fetched every 1280-px thumbnail as base64
+(~150–200 KB each) for 120-px tiles. Tiles now load when scrolled near and ask
+for a 320-px copy (`/thumb?w=`), scaled with OpenCV and cached. The thumbnail
+cache is capped.
+
+**Colours.** The reference categorical palette, dark steps. Colour follows the
+app, not its rank: five common apps have fixed slots, others hash into the three
+free ones (two rare apps can share; every mark is also labelled).
+
+Checks: `tests\test_stage6.py` (6).
