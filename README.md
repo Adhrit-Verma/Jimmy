@@ -6,73 +6,178 @@
 
 <p align="center">
   <b>An always-on assistant for Windows 11 that remembers what you saw and heard,<br>
-  answers when you ask, and otherwise stays quiet.</b>
+  answers out loud when you ask, and otherwise stays quiet.</b>
 </p>
 
 <p align="center">
   <img alt="Windows 11" src="https://img.shields.io/badge/Windows%2011-0078D6">
   <img alt="Python 3.12" src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white">
-  <img alt="Electron" src="https://img.shields.io/badge/overlay-Electron%20%2B%20React-47848F?logo=electron&logoColor=white">
+  <img alt="Electron + React" src="https://img.shields.io/badge/overlay-Electron%20%2B%20React-47848F?logo=electron&logoColor=white">
   <img alt="Local first" src="https://img.shields.io/badge/capture-stays%20on%20your%20laptop-2ea44f">
-  <img alt="Status" src="https://img.shields.io/badge/stages-5%20of%205%20done-8b5cf6">
+  <img alt="English and Hindi" src="https://img.shields.io/badge/speaks-English%20%2B%20Hindi-f97316">
+  <br>
+  <img alt="Stages" src="https://img.shields.io/badge/stages-5%20of%205%20done-8b5cf6">
+  <img alt="Checks" src="https://img.shields.io/badge/checks-93%20%2B%20131--utterance%20matrix-0ea5e9">
+  <img alt="Decisions" src="https://img.shields.io/badge/design%20decisions-38%2C%20written%20down-64748b">
+  <img alt="GPU" src="https://img.shields.io/badge/fits-6%20GB%20laptop%20GPU-76B900?logo=nvidia&logoColor=white">
 </p>
 
 <p align="center">
-  <a href="#talk-to-it">Talk to it</a> ·
-  <a href="#what-it-looks-like">Screenshots</a> ·
-  <a href="#quick-start">Quick start</a> ·
-  <a href="#how-it-works">How it works</a> ·
-  <a href="#privacy-by-construction">Privacy</a> ·
-  <a href="#project-docs">Docs</a>
+  <a href="#-a-day-with-jimmy">A day with Jimmy</a> ·
+  <a href="#-talk-to-it">Talk to it</a> ·
+  <a href="#-what-it-looks-like">Screenshots</a> ·
+  <a href="#-quick-start">Quick start</a> ·
+  <a href="#%EF%B8%8F-how-it-works">How it works</a> ·
+  <a href="#%EF%B8%8F-privacy-by-construction">Privacy</a> ·
+  <a href="#-engineering-notes">Engineering notes</a> ·
+  <a href="#-project-docs">Docs</a>
 </p>
 
 ---
 
-> **Continuous capture is commodity. The product is the gate that decides to stay quiet.**
-> Jimmy is built for six good interruptions an evening, not for throughput.
-
-- **It remembers.** Your screen's text and what's said near the mic become one
-  searchable history, with a blurred screenshot for every moment.
-- **You just ask.** Say *"Jimmy, …"* out loud. You don't type, and you don't
-  need to know the right keywords.
-- **It shows its work.** Every answer sits beside the actual moments it came from.
-- **It knows when to shut up.** At most 4 cards an hour, never two within 10
-  minutes. Silence is the default.
-
----
-
-## Talk to it
-
-While `ambient run` is going, say **"Jimmy,"** and then your question.
-
-| You say | Jimmy |
-|---|---|
-| *"Jimmy, what was that fellowship application I saw on Tuesday?"* | Searches Tuesday by meaning, not just words, and answers aloud. The moments it used appear on the left. |
-| *"Jimmy, and when does it close?"* | A follow-up. It remembers the conversation for a few minutes. |
-| *"Jimmy, show me the best match"* | Opens that screenshot full size. *"Open the second one"* works too. |
-| *"Jimmy, what's on my screen?"* | Describes the window in front of you, with a large view of it. |
-| *"Jimmy, what's this?"* | Can't tell if you mean **now** or **earlier**, so it asks, then waits for your answer. No wake word needed for the reply. |
-| *"Jimmy, can you hear me?"* · *"what can you do?"* | Just talks. No search. |
-| *"Jimmy, how was my day?"* · *"how long was I on YouTube?"* | One line from your captures, with a chart: apps, a day map, totals. No model, instant. *"And yesterday?"* follows on. |
-| *"Jimmy, pause for 30 minutes"* · *"focus on the essay"* · *"open insights"* · *"never mind"* | Does it, and says so in the pill. |
-| *"Jimmy, show me yesterday at 3"* · *"show me the McKinsey form"* | Puts it in front of you: the timeline at that moment, or the screenshot opened big. |
-| *"next"* · *"go back"* · *"scroll down"* · *"close it"* · *"only Chrome"* | Right after Jimmy shows you something, no wake word needed. |
-| *"Jimmy, remind me at 5 to call Sam"* · *"…when I open Discord"* | A card (and a spoken reminder) at that time, or when that app comes up. |
-| *"Jimmy, draft a reply to this"* · *"add this to my calendar"* | A draft copied to your clipboard; an event you confirm with *"yes"*. Nothing is sent or saved behind your back. |
-| *"Jimmy, open that page"* · *"curtain"* · *"lift the curtain"* | Reopens the page in your browser; draws or lifts the privacy curtain. |
-| *"Jimmy, scroll down"* · *"close your UI"* · *"copy the text on my screen"* | Scrolls Jimmy's panel, or the window you're on; clears Jimmy off the screen; copies the window's text. |
-| *"Jimmy, speak softer"* · *"louder"* · *"mute your voice"* | Remembered next time. |
-| *"Jimmy, last time I used Discord?"* · *"my routine last month"* | Answered from your captures, instantly. |
-
-Speak English or Hindi. It understands days and times: *today*, *yesterday afternoon*, *on Tuesday*,
-*between 2 and 3*, *the last 20 minutes*, *an hour ago*, *last Friday*. Say just **"Jimmy"** and pause if you
-want to think first. To type instead, press **Ctrl + Alt + Space**.
-
----
-
-## What it looks like
+> ### Continuous capture is commodity. The product is the gate that decides to stay quiet.
+>
+> Jimmy is built for **six good interruptions an evening**, not for throughput.
+> Every card is at most a handful of words, written by code from your own data,
+> and silence is the default.
 
 <table>
+  <tr>
+    <td width="33%" valign="top">
+      <h3>🧠 It remembers</h3>
+      Your screen's text and the speech near your mic become one searchable
+      history, with a blurred screenshot for every moment.
+    </td>
+    <td width="33%" valign="top">
+      <h3>🎙️ You just ask</h3>
+      Say <i>"Jimmy, …"</i> in English or Hindi. No typing, no keywords: it searches
+      by <b>meaning</b>, inside whatever time you name.
+    </td>
+    <td width="33%" valign="top">
+      <h3>🔎 It shows its work</h3>
+      Every answer sits beside the actual moments it came from. Click one to
+      see it full size.
+    </td>
+  </tr>
+  <tr>
+    <td width="33%" valign="top">
+      <h3>🤫 It knows when to shut up</h3>
+      At most 4 cards an hour, never two within 10 minutes, and 30 minutes of
+      quiet after you dismiss one.
+    </td>
+    <td width="33%" valign="top">
+      <h3>🙋 It proposes, you approve</h3>
+      Focus, drafts, calendar events, opening a page: each waits for your
+      <i>"yes"</i>. Nothing is sent or saved behind your back.
+    </td>
+    <td width="33%" valign="top">
+      <h3>🛡️ Private by construction</h3>
+      Faces are blurred before anything touches disk. Banking, password managers and
+      incognito windows are never captured, and that rule shipped before the first run.
+    </td>
+  </tr>
+</table>
+
+---
+
+## 🌅 A day with Jimmy
+
+What an ordinary day looks like with Jimmy running. Every line in bold quotes
+follows a real card or answer format from the code.
+
+| When | What happens |
+|---|---|
+| **09:12**: you sit down | The curtain lifts as soon as the webcam sees you facing the screen. A card: **"Left off: Fellowship essay · draft 2"**. |
+| **11:40**: deep in VS Code | Nothing. Jimmy is capturing, indexing and deciding, silently. Most hours produce no card at all. |
+| **13:31**: you open a form | A **RECALL** card: **"Same Northwind Fellowship as Tue 15:02"**. It linked what's on screen now to a concrete earlier moment. |
+| **14:05**: *"Jimmy, when does it close?"* | It searches Tuesday by meaning, shows the screenshots it used, and answers out loud in about a second. |
+| **15:30**: you drift to YouTube | You told it *"focus on the essay"* earlier, so you get one **FOCUS** nudge. After that it stays quiet for 45 minutes. |
+| **16:02**: you step away | No face for 6 seconds, so the **privacy curtain** comes down over your screen. |
+| **17:00**: the day before a deadline | **"Tomorrow: Northwind Fellowship"**. It noticed a date on a page, and the local model agreed it was a deadline. |
+| **21:00**: wrapping up | One recap card: **"Today: 10h 42m, mostly VS Code"**. Ask *"how was my day?"* to get the chart. |
+
+---
+
+## 💬 Talk to it
+
+While `ambient run` is going, say **"Jimmy,"** and then what you want.
+
+<table>
+<tr><th width="20%">Kind</th><th width="42%">You say</th><th>Jimmy</th></tr>
+<tr>
+  <td><b>Ask about the past</b></td>
+  <td><i>"Jimmy, what was that fellowship application I saw on Tuesday?"</i><br><i>"…and when does it close?"</i></td>
+  <td>Hybrid keyword + meaning search inside that day. The evidence goes on the left, a spoken answer on the right, and follow-ups work for 3 minutes.</td>
+</tr>
+<tr>
+  <td><b>Ask about now</b></td>
+  <td><i>"Jimmy, what's on my screen?"</i></td>
+  <td>Reads the window in front of you and answers from that alone, never from an earlier answer.</td>
+</tr>
+<tr>
+  <td><b>When it's unclear</b></td>
+  <td><i>"Jimmy, what's this?"</i></td>
+  <td>Asks whether you mean <b>now</b> or <b>earlier</b>, then waits. Your reply needs no wake word.</td>
+</tr>
+<tr>
+  <td><b>Your time</b></td>
+  <td><i>"how was my day?"</i> · <i>"how long was I on YouTube?"</i> · <i>"last time I used Discord?"</i> · <i>"my routine last month"</i></td>
+  <td>Instant, with no model involved: one line written by code, plus a chart. <i>"And yesterday?"</i> follows on.</td>
+</tr>
+<tr>
+  <td><b>Show me</b></td>
+  <td><i>"show me the best match"</i> · <i>"show me yesterday at 3"</i> · <i>"open insights"</i></td>
+  <td>Opens the screenshot full size, or the timeline at that moment.</td>
+</tr>
+<tr>
+  <td><b>Hands-free</b></td>
+  <td><i>"next"</i> · <i>"go back"</i> · <i>"scroll down"</i> · <i>"only Chrome"</i> · <i>"close it"</i></td>
+  <td>No wake word needed for 45 s after Jimmy shows you something.</td>
+</tr>
+<tr>
+  <td><b>Reminders</b></td>
+  <td><i>"remind me at 5 to call Sam"</i> · <i>"…when I open Discord"</i></td>
+  <td>A card and a spoken reminder, at that time or when that app comes up.</td>
+</tr>
+<tr>
+  <td><b>Proposals</b></td>
+  <td><i>"draft a reply to this"</i> · <i>"add this to my calendar"</i> · <i>"open that page"</i></td>
+  <td>A draft goes to your clipboard; an event goes to your calendar app, which asks once more; a page opens in your browser. Nothing goes further without your <i>"yes"</i>.</td>
+</tr>
+<tr>
+  <td><b>Control</b></td>
+  <td><i>"pause for 30 minutes"</i> · <i>"focus on the essay"</i> · <i>"curtain"</i> · <i>"close your UI"</i> · <i>"copy the text on my screen"</i></td>
+  <td>Does it and confirms in the pill.</td>
+</tr>
+<tr>
+  <td><b>Voice & face</b></td>
+  <td><i>"speak softer"</i> · <i>"mute your voice"</i> · <i>"remember my face"</i> · <i>"forget my face"</i></td>
+  <td>Your settings are remembered. Face enrolment is guided on screen and takes about 20 seconds.</td>
+</tr>
+<tr>
+  <td><b>Just chat</b></td>
+  <td><i>"can you hear me?"</i> · <i>"what can you do?"</i></td>
+  <td>Just talks, without searching your history.</td>
+</tr>
+</table>
+
+It understands times like *today*, *yesterday afternoon*, *on Tuesday*, *between 2 and 3*,
+*the last 20 minutes*, *an hour ago* and *last Friday*. Say just **"Jimmy"** and pause if you want to
+think first. To type instead, press **Ctrl + Alt + Space**. If a request doesn't match any rule, the
+cloud model picks one of Jimmy's own tools, asks you a short question back, or says plainly that it can't.
+
+---
+
+## 📸 What it looks like
+
+<table>
+  <tr>
+    <td colspan="2" valign="top">
+      <img src="docs/img/how-was-my-day.png" alt="Jimmy answering 'how was my day?': a chart of time per app on the left, a one-line spoken answer on the right, floating over an essay in Notion"><br>
+      <b>"Jimmy, how was my day?"</b> The answer is instant and no model is involved. Code writes the line,
+      and the chart shows where the time went. Click any block on the ribbon to jump to that moment.
+    </td>
+  </tr>
   <tr>
     <td width="50%" valign="top">
       <img src="docs/img/ask-back.png" alt="Jimmy asking: do you mean what's on your screen right now, or something you saw earlier?"><br>
@@ -90,35 +195,43 @@ want to think first. To type instead, press **Ctrl + Alt + Space**.
     <td width="50%" valign="top">
       <img src="docs/img/screen-now.png" alt="Jimmy describing the article on screen right now"><br>
       <b>What's on my screen.</b> It reads the window you're on and
-      answers from that alone, never from an earlier answer.
+      answers from that alone.
     </td>
     <td width="50%" valign="top">
       <img src="docs/img/show-me.png" alt="An evidence screenshot opened full size"><br>
-      <b>See the moment.</b> "Show me the best match" (or a click) opens the
+      <b>See the moment.</b> <i>"Show me the best match"</i> (or a click) opens the
       evidence full size.
     </td>
   </tr>
   <tr>
     <td colspan="2" valign="top">
       <img src="docs/img/timeline.png" alt="The timeline window: search results, a preview, and a minute-by-minute strip"><br>
-      <b>The timeline</b> (<b>Ctrl + Alt + T</b>). Your day as a strip of blurred screenshots,
-      one per minute. Search it the way you remember it: <i>"fellowship deadline"</i>
-      finds the page even if those words never appeared together.
+      <b>The timeline</b> (<b>Ctrl + Alt + T</b>). Your day as a strip of blurred screenshots.
+      Search it the way you remember it: <i>"fellowship deadline"</i> finds the page even if those
+      words never appeared together.
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" valign="top">
+      <img src="docs/img/insights.png" alt="The Insights tab: tiles for time on screen, most used app, longest stretch, app switches, speech heard and new text; a day map with one lane per app; time per app; hour-by-hour bars; a week heatmap; and the titles you spent most time on"><br>
+      <b>Insights</b> (<b>Ctrl + Alt + I</b>). Where the day went: a day map with one lane per app,
+      hour-by-hour bars, a week heatmap, and the pages you spent longest on. All of it is estimated
+      from captures already on disk, with no new tracking and no model.
     </td>
   </tr>
 </table>
 
-<sub>Every screenshot above is the real overlay and the real model, run on an invented set
-of pages ("Northwind Fellowship", "Alex Rivera"), so no personal data appears.</sub>
+<sub>Every screenshot is the real overlay UI showing invented pages and data ("Northwind
+Fellowship", "Alex Rivera"), so no personal data appears.</sub>
 
 ---
 
-## Quick start
+## 🚀 Quick start
 
-**You need:** Windows 11, an NVIDIA GPU, **Python 3.12** (not 3.14: the ML
-wheels don't exist there yet), Node.js, and [Ollama](https://ollama.com).
+**You need:** Windows 11, an NVIDIA GPU (built on a 6 GB RTX 4050), **Python 3.12**
+(not 3.14, which the ML wheels don't support yet), Node.js, and [Ollama](https://ollama.com).
 
-**1. Install.**
+**1 · Install**
 
 ```powershell
 cd C:\Code\Jimmy
@@ -127,38 +240,39 @@ py -3.12 -m venv .venv
 cd overlay; npm install; npm run build; cd ..
 ```
 
-**2. Pull the two local models.** One decides cards; the other powers meaning search.
+**2 · Pull the two local models.** One decides cards; the other powers meaning search.
 
 ```bash
 ollama pull qwen2.5:3b
-```
-
-```bash
 ollama pull bge-m3
 ```
 
-**3. Add a key for spoken answers** (optional). It's free at
-[build.nvidia.com](https://build.nvidia.com): open any model, click **Get API
-Key**, then:
+**3 · Add a key for spoken answers** (optional). It's free at
+[build.nvidia.com](https://build.nvidia.com): open any model, click **Get API Key**, then:
 
 ```bash
 setx NVIDIA_API_KEY "nvapi-your-key-here"
 ```
 
-Without a key Jimmy still works, offline. Each answer shows what it *found*,
-which is exactly what would have been sent to the model.
+Without a key, Jimmy still works offline. Each answer shows what retrieval *found*, which is
+exactly what would have been sent to the model.
 
-**4. Check, then run.**
+**4 · Check, then run**
 
 ```powershell
 .\.venv\Scripts\python.exe -m ambient doctor   # what actually works on this machine
 .\.venv\Scripts\python.exe -m ambient run      # capture + overlay, until you quit
 ```
 
-`doctor` asks you to speak for 3 seconds to prove the mic hears you. Whisper
-downloads its weights on the first run and caches them after that.
+`doctor` asks you to speak for 3 seconds to prove the mic hears you. Whisper downloads its
+weights on the first run and caches them. Only one `ambient run` can go at a time; a second one
+says so and exits.
 
-### Everyday controls
+> **Just want to see the UI?** In `overlay\`, run `.\node_modules\electron\dist\electron.exe . --demo`
+> to see the pill and cards without Python. `ambient run --demo` plays a spoken, 3-minute scripted
+> tour that uses real capture, search, model and voice.
+
+### ⌨️ Everyday controls
 
 | Action | How |
 |---|---|
@@ -166,16 +280,16 @@ downloads its weights on the first run and caches them after that.
 | Pause capture (and resume) | **Ctrl + Alt + J**, or hover the pill → **Pause 2h** |
 | Open the timeline | **Ctrl + Alt + T**, or hover the pill → **Timeline** |
 | See where the day went | **Ctrl + Alt + I**, or hover the pill → **Insights** |
-| Set or clear a focus | Hover the pill → **Focus** / **Unfocus**, or say *"Jimmy, focus on …"* |
-| Copy or follow up an answer | **Copy** / **Follow up** under the answer |
 | Privacy curtain | Draws itself when you walk away. By hand: **Ctrl + Alt + L** |
-| Let the curtain know you | Say *"Jimmy, remember my face"* and follow the on-screen guide (about 20 s). Then someone else at your screen brings the curtain down. Kept as an encrypted template on this PC, never a photo. *"Forget my face"* deletes it |
-| Silence an answer | **Stop voice** on the answer panel |
-| Dismiss a card | Hover it, click **×**. Jimmy then stays quiet for 30 minutes |
+| Set or clear a focus | Hover the pill → **Focus** / **Unfocus**, or say *"Jimmy, focus on …"* |
+| Let the curtain know you | *"Jimmy, remember my face"*, then follow the on-screen guide (~20 s) |
+| Copy or follow up an answer | **Copy** / **Follow up** under the answer |
+| Silence an answer | The speaker button on the answer panel |
+| Dismiss a card | Hover it and click **×**. Jimmy then stays quiet for 30 minutes |
 | Quit cleanly | Hover the pill → **Quit**, or **Ctrl + C** in the terminal |
 
 <details>
-<summary><b>More commands</b>: search, chat, focus, replay, demo mode</summary>
+<summary><b>More commands</b>: search, chat, focus, replay, deadlines, demo</summary>
 
 ```powershell
 # Search your history (keywords + meaning, within any time you name)
@@ -187,128 +301,196 @@ downloads its weights on the first run and caches them after that.
 .\.venv\Scripts\python.exe -m jimmy chat         # /context shows exactly what was sent
 .\.venv\Scripts\python.exe -m jimmy ask "what was I reading yesterday?"
 .\.venv\Scripts\python.exe -m jimmy remember "standup is at 10:30 on weekdays"
-.\.venv\Scripts\python.exe -m jimmy doctor
+.\.venv\Scripts\python.exe -m jimmy doctor       # key, model, endpoint, data
 
 # Cards
 .\.venv\Scripts\python.exe -m jimmy focus "finish the fellowship essay"   # enables FOCUS nudges
-.\.venv\Scripts\python.exe -m ambient replay     # what the gate would have said over your history
+.\.venv\Scripts\python.exe -m ambient replay --dry   # what the rules would consider, free
+.\.venv\Scripts\python.exe -m ambient replay         # what the gate would have said over your history
+.\.venv\Scripts\python.exe -m ambient deadlines --scan --dry   # date lines in your history, no model
 
 # Variations
 .\.venv\Scripts\python.exe -m ambient run --no-overlay        # terminal only
+.\.venv\Scripts\python.exe -m ambient run --no-cards          # no trigger-gate cards
 .\.venv\Scripts\python.exe -m ambient run --seconds 60 --no-audio
 ```
 
-**Recording a demo.** `ambient run --demo` walks through a scripted tour in
-about 3 minutes, spoken aloud: a card, a chat, a question about the past, the
-screenshot opened big, a follow-up, *"what's this?"* with Jimmy asking back, and
-*"what can you do?"*. Only the questions are scripted. Capture, search, the
-model and the voice are all real. Put the window you want described in front
-before the *"what's this?"* step. To use your own script: `--demo my_script.txt`
-(the format is at the top of `ambient/demo.py`).
+**Recording a demo.** `ambient run --demo` runs a scripted tour of about 3 minutes, spoken aloud:
+a card, a chat, a question about the past, the screenshot opened big, a follow-up, *"what's this?"*
+with Jimmy asking back, and *"what can you do?"*. Only the questions are scripted; capture, search,
+the model and the voice are all real. Bring the window you want described to the front before the
+*"what's this?"* step. To use your own script, run `--demo my_script.txt` (the format is described at
+the top of `ambient/demo.py`).
 
 </details>
 
 ---
 
-## How it works
+## ⚙️ How it works
 
 ```mermaid
 flowchart LR
   subgraph laptop["Your laptop: capture never leaves it"]
     direction LR
-    scr["Screen<br/>DXGI frames + UI text"] --> gate0{"Exclusions<br/>+ face blur"}
+    scr["Screen<br/>DXGI frames + UI Automation text"] --> gate0{"Exclusions<br/>+ face blur"}
     mic["Microphone<br/>Whisper large-v3-turbo"] --> gate0
+    cam["Webcam<br/>face count + head pose"] --> curtain["Privacy curtain"]
     gate0 --> db[("SQLite + FTS5<br/>bge-m3 vectors<br/>blurred thumbnails")]
     db --> cards["Trigger gate<br/>rules, then qwen2.5:3b"]
-    db --> ask["Voice Q&A<br/>route: chat / screen / recall / ask back"]
+    db --> own["Jimmy's own cards<br/>resume · remind · deadline · recap"]
+    db --> ask["Voice Q&A<br/>router: chat / screen / recall / stats / ask back"]
     cards --> ui["Overlay<br/>Electron + React"]
+    own --> ui
     ask --> ui
+    curtain --> ui
   end
   ask -. "only the evidence it shows you" .-> llm[("Cloud model<br/>NVIDIA Nemotron")]
 ```
 
-- **Capture is gated.** A 160×90 change detector skips about half of all ticks.
-  Text comes from UI Automation, with Chromium's accessibility tree woken up so
-  browsers and Electron apps are readable.
-- **Search is hybrid.** Keyword matches (FTS5) and meaning matches (bge-m3,
-  local) are fused, so *"consulting application"* finds a page titled
-  "McKinsey Forward".
-- **The model never writes a card.** It answers yes/no questions. Code writes
-  the card from words that exist in the evidence and real timestamps, so a card
-  can't contain anything invented.
-- **It's quick.** Meaning search takes about 0.5 s, spoken answers start at the
-  first finished sentence, and the local models stay warm. Ollama is always
-  addressed as `127.0.0.1`, never `localhost`, which costs ~2.4 s per connection
-  on Windows.
-- **One LLM client** (`jimmy/llm.py`) serves the whole repo. Captured text only
-  reaches it inside a `<context>` block, below a rule to ignore any instructions
-  found there.
+### The life of a question
 
-The details are in [`ARCHITECTURE.md`](ARCHITECTURE.md) and [`DATA-FLOW.md`](DATA-FLOW.md).
+```mermaid
+sequenceDiagram
+  autonumber
+  actor You
+  participant W as Whisper (local)
+  participant R as Router
+  participant S as Hybrid search (local)
+  participant O as Overlay
+  participant M as Cloud model
+  participant V as Windows voice
+  You->>W: "Jimmy, what was that fellowship form on Tuesday?"
+  W->>R: transcript (stored as a command, never as captured speech)
+  R->>O: "Thinking…" right away
+  R->>S: Tuesday + the meaning of "fellowship form"
+  S-->>O: evidence: blurred screenshots + excerpts (~0.5 s)
+  R->>M: the question + that same evidence, in a context block
+  M-->>O: the answer streams in (~1 s to first word)
+  O->>V: speech starts at the first finished sentence
+  Note over You,V: The mic comes back 0.25 s after Jimmy stops talking
+```
+
+- **The screen becomes text immediately.** A 6 GB GPU can't fit a vision model alongside Whisper,
+  so Jimmy reads exact strings through **UI Automation**, and wakes Chromium's accessibility tree so
+  browsers and Electron apps are readable.
+- **Capture is gated.** A 160×90 change detector skips about half of all 2-second ticks, yet catches a
+  one-message chat scroll. Text seen in 3 or more capture windows (sidebars, your own name, buttons)
+  counts as furniture, not content.
+- **Search is hybrid.** Keyword matches (FTS5) and meaning matches (bge-m3, local) are fused with
+  reciprocal-rank fusion, so *"consulting application"* finds a page titled "McKinsey Forward".
+- **Cards are decided in two tiers.** Local rules decide whether to look at all. The local
+  **qwen2.5:3b** model answers one typed yes/no question, a RECALL "yes" gets a second opinion from
+  the cloud, and then **code writes the line** from words in the evidence and real timestamps. A
+  card can't contain anything invented.
+- **Commands and usage questions are answered first, without a model.** Pause, focus, reminders,
+  "how long was I on…": the router handles these in code, instantly. A Hindi request makes one model
+  call that returns both the English and the tool to use.
+- **There's one LLM client in the repo** (`jimmy/llm.py`). Captured text reaches it only inside a
+  `<context>` block, below a rule to ignore any instructions found there, because a web page saying
+  *"ignore previous instructions"* is exactly the kind of thing that gets captured.
+
+Read the details in [`ARCHITECTURE.md`](ARCHITECTURE.md) and [`DATA-FLOW.md`](DATA-FLOW.md).
+
+### 📏 By the numbers
+
+Measured on the development laptop (Ryzen 7 7840HS, RTX 4050 6 GB):
+
+| What | Measured |
+|---|---|
+| Screen frame grab (DXGI) | **7–14 ms** |
+| Window text (UI Automation) | **317 nodes / 4.8k chars in ~230 ms**, budget 0.6 s |
+| Speech to text (Whisper large-v3-turbo) | **4 s of audio in 0.6 s**, ~1 GB VRAM |
+| Hybrid search over your history | **0.5 s** (2.8 s before the performance pass) |
+| First spoken word of an answer | **~1 s** |
+| Card decision (qwen2.5:3b, local) | **~1 s** per question |
+| Replay of 1.18 h of real history | **5 candidates → 1 card** |
+| Tier 2 precision against blind judges | **0.83** (the bar was 0.80) |
+| Face detection, single-threaded | **20 ms** CPU at 640 px, vs 65 ms on OpenCV's default thread pool |
 
 ---
 
-## Privacy by construction
+## 🛡️ Privacy by construction
 
-These are absent code paths, not settings that happen to be off.
+These are **absent code paths**, not settings that happen to be off.
 
 | Stored | Never stored |
 |---|---|
 | Window app and title | Any raw, unblurred frame |
-| UI text and OCR text | Face embeddings of anyone but you, or any face image |
-| Blurred thumbnails | Anything from an excluded surface |
-| Transcribed speech | Raw audio: only the transcript survives |
+| UI text and OCR text | Anything from an excluded surface |
+| Blurred thumbnails | Raw audio: only the transcript survives |
+| Transcribed speech | Face embeddings of anyone but you, or any face image |
 | Face **count** per frame | Face identity, names, cross-day links |
-| Your own face template, only if you say *"remember my face"* (DPAPI-encrypted, this PC only) | Anyone else's face, or any photo of you |
+| Your own face template, only if you say *"remember my face"* (DPAPI-encrypted, this PC only) | A `faces` table or a `people` table. Neither exists, and a test asserts they don't |
 
-- **Faces are blurred before anything is written.** The clean frame exists only
-  inside one tick. The blur is verified against the detector, not by eye: a test
-  re-runs face detection on the saved JPEG and requires zero hits. There is no
-  `faces` table and no `people` table. That absence is the design.
-- **Excluded surfaces are never captured:** password managers, banking and
-  payment sites, private/incognito windows, and Jimmy's own windows. Add your own
-  in `data\exclusions.txt`, one per line:
+- **Faces are blurred before anything is written.** The clean frame exists only inside one tick.
+  The blur is verified against the detector, not by eye: a test re-runs face detection on the saved
+  JPEG and requires zero hits. Faces are looked for at the full 1280 px thumbnail size, so small
+  ones are caught too.
+- **Excluded surfaces are never captured:** password managers, banking and payment sites,
+  private/incognito windows, and Jimmy's own windows. Add your own in `data\exclusions.txt`,
+  one per line:
   ```
   exe:mysecret.exe
   title:payroll
   url:internal\.example\.com
   ```
-- **The mic pauses on sensitive screens,** so an OTP read aloud never reaches a
-  transcript. The one exception: if another app (Teams, Zoom, Meet) is using the
-  mic, recording continues so a meeting isn't lost.
-- **Recording others is off.** System audio (the far end of a call) is not
-  captured. That's a consent problem, not a feature flag.
-- **What leaves the laptop:** only the evidence shown with an answer (at most
-  6,000 characters, and only with a key set), plus the rare RECALL card
-  candidates the cloud double-checks. Set `JIMMY_RECALL_VERIFY=none` to keep
-  cards fully local.
+- **The mic pauses on sensitive screens,** so an OTP read aloud never reaches a transcript. The one
+  exception: if another app (Teams, Zoom, Meet) is using the mic, recording continues so a meeting
+  isn't lost.
+- **Recording others is off.** System audio (the far end of a call) is not captured. That's a
+  consent problem, not a feature flag.
+- **The webcam recognises only you, and only if you ask.** By default it counts faces and reads head
+  direction for the curtain. After *"remember my face"*, it compares faces with your encrypted
+  template. Every other face's vector exists for one comparison and is dropped. No frame is kept.
+- **Jimmy proposes; you approve.** The only input it ever sends to another app is a scroll, and only
+  when you ask for one. It never clicks or types for you.
+- **What leaves the laptop:** only the evidence shown with an answer (at most 6,000 characters, and
+  only with a key set), plus the rare RECALL candidates the cloud double-checks. Set
+  `JIMMY_RECALL_VERIFY=none` to keep cards fully local.
 
-A face embedding is a biometric template under India's DPDP Act whether or not
-it's persisted. This design shrinks that exposure substantially; it does not
-take it to zero. The one stored template is yours, created only on request, and
-*"forget my face"* deletes it.
+A face embedding is a biometric template under India's DPDP Act whether or not it's persisted.
+This design shrinks that exposure substantially; it does not take it to zero. The one stored
+template is yours, created only on request, and *"forget my face"* deletes it.
 
 <details>
 <summary><b>Storage, microphone and tuning</b></summary>
 
-- **Storage.** Thumbnails are 1280 px so they're readable when opened big, about
-  80–88 KB each: roughly 30–85 MB per active hour, or 90–250 GB a year at 8 hours
-  a day. (The older 25.8 MB/h figure was for 640 px thumbnails.) It's all on your
+- **Storage.** Thumbnails are 1280 px so they're readable when opened big, at about 80–88 KB each.
+  That's roughly 30–85 MB per active hour, or 90–250 GB a year at 8 hours a day. It's all on your
   own disk, and there's no retention policy yet.
-- **Which microphone.** Capture uses the Windows default input. To pick another,
-  set `MIC_DEVICE` in `ambient/config.py` to part of its name, for example
-  `"Microphone Array"`. A quiet room can read as near-silent because of noise
-  suppression, so test by speaking during `ambient doctor`.
-- **OCR is optional.** Without the Tesseract binary, canvas-rendered apps and
-  video contribute no text. Normal apps are unaffected.
-- **Every tunable** lives in [`ambient/config.py`](ambient/config.py), with its
-  reasoning next to it.
+- **Which microphone.** Capture uses the Windows default input. To pick another, set `MIC_DEVICE`
+  in `ambient/config.py` to part of its name, for example `"Microphone Array"`. A quiet room can
+  read as near-silent because of noise suppression, so test by speaking during `ambient doctor`.
+- **OCR is optional.** Without the Tesseract binary, canvas-rendered apps and video contribute no
+  text. Normal apps are unaffected.
+- **Every tunable** lives in [`ambient/config.py`](ambient/config.py), with its reasoning next to it.
 
 </details>
 
 ---
 
-## Status
+## 🔬 Engineering notes
+
+Every non-obvious call is written down with its evidence in
+[`DECISIONS-AND-WHY.md`](DECISIONS-AND-WHY.md), 38 so far. A few worth knowing:
+
+| Finding | What it changed |
+|---|---|
+| **Chromium hides its UI from screen readers until one asks.** Cold, an Electron window exposed 24 nodes; once woken, 317. | Jimmy sends the standard accessibility signal once per window. Without it, browsers would be unreadable. ([D3](DECISIONS-AND-WHY.md#d3--wake-chromiums-accessibility-engine-deliberately)) |
+| **A blur that looks strong can still be re-detected.** The first version fooled the eye but not the face detector. | Blur strength was set by sweeping it against the detector, after the JPEG round-trip. ([D7](DECISIONS-AND-WHY.md#d7--blur-strength-set-by-re-detection-not-by-eye)) |
+| **Whisper invents text from silence.** It decoded silence as "you" and white noise as "Thanks." | Segments are filtered on loudness, no-speech probability, confidence and a blocklist. ([D5](DECISIONS-AND-WHY.md#d5--whisper-output-is-filtered-not-trusted)) |
+| **A 64-bit dhash was blind to text.** It missed 7 of 8 one-message chat scrolls. | It was replaced with a pixel-delta gate tuned on real dark-theme scrolls. ([D18](DECISIONS-AND-WHY.md#d18--fixes-from-the-first-real-hour)) |
+| **Small models copy prompt examples.** qwen2.5:7b answered five candidates with the prompt's example line. | Models answer one yes/no question at a time, and code writes everything you see. ([D20](DECISIONS-AND-WHY.md#d20--card-decisions-run-on-a-local-model-ollama-the-model-picks-code-writes)) |
+| **Screen furniture looks like content.** Every false RECALL rested on a sidebar or a friend list. | Lines seen in 3 or more capture windows are ignored, and the gate was closed by blind judges. ([D22](DECISIONS-AND-WHY.md#d22--stage-3-closed-on-recorded-data-checked-by-blind-ai-judges)) |
+| **`useEffect(() => el.scrollIntoView())` blanked the overlay.** In this Chromium it returns a Promise, which React then called as a cleanup. | A test scans the overlay source for effects without braces. ([D26](DECISIONS-AND-WHY.md#d26--the-overlay-blanked-on-the-second-answer-a-promise-returned-from-an-effect)) |
+| **`localhost` costs 2.4 s per connection on Windows.** It tries IPv6 first, but Ollama listens on IPv4. | Every local call uses `127.0.0.1` with kept-open clients, and search went from 2.8 s to 0.5 s. ([D38](DECISIONS-AND-WHY.md#d38--performance-with-no-feature-or-accuracy-given-up)) |
+
+The performance pass (D38) was checked for **equivalence on a frozen copy of the real database**:
+43 read paths gave the same results before and after.
+
+---
+
+## 🗺️ Status and roadmap
 
 | Stage | What it delivers | |
 |---|---|:-:|
@@ -320,15 +502,17 @@ take it to zero. The one stored template is yours, created only on request, and
 | + · Voice | "Jimmy, …", spoken answers, conversation, asking back | ✅ |
 | + · Insights | Day map, time per app, usage answers, voice commands | ✅ |
 | + · Autonomy | Its own cards, reminders, deadlines, hands-free UI, privacy curtain | ✅ |
+| + · First real session | Routing, tool picking, ask-back, scroll, volume, decluttering | ✅ |
 | + · Polish | Remember my face, English + Hindi, a performance pass | ✅ |
+| **Next** · Hands on the controls | Mouse and keyboard through UI Automation, with a visible "Jimmy is driving" mode, plan approval and a hard stop before anything irreversible | 🧭 designed |
 
-Next up is mouse and keyboard control, which waits on two design decisions
-([`TIMELINE.md`](TIMELINE.md) → Next). More lives in [`SCOPE.md`](SCOPE.md) → *Possible future changes*. The
-biggest one: the model reads text, not pixels, so windows that UI Automation
-can't reach (canvases, video, some apps' main panes) aren't described yet.
+The next step is designed but waits on two decisions: how much approval to require, and which apps
+come first ([`TIMELINE.md`](TIMELINE.md) → Next). Other ideas are in [`SCOPE.md`](SCOPE.md) →
+*Possible future changes*. The biggest known gap: the model reads text, not pixels, so windows
+UI Automation can't reach (canvases, video) aren't described yet.
 
 <details>
-<summary><b>Checks</b>: 93 assert-based checks (plus a 131-utterance command matrix), no framework</summary>
+<summary><b>Checks</b>: 93 assert-based checks and a 131-utterance command matrix, no test framework</summary>
 
 ```powershell
 .\.venv\Scripts\python.exe tests\test_stage1.py    # 15 · capture, blur, store
@@ -342,15 +526,45 @@ can't reach (canvases, video, some apps' main panes) aren't described yet.
 .\.venv\Scripts\python.exe tests\test_face.py      #  6 · remember my face
 .\.venv\Scripts\python.exe tests\test_commands.py  #  4 · 131 commands, talk that mustn't trigger, a drill
 .\.venv\Scripts\python.exe tests\eval_tools.py     #  live: the model's tool pick, English + Hindi
+.\.venv\Scripts\python.exe tests\equiv_db.py snap before   # then change code, snap after, diff
 ```
 
 OpenCV prints `net_impl_backend ... Targets are not supported` on import. It's harmless.
 
 </details>
 
+<details>
+<summary><b>Project layout</b></summary>
+
+```
+Jimmy/
+├── ambient/            the ambient layer: capture, redaction, gate, voice, overlay API
+│   ├── bus.py            the one loop; capture-window lifecycle
+│   ├── screen.py         DXGI capture, change gate, UI Automation text, thumbnails
+│   ├── audio.py          WASAPI capture, VAD, Whisper + hallucination filtering
+│   ├── redact.py         exclusions + the ephemeral face stage (the sensitive file)
+│   ├── db.py             SQLite + FTS5 store
+│   ├── recall.py         chunking, bge-m3 vectors, hybrid search
+│   ├── gate.py           Tier 1 trigger rules and replay
+│   ├── ask.py            wake word, router, evidence, conversation, Windows voice
+│   ├── proactive.py      resume / suggest / remind / deadline / recap cards
+│   ├── insights.py       where the day went, estimated from captures
+│   ├── presence.py       webcam presence for the privacy curtain
+│   ├── api.py            127.0.0.1 API for the overlay (stdlib only)
+│   └── config.py         every tunable, with its reasoning
+├── jimmy/              the core: the one LLM client, memory, card engine
+├── overlay/            Electron + React + Tailwind + Motion: pill, cards, answers, timeline, insights
+├── models/             YuNet + SFace ONNX (small, pinned, committed on purpose)
+├── tests/              assert-based checks, no framework
+├── docs/img/           README screenshots (invented data only)
+└── data/               your captures; never committed
+```
+
+</details>
+
 ---
 
-## Project docs
+## 📚 Project docs
 
 | Doc | What's in it |
 |---|---|
@@ -361,3 +575,5 @@ OpenCV prints `net_impl_backend ... Targets are not supported` on import. It's h
 | [`SCOPE.md`](SCOPE.md) | What's in, what's out, what's owed |
 | [`TIMELINE.md`](TIMELINE.md) | Stage status and acceptance gates |
 | [`CLAUDE.md`](CLAUDE.md) | Orientation for AI coding sessions; verified environment facts |
+
+<p align="center"><sub>Built for one laptop and one person.</sub></p>
