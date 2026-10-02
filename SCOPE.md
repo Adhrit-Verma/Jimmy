@@ -227,7 +227,7 @@ no personal identifiers read aloud, quieter remembered voice, a compact idle pil
 | Not built | Why |
 |---|---|
 | Clicking or typing into other apps | Scroll is the one input Jimmy sends, on request. Anything more needs its own approval design. |
-| Full Hindi/Urdu command understanding | Only the command words Whisper produced are mapped; a translation step would cost a model call per line. |
+| Hindi answers spoken in Hindi | Hindi requests are understood (D36), but the Windows voice is English, so answers are in English. |
 | Tool picking for questions | Questions route by rules; only unrecognised instructions pay for a model call. |
 
 ---

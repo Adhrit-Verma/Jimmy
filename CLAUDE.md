@@ -86,7 +86,7 @@ cd overlay; npm install; npm run build   # once, and after any change under over
 .\.venv\Scripts\python.exe -m ambient.insights    # self-check for the time estimate
 .\.venv\Scripts\python.exe tests\test_stage7.py   # 11 checks: nav, reminders, deadlines, offers, curtain, presence
 .\.venv\Scripts\python.exe -m ambient deadlines --scan --dry   # date lines in history, no model
-.\.venv\Scripts\python.exe tests\test_stage8.py   # 6 checks: the first real session's misses, tools, ask-back
+.\.venv\Scripts\python.exe tests\test_stage8.py   # 7 checks: the first real session's misses, tools, ask-back
 ```
 
 Only one `ambient run` at a time (D35): a second one exits with a message.
@@ -228,8 +228,9 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   with `MIC_DEVICE` in `ambient/config.py`.
 - **Storage with the D18 gate:** 25.8 MB/h (~6.2 GB/month at 8 h/day), ~49 % of
   ticks skipped. Replay of 1.18 h real history: 5 candidates → 2 cards (D19).
-- **Whisper is `large-v3-turbo`** (multilingual, auto-detect): ~1 GB VRAM, 4 s of
-  audio in 0.6 s. Real Hindi accuracy is unverified (D19).
+- **Whisper is `large-v3-turbo`**, restricted to English and Hindi (D36): ~1 GB VRAM,
+  4 s of audio in 0.6 s. Real Hindi accuracy is unverified (D19). Hindi requests
+  are understood via one model call that also returns the English.
 - **Ollama 0.32.13 is installed** with qwen2.5:3b / 7b / 14b. **qwen2.5:3b decides
   cards** (D20): ~1 s per question, 3.3 GB VRAM, ~10 s cold load (idle unload
   after ~5 min). 7B was slower and worse; 14B doesn't fit in VRAM.

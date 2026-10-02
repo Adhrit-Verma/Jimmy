@@ -64,7 +64,7 @@ While `ambient run` is going, say **"Jimmy,"** and then your question.
 | *"Jimmy, speak softer"* · *"louder"* · *"mute your voice"* | Remembered next time. |
 | *"Jimmy, last time I used Discord?"* · *"my routine last month"* | Answered from your captures, instantly. |
 
-It understands days and times: *today*, *yesterday afternoon*, *on Tuesday*,
+Speak English or Hindi. It understands days and times: *today*, *yesterday afternoon*, *on Tuesday*,
 *between 2 and 3*, *the last 20 minutes*, *an hour ago*, *last Friday*. Say just **"Jimmy"** and pause if you
 want to think first. To type instead, press **Ctrl + Alt + Space**.
 
@@ -319,7 +319,7 @@ biggest one: the model reads text, not pixels, so windows that UI Automation
 can't reach (canvases, video, some apps' main panes) aren't described yet.
 
 <details>
-<summary><b>Checks</b>: 82 assert-based checks, no framework</summary>
+<summary><b>Checks</b>: 83 assert-based checks, no framework</summary>
 
 ```powershell
 .\.venv\Scripts\python.exe tests\test_stage1.py    # 15 · capture, blur, store
@@ -329,7 +329,7 @@ can't reach (canvases, video, some apps' main panes) aren't described yet.
 .\.venv\Scripts\python.exe tests\test_stage5.py    # 14 · recall, voice, ask-back, demo
 .\.venv\Scripts\python.exe tests\test_stage6.py    #  6 · insights, usage answers, commands
 .\.venv\Scripts\python.exe tests\test_stage7.py    # 11 · own cards, hands-free, curtain
-.\.venv\Scripts\python.exe tests\test_stage8.py    #  6 · the first real session's misses
+.\.venv\Scripts\python.exe tests\test_stage8.py    #  7 · the first real session's misses
 ```
 
 OpenCV prints `net_impl_backend ... Targets are not supported` on import. It's harmless.

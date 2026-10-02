@@ -1310,3 +1310,25 @@ is now a test case in `tests\test_stage8.py`, in the human's actual words.
 **Not fixed, noted:** Hindi/Urdu speech is still transcribed as it is said;
 only command words are mapped back. "Give me scroll down" (no wake word) was
 missed and still is: bare phrases stay narrow on purpose.
+
+
+### D36 — English and Hindi only
+
+**Asked for:** "I only speak Hindi or English." On 2026-10-02 Whisper's
+detector wrote the human's speech as Urdu, Korean and Danish too.
+
+**Transcription:** detection still runs per segment, but only `en` and `hi`
+can win (`WHISPER_LANGUAGES`). A segment detected as anything else is decoded
+again as whichever of the two scored higher, with Urdu's score added to
+Hindi's (spoken, they're one language; this also makes Hindi come out in
+Devanagari, never Urdu script). faster-whisper's segments are lazy, so the
+redo costs a decode, not a second detection.
+
+**Understanding:** a request with Devanagari in it goes to the tool picker
+(D35) once. The prompt now asks for `"english"` with every pick: a tool runs
+directly; otherwise the English goes through the same rules as an English
+request (screen, usage, recall …). Measured on the cloud model: "मेरी स्क्रीन
+पर क्या है" → "What is on my screen?" → screen; "कल मैंने डिस्कॉर्ड कितनी देर
+चलाया" → usage; "पर्दा लगा दो" → curtain; "थोड़ा धीरे बोलो" → softer.
+0.5–2.5 s each, ~12 s on a cold first call. Answers stay in English (the
+Windows voice is English).
