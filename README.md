@@ -236,6 +236,10 @@ flowchart LR
 - **The model never writes a card.** It answers yes/no questions. Code writes
   the card from words that exist in the evidence and real timestamps, so a card
   can't contain anything invented.
+- **It's quick.** Meaning search takes about 0.5 s, spoken answers start at the
+  first finished sentence, and the local models stay warm. Ollama is always
+  addressed as `127.0.0.1`, never `localhost`, which costs ~2.4 s per connection
+  on Windows.
 - **One LLM client** (`jimmy/llm.py`) serves the whole repo. Captured text only
   reaches it inside a `<context>` block, below a rule to ignore any instructions
   found there.
@@ -251,10 +255,11 @@ These are absent code paths, not settings that happen to be off.
 | Stored | Never stored |
 |---|---|
 | Window app and title | Any raw, unblurred frame |
-| UI text and OCR text | Face embeddings or any biometric template |
+| UI text and OCR text | Face embeddings of anyone but you, or any face image |
 | Blurred thumbnails | Anything from an excluded surface |
 | Transcribed speech | Raw audio: only the transcript survives |
 | Face **count** per frame | Face identity, names, cross-day links |
+| Your own face template, only if you say *"remember my face"* (DPAPI-encrypted, this PC only) | Anyone else's face, or any photo of you |
 
 - **Faces are blurred before anything is written.** The clean frame exists only
   inside one tick. The blur is verified against the detector, not by eye: a test
@@ -280,15 +285,16 @@ These are absent code paths, not settings that happen to be off.
 
 A face embedding is a biometric template under India's DPDP Act whether or not
 it's persisted. This design shrinks that exposure substantially; it does not
-take it to zero.
+take it to zero. The one stored template is yours, created only on request, and
+*"forget my face"* deletes it.
 
 <details>
 <summary><b>Storage, microphone and tuning</b></summary>
 
-- **Storage.** Measured at 25.8 MB per captured hour with 640 px thumbnails
-  (about 6 GB a month at 8 hours a day). Thumbnails are now 1280 px so they're
-  readable when opened big, which costs roughly 2–3× that. It's all on your own
-  disk, and there's no retention policy yet.
+- **Storage.** Thumbnails are 1280 px so they're readable when opened big, about
+  80–88 KB each: roughly 30–85 MB per active hour, or 90–250 GB a year at 8 hours
+  a day. (The older 25.8 MB/h figure was for 640 px thumbnails.) It's all on your
+  own disk, and there's no retention policy yet.
 - **Which microphone.** Capture uses the Windows default input. To pick another,
   set `MIC_DEVICE` in `ambient/config.py` to part of its name, for example
   `"Microphone Array"`. A quiet room can read as near-silent because of noise
@@ -314,8 +320,10 @@ take it to zero.
 | + · Voice | "Jimmy, …", spoken answers, conversation, asking back | ✅ |
 | + · Insights | Day map, time per app, usage answers, voice commands | ✅ |
 | + · Autonomy | Its own cards, reminders, deadlines, hands-free UI, privacy curtain | ✅ |
+| + · Polish | Remember my face, English + Hindi, a performance pass | ✅ |
 
-What's next lives in [`SCOPE.md`](SCOPE.md) → *Possible future changes*. The
+Next up is mouse and keyboard control, which waits on two design decisions
+([`TIMELINE.md`](TIMELINE.md) → Next). More lives in [`SCOPE.md`](SCOPE.md) → *Possible future changes*. The
 biggest one: the model reads text, not pixels, so windows that UI Automation
 can't reach (canvases, video, some apps' main panes) aren't described yet.
 
