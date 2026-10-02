@@ -80,6 +80,11 @@ SEG_MAX_MS = 20000           # force a cut so one monologue cannot grow unbounde
 # English in 0.6 s, English output identical. Hindi comes out in Devanagari.
 WHISPER_MODEL = "large-v3-turbo"
 WHISPER_LANGUAGE: str | None = None   # None = detect per segment; "en" to force English
+# D36: the human speaks English and Hindi, nothing else. Detection still runs, but
+# only these can win: a segment detected as anything else (it guessed Urdu, Korean,
+# Danish on 2026-10-02) is decoded again as whichever of these scored higher.
+# Urdu's score counts toward Hindi: spoken, they're one language.
+WHISPER_LANGUAGES: tuple[str, ...] = ("en", "hi")
 WHISPER_DEVICE = "cuda"
 WHISPER_COMPUTE = "int8"
 WHISPER_FALLBACK_MODEL = "small"   # multilingual too

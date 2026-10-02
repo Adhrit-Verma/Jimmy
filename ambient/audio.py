@@ -240,8 +240,16 @@ class Transcriber:
             return ""
 
         audio = pcm.astype(np.float32) / 32768.0
-        segs, _ = self.model.transcribe(audio, language=config.WHISPER_LANGUAGE, beam_size=1,
-                                        vad_filter=False, condition_on_previous_text=False)
+        opts = dict(beam_size=1, vad_filter=False, condition_on_previous_text=False)
+        segs, info = self.model.transcribe(audio, language=config.WHISPER_LANGUAGE, **opts)
+        allowed = config.WHISPER_LANGUAGES
+        if not config.WHISPER_LANGUAGE and allowed and info.language not in allowed:
+            # D36: detection picked a language the user doesn't speak. Nothing has been
+            # decoded yet (segments are lazy), so only the decode runs again.
+            probs = dict(info.all_language_probs or [])
+            probs["hi"] = probs.get("hi", 0.0) + probs.get("ur", 0.0)
+            segs, info = self.model.transcribe(audio, language=max(allowed, key=lambda c: probs.get(c, 0.0)),
+                                               **opts)
         kept = [s.text.strip() for s in segs
                 if getattr(s, "no_speech_prob", 0.0) <= config.NO_SPEECH_MAX
                 and getattr(s, "avg_logprob", 0.0) >= config.AVG_LOGPROB_MIN]

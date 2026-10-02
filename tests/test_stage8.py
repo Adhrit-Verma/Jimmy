@@ -156,6 +156,43 @@ def test_commands_close_copy_volume_presence():
     print("ok  close everything, copy the screen, volume remembered, 'can you see me' from presence")
 
 
+def test_hindi_and_english_only():
+    """D36: Whisper may only answer in English or Hindi; Hindi requests reach the
+    same rules as English ones."""
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    from ambient.audio import Transcriber
+
+    class FakeModel:
+        def __init__(self, detected):
+            self.detected, self.calls = detected, []
+
+        def transcribe(self, audio, language=None, **kw):
+            self.calls.append(language)
+            info = SimpleNamespace(language=language or self.detected,
+                                   all_language_probs=[("ur", 0.5), ("hi", 0.2), ("en", 0.25), ("ko", 0.05)])
+            return iter([SimpleNamespace(text="जिमी स्क्रॉल डाउन", no_speech_prob=0.0, avg_logprob=-0.1)]), info
+
+    loud = (np.sin(np.arange(16000) / 3) * 8000).astype(np.int16)
+    for detected, calls in (("ur", [None, "hi"]), ("ko", [None, "hi"]), ("en", [None]), ("hi", [None])):
+        t = Transcriber.__new__(Transcriber)
+        t.model = FakeModel(detected)
+        assert t.transcribe(loud) == "जिमी स्क्रॉल डाउन" and t.model.calls == calls, (detected, t.model.calls)
+
+    did = []
+    a, turn, spoken = asker('{"tool": "answer", "args": {"english": "pause for 10 minutes"}}',
+                            pause=lambda m: did.append(m))
+    turn(lambda: a.hear(0, "mic", "जिमी, दस मिनट के लिए रुक जाओ"))
+    assert did == [10.0] and spoken[-1] == "Paused for 10 minutes.", (did, spoken)
+    a, turn, _ = asker('{"tool": "curtain", "args": {"on": true, "english": "put up the privacy curtain"}}',
+                       curtain=lambda on: did.append(("curtain", on)))
+    turn(lambda: a.hear(0, "mic", "जिमी, पर्दा लगा दो"))
+    assert did[-1] == ("curtain", True)
+    print("ok  Hindi or English only; Hindi requests meet the same rules")
+
+
 def test_one_instance_only():
     import ctypes
     k32 = ctypes.WinDLL("kernel32", use_last_error=True)

@@ -254,7 +254,12 @@ Windows laptop. Jimmy can do exactly these things (tool: what it does):
 - cannot {"reason": "..."}: none of the above can do it (clicking, typing, closing
   other apps, reading formatting like bold or colour)
 Put "reason" and "question" inside "args", in the first person ("I can't ..."),
-under 15 words. Reply with JSON only: {"tool": "...", "args": {...}}"""
+under 15 words, in English. The request may be in Hindi or English: always also put
+"english" in "args", the request said in plain English.
+Reply with JSON only: {"tool": "...", "args": {...}}"""
+# D36: Hindi requests (Devanagari) go through the model once, so they meet the same
+# rules as English ones.
+_HINDI = re.compile(r"[ऀ-ॿ]")
 _ACTIONISH = re.compile(r"^(?:turn|switch|close|open|hide|scroll|copy|paste|move|put|set|make|start|stop|"
                         r"enable|disable|mute|unmute|clear|play|pause|resume|lift|lower|raise|zoom|minimi[sz]e|"
                         r"maximi[sz]e|change|speak|talk|save|add|remind|focus|go to|take me|get rid|dismiss|"
@@ -926,12 +931,20 @@ class Asker:
             now = now_ms()
             last = self._conversation(now)
             mode, query = force or route(question, last, now)
-            if mode in ("chat", "recall") and not force and _ACTIONISH.match(polite(question)):
+            hindi = not force and bool(_HINDI.search(question)) and mode not in ("command", "nav")
+            if hindi or (mode in ("chat", "recall") and not force and _ACTIONISH.match(polite(question))):
                 # D35: it sounds like an instruction the rules don't know. Let the model
                 # pick a tool (or ask back) instead of answering "I can't do that".
+                # D36: or it's Hindi: the model's English goes through the same rules.
                 picked = self._pick_tool(question)
-                if picked and self._use_tool(*picked, question=question, source=source, aid=aid):
+                if picked and picked[0] != "answer" and self._use_tool(*picked, question=question,
+                                                                       source=source, aid=aid):
                     return
+                english = str((picked or ("", {}))[1].get("english") or "").strip()
+                if hindi and english:
+                    print(f"[ask] hindi -> {english!r}")
+                    question = english          # ...and on through the same dispatch below
+                    mode, query = route(question, last, now)
             if mode == "presence":
                 said = self._presence_line()
                 self.publish({"type": "toast", "text": said, "icon": "presence"})
