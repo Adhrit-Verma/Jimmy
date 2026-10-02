@@ -17,9 +17,10 @@ to stay quiet. Build for six good interruptions an evening, not for throughput.
 
 **Current state: all five stages are done, plus voice Q&A (D25), Insights + commands (D31),
 cards Jimmy writes itself (D32), hands-free UI (D33), the privacy curtain (D34), fixes from
-the first real session (D35), English + Hindi only (D36), "remember my face" (D37) and a
-performance pass (D38). Next: mouse/keyboard control, waiting on two human decisions
-(`TIMELINE.md` → Next).** "Jimmy, …" → an
+the first real session (D35), English + Hindi only (D36), "remember my face" (D37), a
+performance pass (D38) and "live" (D39: a curtain that follows you, resting while away,
+asking without the name, forget a span, timers). Next: mouse/keyboard control, waiting
+on two human decisions (`TIMELINE.md` → Next).** "Jimmy, …" → an
 evidence panel and a spoken answer, with no typing needed. Stage 3 (trigger gate) passed its 5-check
 list, blind-judged (D19–D22). Stage 4 is the Electron overlay (D23). Stage 5 is hybrid
 keyword + meaning recall and a timeline window (D24). Remaining work lives in
@@ -91,7 +92,10 @@ cd overlay; npm install; npm run build   # once, and after any change under over
 .\.venv\Scripts\python.exe -m ambient deadlines --scan --dry   # date lines in history, no model
 .\.venv\Scripts\python.exe tests\test_stage8.py   # 7 checks: the first real session's misses, tools, ask-back
 .\.venv\Scripts\python.exe tests\test_face.py     # 6 checks: remember-my-face capture, template, tracker
-.\.venv\Scripts\python.exe tests\test_commands.py # the command matrix: 131 utterances, talk, a drill
+.\.venv\Scripts\python.exe tests\test_stage9.py   # 12 checks: curtain follows you, presence thread, no-name asks, forget, timers
+.\.venv\Scripts\python.exe tests\test_commands.py # the command matrix: 149 utterances, talk, a drill
+.\.venv\Scripts\python.exe -m ambient forget "1 to 15 September"   # shows what goes, asks first
+.\.venv\Scripts\python.exe -m ambient compact      # VACUUM + FTS optimize (also runs while you're away)
 .\.venv\Scripts\python.exe tests\eval_tools.py    # live: the model's tool pick (34 cases, needs the key)
 .\.venv\Scripts\python.exe tests\equiv_db.py snap before   # then change code, snap after, diff
 ```
@@ -119,13 +123,13 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 |---|---|
 | `AMBIENT_LAYER.md` | the build spec. Read before changing behaviour. |
 | `ambient/config.py` | every tunable, with the reasoning inline. Change knobs here, not in code. |
-| `ambient/db.py` | SQLite + FTS5 store. Schema, writes, unified search. |
+| `ambient/db.py` | SQLite + FTS5 store. Schema, writes, unified search; D39 `measure` / `forget` / `compact`. |
 | `ambient/redact.py` | exclusions + the ephemeral face stage. **The sensitive file.** |
 | `ambient/screen.py` | DXGI capture, 160×90 change gate, UIA text, OCR fallback, thumbnails. |
 | `ambient/audio.py` | WASAPI capture, VAD chunking, Whisper + hallucination filtering. |
 | `ambient/bus.py` | the one loop. Capture-window lifecycle lives here. |
 | `ambient/__main__.py` | CLI: `run`, `search`, `stats`, `doctor`. |
-| `ambient/plugin.py` | the ambient layer as a Jimmy plugin: time phrases → bounded search + activity. |
+| `ambient/plugin.py` | the ambient layer as a Jimmy plugin: time phrases → bounded search + activity; D39 `date_range` (months, day ranges) for forgetting. |
 | `jimmy/config.py` | core tunables: endpoint, model, context budget. |
 | `jimmy/llm.py` | **the only LLM client in the repo.** Streaming, one warm connection, `<think>` stripping. |
 | `jimmy/memory.py` | Jimmy's memory (`data/jimmy.db`): remembered facts, chat turns, and the safe `fts_query`. |
@@ -134,16 +138,17 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `tests/test_stage1.py` | stage 1 check. Assert-based, no pytest. |
 | `ambient/gate.py` | Stage 3 Tier 1: moments, RECALL/FOCUS rules, hard limits, `replay()`. No LLM. |
 | `jimmy/cards.py` | Stage 3 Tier 2: typed questions to the local model (default) or cloud; code writes the ≤7-word card. |
-| `ambient/ask.py` | D25/D27/D28: wake word, `route()` (chat / screen / recall / clarify / show + follow-ups), `interpret()`, evidence, `Asker` (conversation, ask-back, overlay events), `Voice` (SAPI). |
+| `ambient/ask.py` | D25/D27/D28: wake word, `route()` (chat / screen / recall / clarify / show + follow-ups), `interpret()`, evidence, `Asker` (conversation, ask-back, overlay events; D39 follow-up + eye-contact asks, timers, forget), `Voice` (SAPI). |
 | `ambient/demo.py` | D28: `ambient run --demo`, scripted questions through the real Asker, for screen recordings. |
 | `ambient/insights.py` | D31: where the day went: gap-capped time per app, runs, hours, week; usage answers written in code. |
 | `overlay/src/Insights.jsx` | D31: the Insights tab, plus the shared chart pieces (colours, bars, day ribbon) the overlay reuses. |
 | `tests/test_stage6.py` | D31 check: insights, usage answers, commands, time phrases, small thumbnails. |
 | `ambient/proactive.py` | D32: RESUME / SUGGEST / REMIND / DEADLINE / RECAP cards, reminder and date parsing, `.ics` files. |
-| `ambient/presence.py` | D34: webcam presence for the privacy curtain. Face count + head pose only. |
+| `ambient/presence.py` | D34/D37/D39: webcam presence for the curtain: finds your face, follows where you sit (`Follow`), identity per track, resting looks while away; your gaze zone and lips as yes/no history. |
 | `tests/test_stage7.py` | D32–D34 check. No webcam, no network. |
 | `tests/test_stage8.py` | D35 check: the human's real misses from 2026-10-02, tool picking, ask-back. |
 | `tests/test_face.py` | D37: guidance, capture steps, DPAPI template, tracker with your face. No webcam. |
+| `tests/test_stage9.py` | D39: follow on drawn scenes, identity per track, the presence thread on a fake camera, eyes/lips, follow-up and eye-contact asks, timers, forget + compact, date spans, resting. |
 | `tests/equiv_db.py` | D38: before/after equivalence of 43 read paths on a frozen copy of the real DB. Use it for any change to db/recall/insights/gate. |
 | `overlay/src/main.jsx` | picks the page by hash: the overlay, or `#timeline` / `#insights`; reduced motion respected. |
 | `overlay/src/index.css` | the transparent sheet, and the transform-only keyframes (equalizer, shimmer, progress). |
@@ -196,10 +201,12 @@ setting that defaults to off.
 9. **A model never writes a card.** It answers typed questions; `jimmy/cards.py`
    composes the line from words that exist in the evidence and real timestamps.
    D32's cards follow the same rule: `ambient/proactive.py` writes every line.
-10. **The webcam recognises only its owner, and only if asked** (D34, D37).
-   `presence.py` counts faces and reads head pose. After "remember my face" it
-   matches faces against the owner's DPAPI-encrypted template; every other face's
-   vector lives for one comparison. No frame is kept; nothing pickles. A test
+10. **The webcam recognises only its owner, and only if asked** (D34, D37, D39).
+   `presence.py` finds a face and follows where it sits. After "remember my face"
+   it matches a new face against the owner's DPAPI-encrypted template (per track,
+   not per frame); every other face's vector lives for one comparison. For the
+   owner's face only: looking-at-screen and lips-moving as yes/no values, two
+   minutes, RAM (D39's spec amendment). No frame is kept; nothing pickles. A test
    checks there is one write path (`self.owner.save(e.samples)`) and no image write.
 11. **Jimmy proposes; you approve** (D32). Focus, page, draft, calendar event:
    each waits for your yes, and drafts/events go no further than your
@@ -365,6 +372,12 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
 - **Commands and usage questions route before everything else** (`ask.route`).
   A new pattern there can swallow real questions: add its negative case to
   `test_router_commands_and_stats` first.
+- **`Presence()` in a test loads the real `data/owner_face.bin`** (the owner enrolled
+  on 2026-10-02), so a test expecting "no face remembered" silently gets identity
+  checks. Pass `owner=` a stub (`tests/test_stage9.py` has `_Nobody`).
+- **The curtain's thresholds are from drawn scenes** (D39): turned head 0.55–0.69,
+  empty chair 0.42, `FOLLOW_MIN` 0.5. The console prints the last match when it
+  decides you left; tune from that, not from the drawings.
 - Our own recording process shows up in Windows' mic-in-use registry. Anything
   asking "is someone else on the mic" must skip `sys.executable` /
   `sys._base_executable`, as `audio.other_app_using_mic` does.

@@ -92,7 +92,7 @@ follows a real card or answer format from the code.
 | **13:31**: you open a form | A **RECALL** card: **"Same Northwind Fellowship as Tue 15:02"**. It linked what's on screen now to a concrete earlier moment. |
 | **14:05**: *"Jimmy, when does it close?"* | It searches Tuesday by meaning, shows the screenshots it used, and answers out loud in about a second. |
 | **15:30**: you drift to YouTube | You told it *"focus on the essay"* earlier, so you get one **FOCUS** nudge. After that it stays quiet for 45 minutes. |
-| **16:02**: you step away | No face for 6 seconds, so the **privacy curtain** comes down over your screen. |
+| **16:02**: you step away | Out of the camera's view for 1.5 seconds, so the **privacy curtain** comes down and Jimmy rests: no capture, no listening. Looking away or down at your phone never counts. |
 | **17:00**: the day before a deadline | **"Tomorrow: Northwind Fellowship"**. It noticed a date on a page, and the local model agreed it was a deadline. |
 | **21:00**: wrapping up | One recap card: **"Today: 10h 42m, mostly VS Code"**. Ask *"how was my day?"* to get the chart. |
 
@@ -100,7 +100,9 @@ follows a real card or answer format from the code.
 
 ## 💬 Talk to it
 
-While `ambient run` is going, say **"Jimmy,"** and then what you want.
+While `ambient run` is going, say **"Jimmy,"** and then what you want. Or skip the name: look at
+the screen and ask (an eye in the pill shows Jimmy sees you looking), and after Jimmy answers,
+just keep talking for 10 seconds, like a conversation. *"Thanks"* ends it.
 
 <table>
 <tr><th width="20%">Kind</th><th width="42%">You say</th><th>Jimmy</th></tr>
@@ -138,6 +140,16 @@ While `ambient run` is going, say **"Jimmy,"** and then what you want.
   <td><b>Reminders</b></td>
   <td><i>"remind me at 5 to call Sam"</i> · <i>"…when I open Discord"</i></td>
   <td>A card and a spoken reminder, at that time or when that app comes up.</td>
+</tr>
+<tr>
+  <td><b>Timers</b></td>
+  <td><i>"set a timer for 10 minutes"</i> · <i>"5 minute timer to check the oven"</i> · <i>"how much time is left?"</i> · <i>"cancel the timer"</i></td>
+  <td>Counts down on the pill, over whatever window you're in, then rings.</td>
+</tr>
+<tr>
+  <td><b>Forget</b></td>
+  <td><i>"delete everything from September"</i> · <i>"…from 1 to 15 September"</i> · <i>"forget the last hour"</i></td>
+  <td>Says what it would delete (screenshots, lines heard, MB) and waits for your <i>"yes"</i>. Then the space comes back.</td>
 </tr>
 <tr>
   <td><b>Proposals</b></td>
@@ -277,6 +289,7 @@ says so and exits.
 | Action | How |
 |---|---|
 | Ask | Say *"Jimmy, …"*, or **Ctrl + Alt + Space** to type |
+| Ask without the name | Look at the screen and ask. *"Jimmy, only answer to your name"* turns this off; *"listen without your name"* turns it back on |
 | Pause capture (and resume) | **Ctrl + Alt + J**, or hover the pill → **Pause 2h** |
 | Open the timeline | **Ctrl + Alt + T**, or hover the pill → **Timeline** |
 | See where the day went | **Ctrl + Alt + I**, or hover the pill → **Insights** |
@@ -296,6 +309,8 @@ says so and exits.
 .\.venv\Scripts\python.exe -m ambient search "consulting application on Friday"
 .\.venv\Scripts\python.exe -m ambient index     # backfill meaning search for older captures
 .\.venv\Scripts\python.exe -m ambient stats
+.\.venv\Scripts\python.exe -m ambient forget "1 to 15 September"   # shows what goes, asks first
+.\.venv\Scripts\python.exe -m ambient compact   # give deleted space back (also runs by itself while you're away)
 
 # Chat in the terminal
 .\.venv\Scripts\python.exe -m jimmy chat         # /context shows exactly what was sent
@@ -334,7 +349,7 @@ flowchart LR
     direction LR
     scr["Screen<br/>DXGI frames + UI Automation text"] --> gate0{"Exclusions<br/>+ face blur"}
     mic["Microphone<br/>Whisper large-v3-turbo"] --> gate0
-    cam["Webcam<br/>face count + head pose"] --> curtain["Privacy curtain"]
+    cam["Webcam<br/>follows where you sit"] --> curtain["Privacy curtain"]
     gate0 --> db[("SQLite + FTS5<br/>bge-m3 vectors<br/>blurred thumbnails")]
     db --> cards["Trigger gate<br/>rules, then qwen2.5:3b"]
     db --> own["Jimmy's own cards<br/>resume · remind · deadline · recap"]
@@ -439,9 +454,12 @@ These are **absent code paths**, not settings that happen to be off.
   isn't lost.
 - **Recording others is off.** System audio (the far end of a call) is not captured. That's a
   consent problem, not a feature flag.
-- **The webcam recognises only you, and only if you ask.** By default it counts faces and reads head
-  direction for the curtain. After *"remember my face"*, it compares faces with your encrypted
-  template. Every other face's vector exists for one comparison and is dropped. No frame is kept.
+- **The webcam recognises only you, and only if you ask.** By default it finds a face, then follows
+  where you sit for the curtain. After *"remember my face"*, it compares a new face with your
+  encrypted template once, not every frame. Every other face's vector exists for one comparison and
+  is dropped. For your face only, it notes whether you're looking at the screen and whether your lips
+  are moving, as yes/no values kept in memory for two minutes, so you can ask without the name. No
+  frame is kept.
 - **Jimmy proposes; you approve.** The only input it ever sends to another app is a scroll, and only
   when you ask for one. It never clicks or types for you.
 - **What leaves the laptop:** only the evidence shown with an answer (at most 6,000 characters, and
@@ -504,6 +522,7 @@ The performance pass (D38) was checked for **equivalence on a frozen copy of the
 | + · Autonomy | Its own cards, reminders, deadlines, hands-free UI, privacy curtain | ✅ |
 | + · First real session | Routing, tool picking, ask-back, scroll, volume, decluttering | ✅ |
 | + · Polish | Remember my face, English + Hindi, a performance pass | ✅ |
+| + · Live | A curtain that follows you, resting while you're away, asking without the name, timers, forgetting a span | ✅ |
 | **Next** · Hands on the controls | Mouse and keyboard through UI Automation, with a visible "Jimmy is driving" mode, plan approval and a hard stop before anything irreversible | 🧭 designed |
 
 The next step is designed but waits on two decisions: how much approval to require, and which apps
@@ -512,7 +531,7 @@ come first ([`TIMELINE.md`](TIMELINE.md) → Next). Other ideas are in [`SCOPE.m
 UI Automation can't reach (canvases, video) aren't described yet.
 
 <details>
-<summary><b>Checks</b>: 93 assert-based checks and a 131-utterance command matrix, no test framework</summary>
+<summary><b>Checks</b>: 105 assert-based checks and a 149-utterance command matrix, no test framework</summary>
 
 ```powershell
 .\.venv\Scripts\python.exe tests\test_stage1.py    # 15 · capture, blur, store
@@ -523,8 +542,9 @@ UI Automation can't reach (canvases, video) aren't described yet.
 .\.venv\Scripts\python.exe tests\test_stage6.py    #  6 · insights, usage answers, commands
 .\.venv\Scripts\python.exe tests\test_stage7.py    # 11 · own cards, hands-free, curtain
 .\.venv\Scripts\python.exe tests\test_stage8.py    #  7 · the first real session's misses
+.\.venv\Scripts\python.exe tests\test_stage9.py    # 12 · curtain that follows you, no-name asks, forget, timers
 .\.venv\Scripts\python.exe tests\test_face.py      #  6 · remember my face
-.\.venv\Scripts\python.exe tests\test_commands.py  #  4 · 131 commands, talk that mustn't trigger, a drill
+.\.venv\Scripts\python.exe tests\test_commands.py  #  4 · 149 commands, talk that mustn't trigger, a drill
 .\.venv\Scripts\python.exe tests\eval_tools.py     #  live: the model's tool pick, English + Hindi
 .\.venv\Scripts\python.exe tests\equiv_db.py snap before   # then change code, snap after, diff
 ```

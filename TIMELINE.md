@@ -199,11 +199,20 @@ presence-based privacy curtain. Checks: `tests\test_stage7.py` (11). Live
 acceptance (the human's run-through) is open, and so is the owner-recognition
 question (D34).
 
+## Live · **built 2026-10-02 (D39)**
+
+A curtain that follows where you sit (only leaving curtains, in 1.5 s), Jimmy
+resting while you're away, asking without the name (follow-up and eye contact),
+the wake word mid-sentence, "delete everything from September" with a yes,
+auto-compaction, timers on the pill. Checks: `tests\test_stage9.py` (12), the
+command matrix (149), `tests\eval_tools.py` (39/39). Live acceptance on the real
+webcam (the follow match, the gaze zone, lips) is open.
+
 ---
 
 ## Next, in order
 
-**As of 2026-10-02 (end of the D31–D38 session):**
+**As of 2026-10-02 (end of the D31–D39 sessions):**
 
 1. **Mouse/keyboard control ("agentic") — designed, NOT started, waiting on the human.**
    Agreed with the human: yes it's possible; do performance first (done, D38).
@@ -230,11 +239,14 @@ question (D34).
      1. Approval level: every action, or plan once plus risky steps
         (recommended), or no approval for safe steps?
      2. Which apps first (e.g. Chrome, VS Code, Word, Spotify, Discord)?
-2. **The human's live run-through** of D31–D37: test lists were given in chat;
+2. **The human's live run-through** of D31–D39: test lists were given in chat;
    real-hardware items: remember-my-face capture and stranger curtain with the
    real webcam (`OWNER_MATCH` unmeasured), the camera shared with a Teams/Meet
    call, deadlines over a real evening, scroll falling through to the window in
-   front, Hindi commands.
+   front, Hindi commands. D39: does a turned head / looking down keep the
+   curtain up and leaving drop it (tune `FOLLOW_MIN` from the console's "last
+   match"), does eye contact fire on requests and stay quiet in conversation
+   (`GAZE_ZONE`, `MOUTH_MOVING`), the follow-up window's feel (`FOLLOWUP_S`).
 3. Performance items waiting on evidence or the owner's call: see `SCOPE.md` →
    "Performance (D38) — done, and NOT done" (WebP, an approximate vector index past
    month ~6, the line-count table, cursor polling).

@@ -102,7 +102,7 @@ every screen reader charges.
 | `bus.py` | the one loop, capture-window lifecycle | screen on the calling thread, audio on its own |
 | `insights.py` | where the day went (D31) | estimated from frame times, gap-capped; no model, no new capture |
 | `proactive.py` | cards Jimmy writes itself (D32) | resume, focus offer, reminders, deadlines, recap; acts only on Jimmy |
-| `presence.py` | webcam presence for the curtain (D34, D37) | YuNet count + head pose; with "remember my face", the owner's DPAPI-encrypted template, nobody else's |
+| `presence.py` | webcam presence for the curtain (D34, D37, D39) | finds your face once, then follows where you sit (template match when the face is lost); identity per track; resting looks while you're away; for your face only, "looking at the screen" and "lips moving" as yes/no history |
 | `__main__.py` | `run` / `search` / `stats` / `doctor` | `doctor` reports what actually works on this machine |
 
 ---
@@ -122,7 +122,15 @@ audio-mic    ──► WASAPI read ──► to_mono16k ──► VadChunker ─
 audio-loopback (disabled by default) ────────────────────────┘        │
                                                                       ▼
 transcribe   ──► Whisper ──► filter ──► SQLite write (same lock)
+
+presence     ──► webcam 4 fps (resting: 1 look/s) ──► observe ──► bus._on_presence
+                   └─ yes/no history (RAM) ◄── Asker._unnamed asks "was it you, looking?"
 ```
+
+D39: while the curtain is down because you left, the bus **rests**: no screen
+capture, the mic paused (unless a call holds it), no indexing, no cards of its
+own. Presence and reminders keep running; a tidy-up of the database (VACUUM)
+runs once a day after 10 minutes away.
 
 The screen loop stays on the **calling thread** because UI Automation is COM and
 is happiest where it was initialised. Audio gets its own threads because WASAPI
@@ -263,6 +271,11 @@ strip thumbnails (`/thumb?w=`), and deep links: `open_view` events and
  D31: route() first checks command() (pause/resume/focus/open/hush → Asker._do → bus
    actions; a toast, no panel) and usage questions (stats → insights.answer: one line
    written in code + chart data; no model)
+ D39: no name needed when Asker._unnamed says so: a follow-up (FOLLOWUP_S after Jimmy's
+   voice stops) or eye contact + lips moving + a request-shaped line; never on a call,
+   never when the camera saw your lips still (someone else). Timers are reminders
+   ending in "timer" (counted down on the pill); "delete … from September" →
+   date_range → an offer → yes → bus.forget (Store.forget + compact)
 ```
 
 ## Boundaries for later stages

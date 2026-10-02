@@ -75,9 +75,16 @@ time window and matches its term against app names and window titles.
   model, yes/no). `on_capture` after a frame: a ≥ 45 min gap → RESUME.
 - Cards it writes go through `bus._show_card`: muted kinds are dropped, the
   rest stored in `cards` (with `app`) and published like gate cards.
-- Presence runs on its own thread: webcam frame → 320×240 → YuNet → count +
-  head pose → state. The frame is deleted in the same iteration. State changes
-  go to `bus._on_presence`, which decides the curtain and publishes it.
+- Presence runs on its own thread: webcam frame → 640 px → YuNet (score ≥ 0.5)
+  → the track (D39): a face near it refreshes it; none → its head-and-shoulders
+  patch is template-matched on a 160×120 copy → identity per track (with a
+  remembered face) → state. The frame is deleted in the same iteration. State
+  changes go to `bus._on_presence`, which decides the curtain and publishes it.
+  While you're away it looks once a second (a 40×30 difference) and runs the
+  detector every 5 s or on movement.
+- D39, your face only: per frame `(epoch ms, eye contact, lips moving, facing)`,
+  yes/no/unknown, in a two-minute deque in RAM. `Asker.hear` checks a spoken
+  line's `ts_start..ts_end` against it. Never written anywhere.
 
 On disk, only after "remember my face" (D37): `data/owner_face.bin`, the owner's SFace
 vectors encrypted with DPAPI; deleted by "forget my face".
@@ -109,6 +116,12 @@ Segment(ts_start, ts_end, source, pcm)
              text in HALLUCINATIONS?       -> ""
         │
         ▼  non-empty only
+Asker.hear(ts_end, source, text, ts_start)           (D25, D39)
+   "…Jimmy…" (up to 3 words before it)  ─┐
+   follow-up window after a spoken answer ├─► for Jimmy: source = 'command'
+   eye contact + lips + a request          ┘
+        │
+        ▼
 audio_segments row (+ audio_fts index)
 ```
 
@@ -202,6 +215,15 @@ per thumbnail, 96 % of ticks skipped), i.e. ~0.5 GB for 8 h/day for 30 days. The
 finer D18 gate captures more, because it stops missing scrolls and new messages,
 so that is a floor. Re-measure from the next run. The text DB is negligible
 beside the images, and smaller still now that only new lines are stored.
+
+**Forgetting a span (D39).** `Store.forget(since, until)`, only after a spoken or
+typed yes (or `ambient forget`): embeddings by the ids they point at, then
+`text_blocks` of frames in the span (so the FTS delete triggers run), `frames`,
+`audio_segments`, `cards`, `deadlines` seen then, closed capture windows left
+empty; the thumbnail files and empty day folders; Jimmy's `turns` in the span.
+Kept: remembered facts, reminders, settings. Then `compact()`: FTS `optimize`,
+`VACUUM`, `wal_checkpoint(TRUNCATE)`. No schema change; Jimmy's `settings` gains
+`eye_contact` and `last_compact`.
 
 ---
 

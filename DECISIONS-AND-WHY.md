@@ -1458,3 +1458,103 @@ moving indexing to quieter moments (needs a power trace); polling the cursor
 instead of forwarding every mouse move to the overlay (0.3 % of a core idle,
 5-10 % while the mouse moves); capture rate, change gate, Whisper model, face
 detection skipping, thumbnail size: never without recordings (red team).
+
+
+### D39 — Live: a curtain that follows you, resting while away, asking without the name
+
+**Asked for (2026-10-02, after the first real day):** the curtain fell too often;
+it should fall only when the owner leaves the camera's view (within 1–2 s), not
+when they look away; mark where they sit and follow it; while curtained, check
+every 5 s and wake everything when they're back; hibernate Jimmy's own work
+meanwhile. Compact the database by itself, and delete a span on request ("delete
+from September"). Treat looking at the camera as talking to Jimmy, with
+auto-calibration; a live conversation loop with ask-back; better "Jimmy"
+detection; a visible timer.
+
+**The curtain (`ambient/presence.py`).** Why it fell: (1) YuNet loses a turned
+or lowered face, so "no face for 6 s" happened while the owner sat there;
+(2) with a remembered face, identity was judged on every frame (every 0.5 s,
+D38) and a dim frame scoring under `OWNER_MATCH` for 2 s became "stranger".
+Now:
+- A face that sits down facing the screen starts a **track**. Each frame the
+  detector (score ≥ 0.5 near the track, 0.7 for a new face) refreshes it; when it
+  finds nothing, the head-and-shoulders patch around the last box is **found
+  again by template matching** on a 160×120 picture. The patch is only ever
+  refreshed from a real detection, so it can't learn the empty chair; with no
+  face at all for `BLIND_MAX_S` (120 s) it's no longer trusted.
+- **Away = the track lost for `AWAY_S` = 1.5 s.** Looking away, down at a phone,
+  or a hand over the face keep you present. Drawn scenes: turned head 0.55–0.69,
+  looking down 0.69, empty chair 0.42, against `FOLLOW_MIN` 0.5. **The margin is
+  thin and unmeasured on the real camera**: the console logs the last match when
+  it decides you left, to tune from.
+- **Identity per track:** judged when a face appears (every 0.25 s, up to 6
+  looks), then re-checked every 15 s; two re-checks below 0.30 (under OpenCV's
+  0.363 same-person line) make it "not you". A stranger track is retried every
+  2 s, so one bad capture can't lock the owner out.
+- **Resting while away:** one cheap look a second (a 40×30 difference); the
+  detector runs every `AWAY_CHECK_S` (5 s, as asked) or at once when the picture
+  moves, so sitting down lifts the curtain in about a second, not five.
+- `LOOK_AWAY_S` and the per-frame identity cache (`PRESENCE_REID_S`) are gone.
+
+**Jimmy rests (`bus.dormant()`):** curtain down because you left, or a stranger
+sat down → screen capture off (as before), **the mic pauses** (unless another app
+holds it: a call), indexing and Jimmy's own cards stop; reminders and timers still
+ring. This overturns D34's "audio kept so 'Jimmy, …' works from across the room",
+at the owner's request. A curtain drawn by hand keeps everything on. Models stay
+loaded: reloading Whisper on return would make the wake-up slow.
+
+**Asking without the name** (`Asker._unnamed`). Two ways, never during a call:
+- **Follow-up:** after Jimmy answers something you said, your next line needs no
+  name for `FOLLOWUP_S` (10 s, counted from when its voice stops), as long as the
+  camera doesn't see you turned away. "Okay thanks", "that's all", "stop" end it.
+  Navigation keeps its own 45 s window.
+- **Eye contact:** you were looking at the screen as you began, your lips moved,
+  it's shaped like a request (a question or command; Hindi question words or
+  request forms), and nobody else has been heard near the mic for 30 s.
+  "Someone else" = speech while the camera saw your lips still: a video, a person,
+  a speakerphone. "Jimmy, only answer to your name" turns it off (remembered).
+- The webcam part, for the owner's face only: head pose and iris position (the
+  darkest fifth of each eye box from YuNet's eye points) against the zone where
+  you usually look, **learnt as you work** (median and spread of the last ~600
+  frames; until 120 frames, facing counts). Lips: a 24×16 normalised mouth patch
+  changing between frames. Per-frame yes/no values only, two minutes, RAM.
+- **Honest limit:** on a laptop the camera sits just above the screen, so "at the
+  camera" and "at the top of the screen" are a few pixels apart for a plain
+  webcam. What's detected is "looking at the screen, not elsewhere"; the request
+  shape, the lips and the others-talking rule keep it from answering chatter.
+  The owner's own phone calls on a mobile (the far side inaudible to the laptop)
+  are the case it can't tell; that's what "name only" is for.
+
+**A spec amendment, the human's call:** non-negotiable 3 limited the face signal
+to redaction, counting, diarization and shoulder-surfing. The owner asked for this
+use, so `AMBIENT_LAYER.md` now allows the owner's own face to signal "I'm talking
+to you", never anyone else's, never stored.
+
+**The wake word.** The first real session's misses were the parser, not Whisper:
+"okay hey jimmy", "take it jimmy what's on my screen", "One second, Jimmy turn on
+…", "Can you, Jimmy can you …" (the name wasn't first), and "Chime, can you …".
+Up to three words may now come before the name: fillers always, anything when a
+request follows. "जिमी को टेस्ट कर रहा था" (about Jimmy) no longer counts.
+**Not done:** biasing Whisper with a "Jimmy" hotword: it can make Whisper write
+"Jimmy" into noise, and there are no recordings to prove it helps.
+
+**Forgetting a span** (`Store.forget`, `ambient/plugin.date_range`): "delete
+everything from September", "from 1 to 15 September", "since August", "older than
+30 days", "the last hour", "everything". Jimmy says what would go (screenshots,
+lines heard, MB) and waits for a yes. It deletes frames and their text (through the
+FTS triggers), speech, cards, deadlines seen then, the vectors **by the ids they
+point at** (ids can be reused once rows are gone), the pictures and empty day
+folders, closed empty capture windows, and Jimmy's chat turns from then. Remembered
+facts and reminders stay. Then `compact()`: FTS `optimize`, `VACUUM`, WAL
+truncate. A "forget" needs data words before the dates: "delete the email from
+yesterday" is not about Jimmy's record. `ambient forget "<span>"` does the same
+from the terminal. **Auto-compact:** after 10 min away, at most once a day.
+
+**Timers:** "set a timer for 10 minutes", "5 minute timer to check the oven",
+"how much time is left", "cancel the timer". A timer is a reminder whose text
+ends in "timer". Reminders due within the hour count down on the pill, over every
+window and over the curtain, and ring with "Time's up".
+
+Checks: `tests\test_stage9.py` (12, including the real presence thread on a fake
+camera), 18 new rows in the command matrix (149), `tests\eval_tools.py` 39/39
+with 5 new timer/forget cases (English and Hindi). DB read paths: identical (43).

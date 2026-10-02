@@ -38,6 +38,11 @@ throughput.
    surface "an unknown person is present in X's video call" or any equivalent
    finding about a third party's environment or behaviour. The face signal feeds
    redaction, counting, diarization assist and shoulder-surf warning only.
+   *Amended by the human on 2026-10-02 (D39), one addition:* **the owner's own face
+   may tell Jimmy it's being spoken to** — whether the owner is looking at the
+   screen and whether their lips are moving, kept as per-frame yes/no values in
+   RAM for two minutes, so a request needs no wake word. Never computed for anyone
+   else's face, never stored, never surfaced as a finding.
 4. **Exclusion list ships before first run.** Password managers, banking domains,
    private/incognito windows. Cheaper now than scrubbing six months of history later.
 

@@ -252,6 +252,27 @@ optimised JPEG, face detection at thumbnail size.
 
 ---
 
+## Live: curtain, resting, no-name asks, forget, timers (D39) — built, and NOT built
+
+Built: the curtain follows where you sit (only leaving the picture curtains, in
+1.5 s), identity per track, resting looks while you're away (5 s, or on movement),
+Jimmy resting while you're away (mic, indexing, own cards), the follow-up window,
+eye-contact asks (auto-calibrating zone, lips, request shape, others-talking rule,
+"name only"), the wake word anywhere in the first four words, "delete … from
+September" with a yes, `ambient forget` / `ambient compact`, compaction while
+away, timers on the pill.
+
+| Not built | Why / what it needs |
+|---|---|
+| A "Jimmy" hotword for Whisper | It can make Whisper write the name into noise. Needs recordings of real misses first. |
+| A real gaze model (at the camera vs the top of the screen) | None fits beside Whisper in 6 GB without a download; a plain webcam can't tell those apart. |
+| Unloading models while away | Whisper reloads in seconds: waking up would be slow. Ollama unloads its own after idle. |
+| Tuned `FOLLOW_MIN`, `MOUTH_MOVING`, `GAZE_ZONE` | Measured only on drawn scenes. Tune from the console's "last match" log and real use. |
+| Telling a mobile phone call from talking to Jimmy | The far side is inaudible to the laptop. "Name only" is the switch. |
+| A retention policy (e.g. pictures older than N months) | The owner's call; `ambient forget "older than 90 days"` does it by hand. |
+
+---
+
 ## Possible future changes
 
 Ideas I'd want to make but that are **not decided**. Each needs evidence or a
