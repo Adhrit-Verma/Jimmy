@@ -16,7 +16,10 @@ and what not to build*. Everything else, including this file, is downstream of i
 to stay quiet. Build for six good interruptions an evening, not for throughput.
 
 **Current state: all five stages are done, plus voice Q&A (D25), Insights + commands (D31),
-cards Jimmy writes itself (D32), hands-free UI (D33) and the privacy curtain (D34):** "Jimmy, …" → an
+cards Jimmy writes itself (D32), hands-free UI (D33), the privacy curtain (D34), fixes from
+the first real session (D35), English + Hindi only (D36), "remember my face" (D37) and a
+performance pass (D38). Next: mouse/keyboard control, waiting on two human decisions
+(`TIMELINE.md` → Next).** "Jimmy, …" → an
 evidence panel and a spoken answer, with no typing needed. Stage 3 (trigger gate) passed its 5-check
 list, blind-judged (D19–D22). Stage 4 is the Electron overlay (D23). Stage 5 is hybrid
 keyword + meaning recall and a timeline window (D24). Remaining work lives in
@@ -90,6 +93,7 @@ cd overlay; npm install; npm run build   # once, and after any change under over
 .\.venv\Scripts\python.exe tests\test_face.py     # 6 checks: remember-my-face capture, template, tracker
 .\.venv\Scripts\python.exe tests\test_commands.py # the command matrix: 131 utterances, talk, a drill
 .\.venv\Scripts\python.exe tests\eval_tools.py    # live: the model's tool pick (34 cases, needs the key)
+.\.venv\Scripts\python.exe tests\equiv_db.py snap before   # then change code, snap after, diff
 ```
 
 Only one `ambient run` at a time (D35): a second one exits with a message.
@@ -140,6 +144,9 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `tests/test_stage7.py` | D32–D34 check. No webcam, no network. |
 | `tests/test_stage8.py` | D35 check: the human's real misses from 2026-10-02, tool picking, ask-back. |
 | `tests/test_face.py` | D37: guidance, capture steps, DPAPI template, tracker with your face. No webcam. |
+| `tests/equiv_db.py` | D38: before/after equivalence of 43 read paths on a frozen copy of the real DB. Use it for any change to db/recall/insights/gate. |
+| `overlay/src/main.jsx` | picks the page by hash: the overlay, or `#timeline` / `#insights`; reduced motion respected. |
+| `overlay/src/index.css` | the transparent sheet, and the transform-only keyframes (equalizer, shimmer, progress). |
 | `tests/test_commands.py` | D37: the command matrix (131 utterances, 16 talk negatives, a 25-command drill). Add rows for real misses. |
 | `tests/eval_tools.py` | live: the cloud model's tool pick on 34 English/Hindi requests. Needs the key. |
 | `overlay/src/Answer.jsx` | the answer view: evidence left (best match focused), streamed answer right. |

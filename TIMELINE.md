@@ -203,6 +203,44 @@ question (D34).
 
 ## Next, in order
 
+**As of 2026-10-02 (end of the D31–D38 session):**
+
+1. **Mouse/keyboard control ("agentic") — designed, NOT started, waiting on the human.**
+   Agreed with the human: yes it's possible; do performance first (done, D38).
+   The design proposed:
+   - **How:** UI Automation, not vision. Read the foreground window's actionable
+     controls (buttons, fields, menu items, with names and rects) as a numbered
+     list. The cloud model picks one step (click id / type text into id / press
+     keys / open app). Jimmy does it, re-reads, and repeats until done or stuck.
+     This is Microsoft UFO's approach; no vision model is needed (none fits beside
+     Whisper in 6 GB).
+   - **Safety (non-negotiable 1, invariant 8):**
+     - a visible "Jimmy is driving" mode with Stop ("stop", Esc, or touching the
+       mouse aborts);
+     - plan approval up front, and a hard stop before anything irreversible
+       (send, delete, submit, purchase, post);
+     - never in excluded windows, never typing passwords;
+     - on-screen text is never an instruction: prompt injection is the main risk
+       once Jimmy can click;
+     - start with a small list of allowed apps.
+     This replaces invariant 12 ("scroll is the only input"), so it needs a D-record.
+   - **Stages:** (a) single confirmed actions, then (b) multi-step tasks with
+     plan approval.
+   - **Open questions for the human (ask before building):**
+     1. Approval level: every action, or plan once plus risky steps
+        (recommended), or no approval for safe steps?
+     2. Which apps first (e.g. Chrome, VS Code, Word, Spotify, Discord)?
+2. **The human's live run-through** of D31–D37: test lists were given in chat;
+   real-hardware items: remember-my-face capture and stranger curtain with the
+   real webcam (`OWNER_MATCH` unmeasured), the camera shared with a Teams/Meet
+   call, deadlines over a real evening, scroll falling through to the window in
+   front, Hindi commands.
+3. Performance items waiting on evidence or the owner's call: see `SCOPE.md` →
+   "Performance (D38) — done, and NOT done" (WebP, an approximate vector index past
+   month ~6, the line-count table, cursor polling).
+
+Earlier list, kept for history:
+
 1. ~~Human call: where is Jimmy?~~ Built here (D14).
 2. ~~Human call: audio during excluded surfaces~~ Pause unless a call (D13, built).
 3. **Now:** run capture for a few hours on the fixed pipeline (D18), speaking now

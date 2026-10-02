@@ -35,9 +35,20 @@ from .redact import is_own_window
 # language detection on, it also writes it in Devanagari or Urdu script, and the
 # first real session lost "جمی سکرول اپ" ("Jimmy scroll up") that way. Indic
 # vowel signs aren't \w, so those spellings go without a word boundary.
-_WAKE = re.compile(r"^\W*(?:(?:hey|hi|ok|okay|yo|हे|ہے)\W+)?"
-                   r"(?:(?:jimmy|jimmie|jimi|jimmi|jimy|jimmys|gimmy|jemmy)\b|जिमी|जिम्मी|जीमी|جمی|جیمی|جمّی)\W*(.*)$",
-                   re.I | re.S)
+# D39: the name needn't come first. The real session lost "okay hey jimmy", "take it
+# jimmy what's on my screen", "One second, Jimmy turn on …", "Can you, Jimmy can you …"
+# and heard "Chime, can you …". Up to three words may come before the name: any
+# filler, or anything when what follows is a request.
+_WAKE = re.compile(r"^\W*((?:\S+\s+){0,3}?)"
+                   r"(?:(?:jimmy|jimmie|jimi|jimmi|jimy|jimmys|gimmy|jemmy|chime)\b|जिमी|जिम्मी|जीमी|جمی|جیمی|جمّی)"
+                   r"\W*(.*)$", re.I | re.S)
+_FILLER = {"hey", "hi", "hello", "ok", "okay", "yo", "so", "um", "uh", "oh", "and", "wait", "listen",
+           "one", "second", "sec", "हे", "ہے"}
+# "जिमी को टेस्ट कर रहा था" is about Jimmy, not to him: a postposition right after the name.
+_ABOUT = {"को", "का", "की", "के", "ने", "से", "में", "पर"}
+_ASKS = re.compile(r"^(?:what|who|whom|when|where|why|how|which|can|could|would|will|do|does|did|is|are|"
+                   r"show|open|tell|find|search|remind|set|turn|scroll|close|pause|resume|lift|go|take|"
+                   r"help|give|read|copy|draft|start|stop)\b", re.I)
 # D35: the few command words Whisper writes in Hindi/Urdu script, mapped back.
 _TRANSLIT = {"सकरोल": "scroll", "स्क्रॉल": "scroll", "स्क्रोल": "scroll", "سکرول": "scroll", "اسکرول": "scroll",
              "अप": "up", "اپ": "up", "डाउन": "down", "ڈاؤن": "down", "ڈاون": "down", "नेक्स्ट": "next",
@@ -325,7 +336,14 @@ def _volume_word(t: str) -> str:
 def parse_wake(text: str) -> str | None:
     """The question after the wake word, "" if only the name was said, else None."""
     m = _WAKE.match(text.strip())
-    return m.group(1).strip(" .,!?") if m else None
+    if not m:
+        return None
+    before, rest = m[1].split(), m[2].strip(" .,!?")
+    if rest.split()[:1] and rest.split()[0].strip(",.") in _ABOUT:
+        return None
+    if all(w.strip(",.!?").lower() in _FILLER for w in before):
+        return rest
+    return rest if rest and (_ASKS.match(rest) or command(rest) or nav(rest)) else None
 
 
 def route(text: str, last: dict | None = None, now: int | None = None) -> tuple[str, str]:
