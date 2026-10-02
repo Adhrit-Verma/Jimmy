@@ -225,6 +225,12 @@ def main(argv: list[str] | None = None) -> int:
     db = a.db or config.DB_PATH
 
     if a.cmd == "run":
+        import ctypes
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        _instance = k32.CreateMutexW(None, False, "Local\\JimmyAmbientRun")   # held until exit
+        if ctypes.get_last_error() == 183:                                    # ERROR_ALREADY_EXISTS
+            print("Jimmy is already running (another `ambient run`). Quit that one first.")
+            return 1
         from .bus import ContextBus
         bus = ContextBus(db_path=db, monitor=a.monitor,
                          audio=not a.no_audio, thumbs=not a.no_thumbs, cards=not a.no_cards,

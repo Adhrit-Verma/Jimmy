@@ -357,6 +357,21 @@ class ContextBus:
             return mode == "always" or (mode == "sensitive" and self._sensitive)
         return bool(presence.get("looking_away"))
 
+    def set_volume(self, word: str, mem) -> str:
+        """"Jimmy, speak softer / louder / mute your voice" (D35), remembered."""
+        v = self._voice
+        if not v:
+            return "My voice is switched off in config."
+        if word in ("mute", "unmute"):
+            v.muted = word == "mute"
+            said = "Muted. Say \"Jimmy, unmute your voice\" to hear me." if v.muted else "I'm back."
+        else:
+            v.volume = max(10, min(100, v.volume + (20 if word == "louder" else -20)))
+            said = f"Volume {v.volume} percent."
+        mem.set_setting("voice_volume", v.volume)
+        mem.set_setting("voice_muted", int(v.muted))
+        return said
+
     def set_curtain(self, on: bool) -> None:
         """By hand: Ctrl+Alt+L, the pill, or "Jimmy, curtain" / "lift the curtain"."""
         self._manual_curtain = on
@@ -429,6 +444,9 @@ class ContextBus:
             from jimmy.memory import Memory
             self._focus_memory = Memory(jcfg.MEMORY_DB)
         mem = self._intent_memory()        # focus and reminders (D32) live in Jimmy's memory
+        if self._voice:                    # D35: the volume you asked for last time
+            self._voice.volume = int(mem.setting("voice_volume", config.VOICE_VOLUME))
+            self._voice.muted = mem.setting("voice_muted") == "1"
         self._api = OverlayAPI({"state": self.overlay_state, "pause": self.pause,
                                 "resume": self.resume, "dismiss": self.dismiss,
                                 "post_ask": lambda b: self._asker.ask(str(b.get("q", "")).strip(), "typed")
@@ -439,6 +457,7 @@ class ContextBus:
                                 "post_focus": lambda b: self.set_focus(str(b.get("text", "")).strip() or None),
                                 "post_curtain": lambda b: self.set_curtain(bool(b.get("on"))),
                                 "post_card_used": lambda b: self.store.set_card_state(int(b.get("id", 0)), "used"),
+                                "post_scroll_window": lambda b: screen.scroll_active(b.get("dir") != "up"),
                                 "post_accept": lambda b: self._api.publish(
                                     {"type": "toast", "text": self._asker.accept(), "icon": "yes"}),
                                 **timeline_hooks(self.store)}).start()
@@ -451,7 +470,9 @@ class ContextBus:
                                      "remind": lambda what, due, app: mem.add_reminder(what, due, app),
                                      "reminders": lambda: mem.reminders(),
                                      "unremind": lambda: mem.set_reminder_state(None, "cancelled"),
-                                     "open_file": os.startfile})
+                                     "open_file": os.startfile,
+                                     "volume": lambda word: self.set_volume(word, mem),
+                                     "presence": lambda: self._presence if self._presence_obj else None})
         # D32: the cards Jimmy writes itself. Deadlines need the local model.
         from jimmy.cards import local_engine
 

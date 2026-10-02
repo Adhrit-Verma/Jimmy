@@ -25,7 +25,12 @@ NAMES = {"code": "VS Code", "msedge": "Edge", "ms-teams": "Teams", "explorer": "
 # Words of a usage question that aren't what it's about ("how long was I on *chrome*").
 _USAGE_WORDS = set("""long much time spent spend spending screen apps app used use using hours
 minutes many whole total usage breakdown most least which productive focused stats spent
-overall where go went""".split())
+overall where go went opened open date started start starting first routine usual usually
+typical month visited checked""".split())
+# D35: "last time I used Discord", "when did I start using Discord", "my routine".
+_LAST = re.compile(r"\blast time\b|\bwhen did i last\b|\blast (?:used|opened|on)\b", re.I)
+_FIRST = re.compile(r"\bfirst time\b|\bwhen did i first\b|\bstart(?:ed)? using\b|\bfirst (?:used|opened)\b", re.I)
+_ROUTINE = re.compile(r"\broutine\b|\busual(?:ly)?\b|\btypical\b", re.I)
 
 
 def app_name(app: str | None) -> str:
@@ -132,11 +137,19 @@ def answer(store: Store, question: str, window: tuple[int, int, str] | None,
     question, time and usage words are gone; it matches app names and titles, so
     "youtube" finds a Chrome tab. With no term: the day's total and top apps.
     """
+    which = "last" if _LAST.search(question) else "first" if _FIRST.search(question) else None
+    routine = bool(_ROUTINE.search(question))
     if window is None:
         midnight = datetime.fromtimestamp(now / 1000).replace(hour=0, minute=0, second=0, microsecond=0)
-        window = (int(midnight.timestamp() * 1000), now, "today")
+        window = ((0, now, "ever") if which else (now - 30 * 86_400_000, now, "last 30 days") if routine
+                  else (int(midnight.timestamp() * 1000), now, "today"))
     since, until, label = window
     ps = pieces(store.timeline(since, until), until)
+    if which and label != "ever" and not any(t in app.lower() or t in title.lower()
+                                             for t in terms(question) for app, title, *_ in ps):
+        # "the Tuesday when I started using Discord": nothing then, so look at all of it.
+        line, data = answer(store, question, (0, now, "ever"), now)
+        return f"Not {_when(label)}. {line}", data
     s = summarize(ps)
     when = _when(label)
     match = None
@@ -151,7 +164,12 @@ def answer(store: Store, question: str, window: tuple[int, int, str] | None,
     if not ps:
         line = f"Nothing captured {when}."
     elif match and not match["ms"]:
-        line = f"I didn't see {match['name']} {when}."
+        line = f"I didn't see {match['name']}{'' if label == 'ever' else ' ' + when}."
+    elif which and match:
+        ts = match["spans"][-1][0] if which == "last" else match["spans"][0][0]   # last capture, not estimate end
+        line = f"{match['name']}: {which} seen {_at(ts, now)}."
+    elif routine or until - since > 2 * 86_400_000 and not match:
+        line = _routine(ps, s, when)
     elif match:
         line = f"{dur(match['ms'])} on {match['name']} {when}, of {dur(s['active_ms'])} on screen."
     else:
@@ -159,6 +177,30 @@ def answer(store: Store, question: str, window: tuple[int, int, str] | None,
         line = f"{dur(s['active_ms'])} on screen {when}. Most on {top[0]['app']} ({dur(top[0]['ms'])})"
         line += f", then {top[1]['app']} ({dur(top[1]['ms'])})." if len(top) > 1 else "."
     return line, {**s, "since": since, "until": until, "label": label, "match": match}
+
+
+def _at(ts: int, now: int) -> str:
+    d, n = datetime.fromtimestamp(ts / 1000), datetime.fromtimestamp(now / 1000)
+    day = ("today" if d.date() == n.date() else "yesterday" if (n.date() - d.date()).days == 1
+           else d.strftime("%a %d %b"))
+    return f"{day} at {d:%H:%M}"
+
+
+def _routine(ps: list, s: dict, when: str) -> str:
+    """Several days in one line: how many, how long a day, when you start, what on."""
+    days: dict[str, list[int]] = defaultdict(lambda: [0, 1 << 62])
+    for _, _, a, b in ps:
+        d = days[datetime.fromtimestamp(a / 1000).strftime("%Y-%m-%d")]
+        d[0] += b - a
+        d[1] = min(d[1], a)
+    active = [v for v in days.values() if v[0] >= 10 * 60_000]
+    if not active:
+        return f"Hardly anything captured {when}."
+    starts = sorted(datetime.fromtimestamp(v[1] / 1000).strftime("%H:%M") for v in active)
+    top = ", then ".join(a["app"] for a in s["apps"][:2])
+    return (f"{len(active)} active day{'s' * (len(active) > 1)} {when}, about "
+            f"{dur(sum(v[0] for v in active) / len(active))} a day, usually from {starts[len(starts) // 2]}. "
+            f"Mostly {top}.")
 
 
 def terms(question: str) -> list[str]:

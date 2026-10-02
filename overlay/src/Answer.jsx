@@ -71,7 +71,7 @@ function Evidence({ answer, onOpen }) {
       {...hover}
       initial={{ opacity: 0, x: -24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }}
       transition={spring}
-      className={`pointer-events-auto absolute bottom-6 left-4 top-14 flex w-[400px] flex-col overflow-hidden rounded-2xl ${surface}`}
+      className={`pointer-events-auto absolute left-4 top-14 flex max-h-[calc(100%-5rem)] w-[400px] flex-col overflow-hidden rounded-2xl ${surface}`}
     >
       <div className="flex items-center gap-2 px-4 pb-2 pt-3.5 text-[11px] uppercase tracking-wider text-neutral-500">
         <Search size={12} />

@@ -169,6 +169,6 @@ LISTEN_WINDOW_S = 8          # after "Jimmy" alone, the next thing said (within 
 VOICE_ANSWERS = True         # read spoken questions' answers aloud (Windows' built-in voice)
 VOICE_MAX_CHARS = 220        # read at most this much: the first sentences that fit (D31: was 320)
 VOICE_RATE = 1               # SAPI speaking rate, -10..10
-VOICE_VOLUME = 100           # 0..100
+VOICE_VOLUME = 55            # 0..100; D35: 100 was too loud. "Jimmy, speak softer/louder" changes it
 CONVO_S = 180                # questions this close together are one conversation (D27)
 CLARIFY_WAIT_S = 20          # after Jimmy asks "now, or earlier?", wait this long for the reply (D28)

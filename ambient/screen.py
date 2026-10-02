@@ -86,6 +86,26 @@ def focused_is_password() -> bool:
         return False
 
 
+def scroll_active(down: bool, notches: int = 5) -> bool:
+    """Scroll the window you're on, as your mouse wheel would (D35: "Jimmy, scroll
+    down" with nothing of Jimmy's to scroll). The only input Jimmy ever sends to
+    another app, and only when asked: no clicks, no typing. If the pointer isn't
+    over that window, Page Down/Up goes to it instead."""
+    hwnd = user32.GetForegroundWindow()
+    if not hwnd:
+        return False
+    pt, rect = wintypes.POINT(), wintypes.RECT()
+    user32.GetCursorPos(ctypes.byref(pt))
+    user32.GetWindowRect(hwnd, ctypes.byref(rect))
+    if rect.left <= pt.x < rect.right and rect.top <= pt.y < rect.bottom:
+        user32.mouse_event(0x0800, 0, 0, (-120 if down else 120) * notches, 0)   # MOUSEEVENTF_WHEEL
+    else:
+        vk = 0x22 if down else 0x21                                              # VK_NEXT / VK_PRIOR
+        user32.keybd_event(vk, 0, 0, 0)
+        user32.keybd_event(vk, 0, 2, 0)                                          # KEYEVENTF_KEYUP
+    return True
+
+
 def clean_url(raw: str) -> str | None:
     """What an address bar showed, as a link to reopen (D32). Query and fragment
     are dropped (that's where tokens live); only http(s) pages are kept."""

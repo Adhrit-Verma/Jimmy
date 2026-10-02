@@ -7,9 +7,9 @@ import {
 import Answer from "./Answer.jsx";
 
 const CARD_MS = 12_000;      // a card fades on its own; × is the only real dismissal
-const ANSWER_MS = 60_000;    // an answer fades after a minute unless hovered
+const ANSWER_MS = 30_000;    // D35: an answer fades after 30 s unless hovered (was a minute: clutter)
 const FLASH_MS = 2600;       // D31: how long the pill shows "Paused", "Copied", …
-const MAX_CARDS = 3;
+const MAX_CARDS = 2;          // D35: fewer things on screen at once
 const bridge = window.jimmy; // from preload.cjs: events in, actions out
 
 // Everything except the pill, cards and answer panels lets clicks through.
@@ -31,6 +31,7 @@ const SUGGEST = [
   { label: "Open insights", icon: BarChart3 },
 ];
 const FLASH_ICON = {
+  close_ui: X, copy_screen: Check, volume: MessageCircle, presence: Eye,
   pause: Pause, resume: Play, focus: Target, unfocus: Target, open: ExternalLink, show: X, nav: MoveRight,
   remind: Bell, reminders: Bell, unremind: Bell, curtain: EyeOff, uncurtain: Eye, open_url: Globe,
 };
@@ -134,6 +135,9 @@ function Pill({ state, mood, prompt, typing, setTyping, flash, recent, onAsk, an
     : mood === "answering" ? <span className="shimmer">Answering…</span>
     : <span className="text-neutral-400">Listening</span>;
   const dot = curtain ? "bg-neutral-500" : paused ? "bg-amber-400" : mood ? "bg-sky-400" : "bg-emerald-400";
+  // D35: idle, the pill is just a dot, so it doesn't sit on other apps' tab bars and
+  // title bars. Anything happening (or your pointer) brings the whole pill back.
+  const compact = !open && !typing && !flash && !mood && !watched && !answerOpen;
   const FlashIcon = flash ? FLASH_ICON[flash.icon] || Check : null;
 
   return (
@@ -143,8 +147,8 @@ function Pill({ state, mood, prompt, typing, setTyping, flash, recent, onAsk, an
         onMouseEnter={() => { hover.onMouseEnter(); setOpen(true); }}
         onMouseLeave={() => { if (!typing) hover.onMouseLeave(); setOpen(false); setArmed(false); }}
         transition={{ type: "spring", stiffness: 500, damping: 38 }}
-        className={`pointer-events-auto flex h-8 items-center gap-2 rounded-full px-3 text-[12px] ${surface}
-          ${mood === "listening" ? "ring-sky-400/40" : ""}`}
+        className={`pointer-events-auto flex items-center gap-2 rounded-full text-[12px] ${surface}
+          ${compact ? "h-4 px-1.5 opacity-70" : "h-8 px-3"} ${mood === "listening" ? "ring-sky-400/40" : ""}`}
       >
         {mood === "listening" ? <Equalizer /> : (
           <span className="relative flex size-2">
@@ -152,8 +156,8 @@ function Pill({ state, mood, prompt, typing, setTyping, flash, recent, onAsk, an
             <span className={`relative inline-flex size-2 rounded-full ${dot}`} />
           </span>
         )}
-        <span className="font-medium text-neutral-100">Jimmy</span>
-        {typing ? (
+        {!compact && <span className="font-medium text-neutral-100">Jimmy</span>}
+        {compact ? null : typing ? (
           <form onSubmit={submit} className="flex items-center">
             <input
               ref={input} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey} onBlur={done}
@@ -174,12 +178,12 @@ function Pill({ state, mood, prompt, typing, setTyping, flash, recent, onAsk, an
             </motion.span>
           </AnimatePresence>
         )}
-        {watched && !typing && (
+        {watched && !typing && !compact && (
           <span className="flex items-center gap-1 rounded-full bg-amber-400/15 px-2 py-0.5 text-[11.5px] text-amber-200">
             <Eye size={11} /> Someone's looking · panels hidden
           </span>
         )}
-        {state.focus && !typing && !flash && !curtain && !watched && (
+        {state.focus && !typing && !flash && !curtain && !watched && !compact && (
           <span title={`Focus: ${state.focus.text}`}
             className="flex max-w-[220px] items-center gap-1 rounded-full bg-violet-400/10 px-2 py-0.5 text-[11.5px] text-violet-200">
             <Target size={11} className="shrink-0" />
@@ -393,8 +397,14 @@ export default function App() {
     const { answer: a, openIndex: oi, cards: cs } = live.current;
     const n = a?.evidence?.length || 0;
     if (ev.action === "scroll") {
-      document.querySelectorAll("[data-scroll]").forEach((el) =>
-        el.scrollBy({ top: (ev.dir === "down" ? 1 : -1) * el.clientHeight * 0.7, behavior: "smooth" }));
+      // D35: in the first real session "scroll down" did nothing: the panel had nothing
+      // to scroll. Jimmy's panel if it can move; otherwise the window you're on.
+      const down = ev.dir === "down";
+      const room = [...document.querySelectorAll("[data-scroll]")].filter((el) =>
+        down ? el.scrollTop + el.clientHeight < el.scrollHeight - 4 : el.scrollTop > 4);
+      if (oi == null && room.length) {
+        room.forEach((el) => el.scrollBy({ top: (down ? 1 : -1) * el.clientHeight * 0.7, behavior: "smooth" }));
+      } else bridge?.api("scroll_window", { dir: ev.dir });
     } else if (ev.action === "step" && n) setOpenIndex(oi == null ? 0 : Math.max(0, Math.min(n - 1, oi + ev.by)));
     else if (ev.action === "edge" && n) setOpenIndex(ev.to === "first" ? 0 : n - 1);
     else if (ev.action === "zoom" && n) setOpenIndex(oi ?? 0);
@@ -439,7 +449,8 @@ export default function App() {
       }
       if (ev.type === "toast") { waiting.current = 0; unthink(); say(ev.text, ev.icon); }
       if (ev.type === "ui") onUi(ev);
-      if (ev.type === "copy") say("Draft copied", "copy");
+      if (ev.type === "copy") say(ev.label || "Copied", "copy");
+      if (ev.type === "close_all") { setOpenIndex(null); closeAnswer(); setCards([]); }   // "Jimmy, close your UI"
       if (ev.type === "presence") setPresence(ev);
       if (ev.type === "state" && "curtain" in ev) setPresence((p) => ({ ...p, curtain: ev.curtain, state: ev.presence }));
       if (ev.type === "answer_close") closeAnswer();

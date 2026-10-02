@@ -99,7 +99,10 @@ function send(event) {
       win.setBounds(on ? d.bounds : d.workArea);
     }
   }
-  if (event.type === "ui" && target === "timeline" && timeline && !timeline.isDestroyed()) {
+  if (event.type === "close_all" && timeline && !timeline.isDestroyed()) timeline.close();   // D35
+  // Navigation goes to the timeline only while you're in it; after you click back into
+  // another app, "scroll down" means that app (D35).
+  if (event.type === "ui" && target === "timeline" && timeline && !timeline.isDestroyed() && timeline.isFocused()) {
     return timeline.webContents.send("event", event);
   }
   if (win && !win.isDestroyed()) win.webContents.send("event", event);

@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS turns (
     role TEXT NOT NULL, text TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_turns_session ON turns(session, id);
+CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS reminders (
     id INTEGER PRIMARY KEY, created INT NOT NULL, text TEXT NOT NULL,
     due_ts INT, app TEXT, state TEXT DEFAULT 'waiting'
@@ -156,6 +157,16 @@ class Memory:
             self._write("UPDATE reminders SET state = ? WHERE state = 'waiting'", (state,))
         else:
             self._write("UPDATE reminders SET state = ? WHERE id = ?", (state, rid))
+
+    # Settings the user changed by voice ("speak softer"), kept across runs (D35).
+    def setting(self, key: str, default=None):
+        with self._lock:
+            row = self.conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+        return row[0] if row else default
+
+    def set_setting(self, key: str, value) -> None:
+        self._write("INSERT INTO settings(key, value) VALUES (?, ?) "
+                    "ON CONFLICT(key) DO UPDATE SET value = excluded.value", (key, str(value)))
 
     def add_turn(self, session: str, role: str, text: str) -> None:
         if text and text.strip():

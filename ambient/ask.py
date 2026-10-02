@@ -31,9 +31,33 @@ from .db import Store, now_ms
 from .recall import furniture, hybrid
 from .redact import is_own_window
 
-# Whisper spells the name a few ways; the question follows the name.
-_WAKE = re.compile(r"^\W*(?:(?:hey|hi|ok|okay|yo)\W+)?(?:jimmy|jimmie|jimi|jimmi|jimy)\b\W*(.*)$",
+# Whisper spells the name a few ways; the question follows the name. D35: with
+# language detection on, it also writes it in Devanagari or Urdu script, and the
+# first real session lost "جمی سکرول اپ" ("Jimmy scroll up") that way. Indic
+# vowel signs aren't \w, so those spellings go without a word boundary.
+_WAKE = re.compile(r"^\W*(?:(?:hey|hi|ok|okay|yo|हे|ہے)\W+)?"
+                   r"(?:(?:jimmy|jimmie|jimi|jimmi|jimy|jimmys|gimmy|jemmy)\b|जिमी|जिम्मी|जीमी|جمی|جیمی|جمّی)\W*(.*)$",
                    re.I | re.S)
+# D35: the few command words Whisper writes in Hindi/Urdu script, mapped back.
+_TRANSLIT = {"सकरोल": "scroll", "स्क्रॉल": "scroll", "स्क्रोल": "scroll", "سکرول": "scroll", "اسکرول": "scroll",
+             "अप": "up", "اپ": "up", "डाउन": "down", "ڈاؤن": "down", "ڈاون": "down", "नेक्स्ट": "next",
+             "نیکسٹ": "next", "बैक": "back", "بیک": "back", "क्लोज़": "close", "क्लोज": "close", "کلوز": "close",
+             "पॉज़": "pause", "پاز": "pause", "स्टॉप": "stop", "اسٹاپ": "stop"}
+
+
+def normalize(text: str) -> str:
+    """Known command words back to English; everything else untouched."""
+    return " ".join(_TRANSLIT.get(w.strip(".,!?؟।"), w) for w in text.split())
+
+
+# "can you …", "please …", "… for me": the request inside the politeness (D35).
+_POLITE = re.compile(r"^(?:(?:hey|ok|okay|so|um|uh)\W+)?(?:(?:(?:can|could|would|will) you|please|"
+                     r"i (?:want|need) you to|go ahead and|kindly)\s+)+", re.I)
+_POLITE_END = re.compile(r"\s+(?:please|for me|now|right now|jimmy)\W*$", re.I)
+
+
+def polite(text: str) -> str:
+    return _POLITE_END.sub("", _POLITE.sub("", " ".join(text.strip().split()))).strip()
 
 # --- routing (D27): plain rules, deterministic and testable ------------------
 _SCREEN = re.compile(
@@ -41,7 +65,11 @@ _SCREEN = re.compile(
     r"|\bwhat(?:'s| is) (?:this|that) (?:page|window|tab|site|document|file)\b"
     r"|\bwhat(?: am i|'m i| i'm) (?:looking at|reading|seeing|watching|doing)(?: right)? now\b"
     r"|\b(?:summari[sz]e|explain|read|describe) (?:this|the page|the screen|my screen|what'?s on)\b"
-    r"|\bwhat(?:'s| is) on (?:my |the )?screen\b", re.I)
+    r"|\bwhat(?:'s| is) on (?:my |the )?screen\b"
+    r"|\b(?:can|do) you see (?:my |the |this )?(?:screen|window|page)\b", re.I)    # D35: it can; show it
+# D35: "can you see me?" is about the webcam, answered from presence, by code.
+_PRESENCE = re.compile(r"\b(?:can|do) you see me\b|\b(?:see|recogni[sz]e) my face\b|"
+                       r"\bam i (?:in front of|on) (?:the )?camera\b|\bis (?:my|the) (?:webcam|camera) on\b", re.I)
 _CHAT = re.compile(
     r"^(?:can|could|do|are|will) you (?:hear|listen|there|awake|working|understand|see me)\b"
     r"|^(?:hi|hello|hey|thanks|thank you|thank|good (?:morning|afternoon|evening|night)|bye|ok|okay)\b"
@@ -71,7 +99,14 @@ _STATS = re.compile(
     r"|\bscreen ?time\b|\btime (?:spent|on screen)\b|\bspen[dt] (?:my |the )?(?:time|day|morning|afternoon)\b"
     r"|\b(?:which|what) apps? (?:did i use|have i used|was i (?:on|using)|i used)\b|\bmost used apps?\b"
     r"|\b(?:show|how was|how'?s|recap|review)\s+(?:me\s+)?my (?:day|week|morning|afternoon|evening)\b"
-    r"|\bwhere did (?:my |the )?(?:time|day) go\b|\bhow (?:productive|focused) was i\b", re.I)
+    r"|\bwhere did (?:my |the )?(?:time|day) go\b|\bhow (?:productive|focused) was i\b"
+    # D35 (missed in the first real session): "show me the apps I have used today",
+    # "what was the apps I have opened last month", "my routine", "last time I used Discord".
+    r"|\bapps?\b.{0,30}\b(?:used|use|using|opened|open|ran)\b"
+    r"|\bmy (?:routine|usual day|typical day)\b|\bhow do i (?:usually )?spend\b"
+    r"|\b(?:last|first) time (?:that )?i (?:used|opened|was on|was in|visited|went on|checked)\b"
+    r"|\bwhen (?:did|was|have) i (?:last |first )?(?:use|used|open|opened|on|start(?:ed)? using|visit)\b"
+    r"|\bwhen i (?:started|first) us(?:e|ed|ing)\b", re.I)
 # Only these continue a usage answer; "what is this?" after one is a new question.
 _STATS_FOLLOW = re.compile(r"(?:and|also|what about|how about|and what about)\b", re.I)
 
@@ -86,7 +121,9 @@ _CMD = (
                          r"\s*(m|mins?|minutes?|h|hrs?|hours?))?\W*$", re.I)),
     ("resume", re.compile(r"^(?:please\s+)?(?:resume|unpause|start (?:listening|recording|capturing)(?: again)?)\W*$",
                           re.I)),
-    ("unfocus", re.compile(r"^(?:clear|stop|end|drop|cancel)\s+(?:my\s+|the\s+)?focus\W*$", re.I)),
+    ("unfocus", re.compile(r"^(?:(?:clear|stop|end|drop|cancel|remove)\s+(?:my\s+|the\s+)?focus(?:ing)?"
+                           r"(?:\s+on\s+.+)?|unfocus|no (?:more )?focus|stop focusing(?:\s+on\s+.+)?|"
+                           r"i'?m done (?:with|focusing on)\s+.+)\W*$", re.I)),
     ("focus", re.compile(r"^(?:(?:i (?:want|need) to|let me|let'?s|help me)\s+)?"
                          r"(?:focus on|set (?:my )?focus(?: to)?|my focus is)\s+(.{3,}?)\W*$", re.I)),
     ("hush", re.compile(r"^(?:stop|stop talking|shush|hush|quiet|be quiet|shut up|enough|never ?mind|cancel|"
@@ -99,10 +136,28 @@ _CMD = (
                        r"(?:\s+(?:please|jimmy|do it))?\W*$", re.I)),
     ("no", re.compile(r"^(?:no|nope|no thanks|not now|skip(?: it)?|don'?t)\W*$", re.I)),
     # D34: the privacy curtain by hand. Raised by voice; lifted by voice, hotkey or presence.
-    ("curtain", re.compile(r"^(?:curtain|privacy(?: mode| screen| curtain)?|hide (?:my )?screen|"
-                           r"(?:close|draw|pull) the curtain)\W*$", re.I)),
+    ("curtain", re.compile(r"^(?:(?:turn on|switch on|enable|start|activate|put up|use)\s+(?:the\s+|my\s+)?)?"
+                           r"(?:curtain|privacy(?: mode| screen| curtain)?)(?:\s+on)?\W*$|^hide (?:my )?screen\W*$|"
+                           r"^(?:close|draw|pull) the curtain\W*$", re.I)),
     ("uncurtain", re.compile(r"^(?:lift|open|raise|remove|drop) the curtain|^show (?:me )?my screen\W*$|"
-                             r"^(?:i'?m back|curtain off|privacy off)\W*$", re.I)),
+                             r"^(?:(?:turn off|switch off|disable|stop|end)\s+(?:the\s+|my\s+)?"
+                             r"(?:curtain|privacy(?: mode| screen| curtain)?)|(?:curtain|privacy(?: mode)?) off|"
+                             r"i'?m back)\W*$", re.I)),
+    # D35: Jimmy's own clutter, gone: every panel, card and the timeline window.
+    ("close_ui", re.compile(r"^(?:close|hide|clear|dismiss|remove|minimi[sz]e)\s+(?:all\s+(?:of\s+)?)?"
+                            r"(?:your|the|my|jimmy'?s)?\s*(?:ui|interface|panels?|windows?|cards?|everything|"
+                            r"overlay|stuff|screen)\W*$|^(?:hide yourself|go away|clear the screen)\W*$", re.I)),
+    # D35: "copy the text on my screen" copies; it doesn't read it out.
+    ("copy_screen", re.compile(r"^(?:\w+\s+)?copy\s+(?:all\s+)?(?:of\s+)?(?:the\s+)?(?:text|everything|words|"
+                               r"content|this)(?:\s+(?:on|from|in)\s+(?:my\s+|the\s+|this\s+)?"
+                               r"(?:screen|window|page))?\W*$", re.I)),
+    # D35: how loud Jimmy speaks, remembered across runs.
+    ("volume", re.compile(r"^(?:speak|talk|be)\s+(softer|quieter|lower|louder|more quietly|more loudly|up)\W*$|"
+                          r"^(?:turn|bring)\s+(?:your\s+)?(?:voice|volume)\s+(down|up)\W*$|"
+                          r"^(?:lower|reduce|decrease)\s+(?:your\s+)?(?:voice|volume)\W*$|"
+                          r"^(?:raise|increase)\s+(?:your\s+)?(?:voice|volume)\W*$|"
+                          r"^(mute|unmute|silence)\s+(?:your\s+)?(?:voice|yourself)\W*$|"
+                          r"^(?:stop|start)\s+(?:speaking|talking)(?: out loud| aloud)?\W*$", re.I)),
     # D32: reopen a page you saw, in your browser (the URL its address bar showed).
     ("open_url", re.compile(r"^(?:please\s+)?(?:re)?open (?:that|the|this)(?: same)? (?:page|link|site|tab|website)"
                             r"(?: again)?(?: in (?:the |my )?browser)?\W*$"
@@ -133,7 +188,10 @@ _SEARCH = re.compile(r"^(?:search|look) for\s+(.+?)\W*$", re.I)
 
 def nav(text: str) -> dict | None:
     """The overlay/timeline event a navigation phrase means, or None (D33)."""
-    t = " ".join(text.strip().strip(".!?,").split())
+    t = polite(normalize(text)).strip(".!?,")
+    # "scroll down and show me older things": the scroll is the instruction (D35).
+    if m := re.match(r"^(?:scroll|page)\s+(down|up)\b", t, re.I):
+        return {"type": "ui", "action": "scroll", "dir": m[1].lower()}
     for rx, fn in _NAV:
         if m := rx.match(t):
             return {"type": "ui", **fn(m)}
@@ -158,18 +216,49 @@ _YES = re.compile(r"^(?:yes|yeah|yep|sure|do it|go ahead|add it|okay|ok)\W*$|^(?
 ANSWER_STYLE = """The user asked this out loud; the <context> items are shown beside your reply.
 Answer in one or two short sentences, under 35 words, plain text: the answer first,
 then when and where (day, time, app). No preamble, no restating the question, no
-hedging. If the context doesn't answer it, say so in under ten words."""
+hedging. If the context shows two or more different things they could mean, ask
+which one in one short question instead of guessing. Things they said to Jimmy are
+not evidence. If the context doesn't answer it, say so in under ten words."""
 
 SCREEN_STYLE = """The <context> is the window the user is looking at right now. In one or two
 short sentences, under 40 words: what it is, then what matters for their question. For
 a summary, give the gist of the content, not the interface. Use only this <context>:
 never reuse an earlier answer. If the text is thin, name the app and window and say you
-can't read its main content."""
+can't read its main content. This is read aloud: never say email addresses, phone
+numbers, passwords or codes (say "an email address"). A sign-in form means they are
+not signed in yet."""
 
 CHAT_STYLE = """This is conversation, not a search. Reply in one short sentence, plain text,
-easy to read aloud. If asked what you can do: recall what they saw or heard ("what was
-that form on Friday?"), explain their screen ("what's on my screen?"), show where their
-day went ("how was my day?"), and keep them on track ("focus on ...")."""
+easy to read aloud. If the request is unclear, ask one short question back instead.
+You can see their screen and their history; never say you can't. If asked what you
+can do: recall what they saw or heard ("what was that form on Friday?"), explain their
+screen ("what's on my screen?"), show where their day went ("how was my day?"), set
+reminders and a focus, draft replies, and move around your own panels by voice."""
+
+# D35: when the rules don't recognise a request but it sounds like an instruction,
+# the model picks which of Jimmy's tools it means, or asks back. One call, JSON,
+# nothing captured goes in: only the request.
+TOOLS_Q = """You route one spoken request to Jimmy, a desktop assistant on the user's
+Windows laptop. Jimmy can do exactly these things (tool: what it does):
+- scroll {"dir": "up" or "down"}: scroll what's in front (Jimmy's panel or the window)
+- close_ui {}: hide all of Jimmy's panels, cards and windows
+- open {"view": "timeline" or "insights"}: open Jimmy's timeline or insights window
+- curtain {"on": true or false}: draw or lift the privacy curtain over the screen
+- pause {"minutes": number}: stop capturing for a while; resume {}: start again
+- focus {"text": "..."}: set what the user means to work on; unfocus {}
+- remind {"text": "...", "when": "..."}: set a reminder
+- copy_screen {}: copy the text of the window in front to the clipboard
+- volume {"level": "softer" or "louder" or "mute" or "unmute"}: Jimmy's speaking voice
+- answer {}: a question about the screen, the user's past, their time, or anything
+- ask_back {"question": "..."}: too unclear to act on; ask one short question
+- cannot {"reason": "..."}: none of the above can do it (clicking, typing, closing
+  other apps, reading formatting like bold or colour)
+Put "reason" and "question" inside "args", in the first person ("I can't ..."),
+under 15 words. Reply with JSON only: {"tool": "...", "args": {...}}"""
+_ACTIONISH = re.compile(r"^(?:turn|switch|close|open|hide|scroll|copy|paste|move|put|set|make|start|stop|"
+                        r"enable|disable|mute|unmute|clear|play|pause|resume|lift|lower|raise|zoom|minimi[sz]e|"
+                        r"maximi[sz]e|change|speak|talk|save|add|remind|focus|go to|take me|get rid|dismiss|"
+                        r"select|click|type|press|delete|send|read out)\b", re.I)
 
 
 DRAFT_STYLE = """Write what the user asked for (a reply, message or email) as a draft they will
@@ -192,7 +281,7 @@ def _topic(text: str) -> list[str]:
 
 def command(text: str) -> tuple[str, object] | None:
     """(kind, argument) if this is something to do rather than a question (D31)."""
-    t = text.strip()
+    t = polite(normalize(text))
     for kind, rx in _CMD:
         m = rx.match(t)
         if not m:
@@ -200,8 +289,19 @@ def command(text: str) -> tuple[str, object] | None:
         if kind == "pause":
             n = m[1] and (float(m[1]) if m[1].isdigit() else _NUMS.get(m[1].lower(), 1))
             return kind, (n * (60 if m[2][0].lower() == "h" else 1) if n else None)
-        return kind, (m[1].strip() if m.groups() else None)
+        if kind == "volume":
+            return kind, _volume_word(t)
+        return kind, (next((g for g in m.groups() if g), "") or None) if m.groups() else None
     return None
+
+
+def _volume_word(t: str) -> str:
+    low = t.lower()
+    if re.search(r"\bunmute\b|\bstart (?:speaking|talking)", low):
+        return "unmute"
+    if re.search(r"\bmute\b|\bsilence\b|\bstop (?:speaking|talking)", low):
+        return "mute"
+    return "louder" if re.search(r"\b(?:louder|loudly|up|raise|increase)\b", low) else "softer"
 
 
 def parse_wake(text: str) -> str | None:
@@ -236,6 +336,8 @@ def route(text: str, last: dict | None = None, now: int | None = None) -> tuple[
             and len(t.split()) <= 8 and (_STATS_FOLLOW.match(t) or (fresh_time and not _PAST.search(t)))):
         q = t if insights.terms(t) else f"{t} {last.get('term', '')}"
         return "stats", (q if fresh_time else f"{q} {last.get('when', '')}").strip()
+    if _PRESENCE.search(t):
+        return "presence", t
     if _CHAT.search(t) and not _PAST.search(t):
         return "chat", t
     if last and last["mode"] in ("recall", "screen") and _SHOW.search(t) and len(t.split()) <= 8:
@@ -300,6 +402,17 @@ def _item(ref, ts, kind, text, frame, via, terms) -> dict:
         "url": (frame or {}).get("url"),
         "excerpt": excerpt(text, terms), "text": text[:600],
     }
+
+
+def _json_obj(reply: str) -> dict | None:
+    """The outermost {...} in a model reply, parsed; None if there isn't one."""
+    import json
+    a, b = reply.find("{"), reply.rfind("}")
+    try:
+        got = json.loads(reply[a:b + 1]) if 0 <= a < b else None
+    except ValueError:
+        return None
+    return got if isinstance(got, dict) else None
 
 
 def _when_due(r: dict) -> str:
@@ -379,14 +492,16 @@ class Voice:
     Its own thread (COM likes one), interruptible, reports start and end."""
 
     def __init__(self, on_start: Callable[[], None] = lambda: None,
-                 on_end: Callable[[], None] = lambda: None):
+                 on_end: Callable[[], None] = lambda: None,
+                 volume: int = config.VOICE_VOLUME, muted: bool = False):
         self.on_start, self.on_end = on_start, on_end
+        self.volume, self.muted = volume, muted     # D35: changed by voice, applied per sentence
         self._q: queue.Queue = queue.Queue()
         self._stop = threading.Event()
         threading.Thread(target=self._run, daemon=True, name="voice").start()
 
     def say(self, text: str) -> None:
-        if text.strip():
+        if text.strip() and not self.muted:
             self._stop.clear()
             self._q.put(text)
 
@@ -404,13 +519,13 @@ class Voice:
             comtypes.CoInitialize()
             sapi = CreateObject("SAPI.SpVoice")
             sapi.Rate = config.VOICE_RATE
-            sapi.Volume = config.VOICE_VOLUME
         except Exception as exc:
             print(f"[voice] unavailable: {type(exc).__name__}: {exc}")
             return
         while (text := self._q.get()) is not None:
             self.on_start()
             try:
+                sapi.Volume = self.volume
                 sapi.Speak(text, 1)                     # 1 = asynchronous
                 while not sapi.WaitUntilDone(100):
                     if self._stop.is_set():
@@ -456,6 +571,7 @@ class Asker:
         """Called for every transcribed segment. True if it was meant for Jimmy."""
         if source != "mic":
             return False
+        text = normalize(text)                 # D35: "جمی سکرول اپ" -> "جمی scroll up"
         now = now_ms()
         bare = " ".join(text.strip().split())
         # D33: right after Jimmy showed you something, navigation needs no wake word;
@@ -613,6 +729,21 @@ class Asker:
                 return "I can't do that from here."
             act["curtain"](kind == "curtain")
             return "Curtain down." if kind == "curtain" else "Curtain lifted."
+        if kind == "close_ui":
+            self.pending, self.listen_until, self.nav_until = None, 0, 0
+            self.publish({"type": "close_all"})
+            return "Cleared."
+        if kind == "copy_screen":
+            now = self.screen_now()
+            if not now or not now["text"].strip():
+                return "I can't read this window."
+            self.publish({"type": "copy", "text": now["text"],
+                          "label": f"Copied {len(now['text'].split())} words"})
+            return f"Copied the text of {insights.app_name(now['frame']['app'])}."
+        if kind == "volume":
+            if "volume" not in act:
+                return "I can't do that from here."
+            return act["volume"](arg)
         need = {"pause": "pause", "resume": "resume", "focus": "focus", "unfocus": "focus"}[kind]
         if need not in act:
             return "I can't do that from here."
@@ -645,6 +776,92 @@ class Asker:
         if source == "voice" and self.speak and config.VOICE_ANSWERS:
             self.speak(line)
 
+    def _presence_line(self) -> str:
+        """D35: "can you see me?", answered from the webcam's state, by code."""
+        info = self.actions.get("presence", lambda: None)()
+        if not info:
+            return "No, the webcam is off for me."
+        st = info.get("state")
+        if st == "present":
+            return "Yes, one face at the screen. I count faces; I don't recognise them."
+        if st == "watched":
+            return "I see more than one face, so I'm hiding my panels."
+        if st == "away":
+            return "No one's in front of the camera right now."
+        return f"No, the webcam is off for me{': ' + info['why'] if info.get('why') else ''}."
+
+    def _pick_tool(self, question: str) -> tuple[str, dict] | None:
+        """(tool, args) the model chose for an unrecognised instruction, or None."""
+        from jimmy.cards import parse
+        jim = self._jim()
+        if not getattr(jim, "llm", None) or not jim.llm.configured or not hasattr(jim.llm, "chat"):
+            return None
+        try:
+            reply = jim.llm.chat([{"role": "system", "content": TOOLS_Q}, {"role": "user", "content": question}],
+                                 max_tokens=160, temperature=0.0)
+        except Exception as exc:                    # any failure: answer as before
+            print(f"[ask] tool pick failed: {type(exc).__name__}: {exc}")
+            return None
+        got = _json_obj(reply) or parse(reply, "tool")   # nested ("args": {...}); flat as a fallback
+        if not got or not isinstance(got.get("tool"), str):
+            return None
+        # Measured on the cloud model: "reason" sometimes lands beside "args", not in it.
+        args = {**{k: v for k, v in got.items() if k not in ("tool", "args")},
+                **(got.get("args") if isinstance(got.get("args"), dict) else {})}
+        print(f"[ask] tool: {got['tool']} {args}")
+        return got["tool"], args
+
+    def _use_tool(self, tool: str, args: dict, question: str, source: str, aid: str) -> bool:
+        """Carry out the model's pick through the same code a spoken command uses.
+        False = "answer it after all"."""
+        cmd = {"close_ui": ("close_ui", None), "resume": ("resume", None), "unfocus": ("unfocus", None),
+               "copy_screen": ("copy_screen", None),
+               "curtain": ("curtain" if args.get("on", True) is not False else "uncurtain", None),
+               "pause": ("pause", float(args["minutes"]) if str(args.get("minutes", "")).replace(".", "", 1).isdigit()
+                         else None),
+               "focus": ("focus", str(args.get("text", "")).strip() or None),
+               "open": ("open", "insights" if args.get("view") == "insights" else "timeline"),
+               "volume": ("volume", args.get("level") if args.get("level") in ("softer", "louder", "mute", "unmute")
+                          else "softer")}.get(tool)
+        if tool == "remind" and args.get("text"):
+            cmd, question = ("remind", None), f"remind me {args.get('when', '')} to {args['text']}"
+        if tool == "focus" and not (cmd and cmd[1]):
+            cmd = None
+        if cmd:
+            said = self._do(cmd[0], cmd[1], question)
+            self.publish({"type": "toast", "text": said, "icon": cmd[0]})
+        elif tool == "scroll":
+            ev = {"type": "ui", "action": "scroll", "dir": "up" if args.get("dir") == "up" else "down"}
+            self.publish(ev)
+            said = _nav_said(ev)
+            self.publish({"type": "toast", "text": said, "icon": "nav"})
+            self.nav_until = now_ms() + config.NAV_WINDOW_S * 1000
+            return True                              # silent, like any navigation
+        elif tool in ("ask_back", "cannot"):
+            said = " ".join(str(args.get("question" if tool == "ask_back" else "reason") or "").split())[:200]
+            # ...and it writes about "Jimmy" in the third person; Jimmy is speaking.
+            said = re.sub(r"^jimmy (?:cannot|can't|can not)", "I can't", said, flags=re.I)
+            said = re.sub(r"\bhe can\b", "I can", re.sub(r"\bhis own\b", "my own", said))
+            if not said:
+                return False
+            if tool == "cannot" and not said.lower().startswith(("i ", "i'", "sorry")):
+                said = f"I can't do that: {said[0].lower() + said[1:]}"
+            self.publish({"type": "answer_start", "id": aid, "question": question, "source": source,
+                          "mode": "clarify" if tool == "ask_back" else "chat", "history": []})
+            self.publish({"type": "answer_evidence", "id": aid, "mode": "clarify" if tool == "ask_back" else "chat",
+                          "evidence": [], "window": None, "terms": [], "days": []})
+            self.publish({"type": "answer_delta", "id": aid, "text": said})
+            self.publish({"type": "answer_end", "id": aid, "text": said, "awaiting": tool == "ask_back"})
+            if tool == "ask_back":
+                self.listen_until = now_ms() + config.CLARIFY_WAIT_S * 1000
+                self.publish({"type": "listening", "prompt": "listening… your answer"})
+            self.turns.append({"q": question, "a": said, "mode": "chat", "query": question, "ts": now_ms()})
+        else:
+            return False                             # "answer", or a tool that doesn't exist
+        if source == "voice" and self.speak:
+            self.speak(said)
+        return True
+
     def _write(self, aid: str, mode: str, question: str, source: str) -> None:
         """D32: a draft to paste ("draft a reply") or an event to confirm ("add this to
         my calendar"), from the window you're on (or what we were just looking at).
@@ -671,7 +888,7 @@ class Asker:
                                         instructions=DRAFT_STYLE):
                 text += piece
                 self.publish({"type": "answer_delta", "id": aid, "text": piece})
-            self.publish({"type": "copy", "text": text})
+            self.publish({"type": "copy", "text": text, "label": "Draft copied"})
             wrote = True
         else:
             ctx = render_context(to_snippets(items))
@@ -709,6 +926,18 @@ class Asker:
             now = now_ms()
             last = self._conversation(now)
             mode, query = force or route(question, last, now)
+            if mode in ("chat", "recall") and not force and _ACTIONISH.match(polite(question)):
+                # D35: it sounds like an instruction the rules don't know. Let the model
+                # pick a tool (or ask back) instead of answering "I can't do that".
+                picked = self._pick_tool(question)
+                if picked and self._use_tool(*picked, question=question, source=source, aid=aid):
+                    return
+            if mode == "presence":
+                said = self._presence_line()
+                self.publish({"type": "toast", "text": said, "icon": "presence"})
+                if source == "voice" and self.speak:
+                    self.speak(said)
+                return
             if mode == "command":
                 kind, arg = command(question)
                 said = self._do(kind, arg, question)
@@ -807,8 +1036,14 @@ class Asker:
                                                 snippets=to_snippets(items), instructions=style):
                         text += piece
                         self.publish({"type": "answer_delta", "id": aid, "text": piece})
-                self.publish({"type": "answer_end", "id": aid, "text": text})
+                asks = text.rstrip().endswith("?")
+                self.publish({"type": "answer_end", "id": aid, "text": text, "awaiting": asks})
                 self.nav_until = now_ms() + config.NAV_WINDOW_S * 1000
+                if asks:
+                    # D35: Jimmy asked back ("the form on Friday, or the one on Tuesday?").
+                    # The reply needs no wake word, and continues this conversation.
+                    self.listen_until = now_ms() + config.CLARIFY_WAIT_S * 1000
+                    self.publish({"type": "listening", "prompt": "listening… your answer"})
                 if mode == "recall" and items and _SHOWME.match(question):
                     self.publish({"type": "open_evidence", "index": 0})    # "show me the form": up it comes
                 self.turns.append({"q": question, "a": text, "mode": mode, "query": query, "ts": now_ms()})
