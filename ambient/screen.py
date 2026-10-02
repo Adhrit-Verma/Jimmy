@@ -222,10 +222,9 @@ def window_text(hwnd: int,
             break
         ctrl, depth = queue.pop(0)
         nodes += 1
-        try:
-            ctype = ctrl.ControlTypeName
-        except Exception:
-            continue
+        # D38: the wrapper class already says the type (it was chosen from it). The
+        # property asked Windows again: 134 ms per 800 nodes, a third of the budget.
+        ctype = type(ctrl).__name__
         if ctype in TEXT_TYPES:
             val = _value_of(ctrl)
             if val and len(val) > 1 and val not in seen:
@@ -339,5 +338,8 @@ def save_thumb(bgr: np.ndarray, ts_ms: int, thumb_dir: Path | None = None) -> st
         bgr = cv2.resize(bgr, (config.THUMB_WIDTH, max(1, int(h * s))),
                          interpolation=cv2.INTER_AREA)
     path = out_dir / f"{ts_ms}.jpg"
-    cv2.imwrite(str(path), bgr, [cv2.IMWRITE_JPEG_QUALITY, config.THUMB_JPEG_QUALITY])
+    opts = [cv2.IMWRITE_JPEG_QUALITY, config.THUMB_JPEG_QUALITY]
+    if config.THUMB_JPEG_OPTIMIZE:
+        opts += [cv2.IMWRITE_JPEG_OPTIMIZE, 1, cv2.IMWRITE_JPEG_PROGRESSIVE, 1]
+    cv2.imwrite(str(path), bgr, opts)
     return str(path.relative_to(root.parent)) if root.parent in path.parents else str(path)

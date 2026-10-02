@@ -175,7 +175,7 @@ def test_asker_answers_voice_questions_and_speaks_only_those():
             break
         __import__("time").sleep(0.05)
     kinds = [e["type"] for e in events]
-    assert kinds[:3] == ["listening", "answer_start", "answer_evidence"] and kinds[-1] == "answer_end", kinds
+    assert kinds[:4] == ["listening", "thinking", "answer_start", "answer_evidence"] and kinds[-1] == "answer_end", kinds
     ev = next(e for e in events if e["type"] == "answer_evidence")
     assert ev["evidence"][0]["app"] == "Chrome" and "McKinsey" in ev["evidence"][0]["title"]
     assert next(e for e in events if e["type"] == "answer_end")["text"] == "The McKinsey form, Friday 14:09."

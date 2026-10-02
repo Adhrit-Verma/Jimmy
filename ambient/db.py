@@ -227,25 +227,29 @@ class Store:
         gets a sentence of context rather than a keyword.
         """
         n = max(1, min(64, int(snippet_tokens)))
-        sql = f"""
+        sql = """
         SELECT 'screen' AS kind, f.ts AS ts, f.app AS app, f.title AS title,
-               t.source AS source, snippet(text_fts, 0, '[', ']', '...', {n}) AS snippet,
-               bm25(text_fts) AS rank, f.thumb_path AS thumb_path, f.window_id AS window_id,
-               t.id AS ref
+               t.source AS source, bm25(text_fts) AS rank, f.thumb_path AS thumb_path,
+               f.window_id AS window_id, t.id AS ref
           FROM text_fts JOIN text_blocks t ON t.id = text_fts.rowid
                         JOIN frames f ON f.id = t.frame_id
          WHERE text_fts MATCH ? AND f.ts BETWEEN ? AND ?
         UNION ALL
-        SELECT 'audio', a.ts_start, NULL, NULL, a.source,
-               snippet(audio_fts, 0, '[', ']', '...', {n}), bm25(audio_fts), NULL, a.window_id,
+        SELECT 'audio', a.ts_start, NULL, NULL, a.source, bm25(audio_fts), NULL, a.window_id,
                -a.id
           FROM audio_fts JOIN audio_segments a ON a.id = audio_fts.rowid
          WHERE audio_fts MATCH ? AND a.ts_start BETWEEN ? AND ? AND a.source != 'command'
          ORDER BY rank LIMIT ?
         """
         args = (query, since_ms, until_ms, query, since_ms, until_ms, limit)
+        snip = {t: f"SELECT snippet({t}, 0, '[', ']', '...', {n}) FROM {t} WHERE {t} MATCH ? AND rowid = ?"
+                for t in ("text_fts", "audio_fts")}
         with self._lock:
-            return [dict(r) for r in self.conn.execute(sql, args)]
+            out = [dict(r) for r in self.conn.execute(sql, args)]
+            for r in out:
+                fts = "text_fts" if r["ref"] > 0 else "audio_fts"
+                r["snippet"] = self.conn.execute(snip[fts], (query, abs(r["ref"]))).fetchone()[0]
+        return out
 
     def activity(self, since_ms: int, until_ms: int, limit: int = 15) -> list[dict]:
         """Which app/title was on screen, when, and for how many captured frames."""
@@ -255,16 +259,21 @@ class Store:
         with self._lock:
             return [dict(r) for r in self.conn.execute(sql, (since_ms, until_ms, limit))]
 
-    def term_share(self, term: str, until_ms: int) -> float:
+    def block_count(self, until_ms: int) -> int:
+        """Text blocks captured before `until_ms` (the denominator of term_share)."""
+        with self._lock:
+            return self.conn.execute("SELECT COUNT(*) FROM text_blocks t JOIN frames f ON f.id = t.frame_id "
+                                     "WHERE f.ts < ?", (until_ms,)).fetchone()[0]
+
+    def term_share(self, term: str, until_ms: int, total: int | None = None) -> float:
         """Fraction of text blocks before `until_ms` that contain `term` (0..1).
 
         The gate's IDF: a word in 30 % of everything ("claude", "discord") says
         nothing about a specific earlier moment.
         """
         with self._lock:
-            total = self.conn.execute(
-                "SELECT COUNT(*) FROM text_blocks t JOIN frames f ON f.id = t.frame_id "
-                "WHERE f.ts < ?", (until_ms,)).fetchone()[0]
+            if total is None:
+                total = self.block_count(until_ms)
             if not total:
                 return 0.0
             hits = self.conn.execute(
@@ -293,16 +302,21 @@ class Store:
     # `ref` is the same as in search(): > 0 a text block id, < 0 an audio segment id.
     def unembedded(self, model: str, limit: int = 200) -> list[dict]:
         """Text and speech not yet embedded with `model`, oldest first."""
+        # Indexing runs oldest first and stops at the first failure, so nothing is
+        # missing below the newest embedded id: start there. The NOT EXISTS stays as
+        # a guard, now over a few rows instead of all history (D38).
         sql = """
         SELECT t.id AS ref, f.ts AS ts, t.text AS text FROM text_blocks t
           JOIN frames f ON f.id = t.frame_id
-         WHERE NOT EXISTS (SELECT 1 FROM embeddings e WHERE e.ref = t.id AND e.model = ?)
+         WHERE t.id > (SELECT COALESCE(MAX(ref), 0) FROM embeddings WHERE model = ? AND ref > 0)
+           AND NOT EXISTS (SELECT 1 FROM embeddings e WHERE e.ref = t.id AND e.model = ?)
         UNION ALL
         SELECT -a.id, a.ts_start, a.text FROM audio_segments a
-         WHERE a.source != 'command' AND NOT EXISTS (SELECT 1 FROM embeddings e WHERE e.ref = -a.id AND e.model = ?)
+         WHERE a.id > (SELECT COALESCE(-MIN(ref), 0) FROM embeddings WHERE model = ? AND ref < 0)
+           AND a.source != 'command' AND NOT EXISTS (SELECT 1 FROM embeddings e WHERE e.ref = -a.id AND e.model = ?)
          ORDER BY ts LIMIT ?"""
         with self._lock:
-            return [dict(r) for r in self.conn.execute(sql, (model, model, limit))]
+            return [dict(r) for r in self.conn.execute(sql, (model, model, model, model, limit))]
 
     def add_embeddings(self, rows: list[tuple[int, int, str, str, bytes]]) -> None:
         """rows: (ref, ts, model, chunk, float32 bytes)."""
@@ -324,6 +338,49 @@ class Store:
         with self._lock:
             return [dict(r) for r in self.conn.execute(sql, (model, since_ms, until_ms,
                                                              model, since_ms, until_ms))]
+
+    def vector_pages(self, model: str, since_ms: int, until_ms: int, page: int = 2048):
+        """(embedding id, vec bytes) pages for a window: text then speech, each by
+        (ts, id), the order the old one-shot read returned them in."""
+        arms = ("""SELECT e.id, e.ts, e.vec FROM embeddings e JOIN text_blocks t ON t.id = e.ref
+                     JOIN frames f ON f.id = t.frame_id
+                    WHERE e.ref > 0 AND e.model = ? AND e.ts BETWEEN ? AND ? AND (e.ts, e.id) > (?, ?)
+                    ORDER BY e.ts, e.id LIMIT ?""",
+                """SELECT e.id, e.ts, e.vec FROM embeddings e JOIN audio_segments a ON a.id = -e.ref
+                    WHERE e.ref < 0 AND e.model = ? AND e.ts BETWEEN ? AND ? AND a.source != 'command'
+                      AND (e.ts, e.id) > (?, ?) ORDER BY e.ts, e.id LIMIT ?""")
+        for sql in arms:
+            last = (-1, -1)
+            while True:
+                with self._lock:
+                    rows = self.conn.execute(sql, (model, since_ms, until_ms, *last, page)).fetchall()
+                if not rows:
+                    break
+                last, full = (rows[-1][1], rows[-1][0]), len(rows) == page
+                out, rows = [(r[0], r[2]) for r in rows], None
+                yield out
+                del out
+                if not full:
+                    break
+
+    def vector_rows(self, ids: list[int]) -> dict[int, dict]:
+        """Where and when each embedding id was seen, for search results."""
+        if not ids:
+            return {}
+        marks = ",".join("?" * len(ids))
+        sql = f"""
+        SELECT e.id AS id, e.ref, e.ts, e.chunk, f.id AS frame_id, f.app, f.title, NULL AS source
+          FROM embeddings e JOIN text_blocks t ON t.id = e.ref JOIN frames f ON f.id = t.frame_id
+         WHERE e.id IN ({marks}) AND e.ref > 0
+        UNION ALL
+        SELECT e.id, e.ref, e.ts, e.chunk, NULL, NULL, NULL, a.source
+          FROM embeddings e JOIN audio_segments a ON a.id = -e.ref WHERE e.id IN ({marks}) AND e.ref < 0"""
+        with self._lock:
+            return {r["id"]: {k: r[k] for k in r.keys() if k != "id"} for r in self.conn.execute(sql, (*ids, *ids))}
+
+    def last_frame_id(self) -> int:
+        with self._lock:
+            return self.conn.execute("SELECT COALESCE(MAX(id), 0) FROM frames").fetchone()[0]
 
     def days(self) -> list[str]:
         """Local dates (YYYY-MM-DD) that have captures, newest first."""
@@ -359,11 +416,16 @@ class Store:
         can show a thumbnail."""
         cols = "f.id, f.ts, f.app, f.title, f.thumb_path, f.url"
         with self._lock:
-            row = (self.conn.execute(f"SELECT {cols} FROM text_blocks t JOIN frames f "
-                                     "ON f.id = t.frame_id WHERE t.id = ?", (ref,)).fetchone()
-                   if ref > 0 else
-                   self.conn.execute(f"SELECT {cols} FROM frames f ORDER BY ABS(f.ts - ?) LIMIT 1",
-                                     (ts,)).fetchone())
+            if ref > 0:
+                row = self.conn.execute(f"SELECT {cols} FROM text_blocks t JOIN frames f "
+                                        "ON f.id = t.frame_id WHERE t.id = ?", (ref,)).fetchone()
+            else:
+                # The nearest frame either side, on the ts index; a tie goes to the earlier.
+                before = self.conn.execute(f"SELECT {cols} FROM frames f WHERE f.ts <= ? "
+                                           "ORDER BY f.ts DESC, f.id LIMIT 1", (ts,)).fetchone()
+                after = self.conn.execute(f"SELECT {cols} FROM frames f WHERE f.ts > ? "
+                                          "ORDER BY f.ts, f.id LIMIT 1", (ts,)).fetchone()
+                row = before if (before and (not after or ts - before["ts"] <= after["ts"] - ts)) else after
         return dict(row) if row else None
 
     def window_content(self, window_id: str, title: str) -> tuple[dict | None, str]:
@@ -396,6 +458,13 @@ class Store:
         with self._lock:
             row = self.conn.execute(sql, (abs(ref),)).fetchone()
         return row[0] if row else ""
+
+    def blocks_after(self, block_id: int) -> list[tuple[int, str, str]]:
+        """(block id, window_id, text) of every text block stored after `block_id`."""
+        with self._lock:
+            return [(r[0], r[1], r[2]) for r in self.conn.execute(
+                "SELECT t.id, f.window_id, t.text FROM text_blocks t JOIN frames f ON f.id = t.frame_id "
+                "WHERE t.id > ? ORDER BY t.id", (block_id,))]
 
     def blocks_before(self, until_ms: int) -> list[tuple[str, str]]:
         """(window_id, text) of every text block captured before `until_ms`."""
@@ -447,6 +516,10 @@ class Store:
     def close(self) -> None:
         with self._lock:
             self.conn.commit()
+            try:
+                self.conn.execute("PRAGMA optimize")    # refresh the planner's statistics (D38)
+            except sqlite3.Error:
+                pass
             self.conn.close()
 
     def __enter__(self):

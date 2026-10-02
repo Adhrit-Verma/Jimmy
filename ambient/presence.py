@@ -251,6 +251,24 @@ class Tracker:
         return self.state, looking_away
 
 
+def _iou(a, b) -> float:
+    ax, ay, aw, ah = (float(v) for v in a)
+    bx, by, bw, bh = (float(v) for v in b)
+    ix = max(0.0, min(ax + aw, bx + bw) - max(ax, bx))
+    iy = max(0.0, min(ay + ah, by + bh) - max(ay, by))
+    inter = ix * iy
+    return inter / (aw * ah + bw * bh - inter + 1e-9)
+
+
+def _same_faces(verdict: dict, boxes: list, t: float) -> bool:
+    """Is the last identity verdict still about these faces? Same count, each box
+    overlapping its old place by half or more, and no older than PRESENCE_REID_S."""
+    old = verdict["boxes"]
+    if t - verdict["at"] > config.PRESENCE_REID_S or len(old) != len(boxes) or not boxes:
+        return False
+    return all(max(_iou(b, o) for o in old) >= 0.5 for b in boxes)
+
+
 class Presence:
     def __init__(self, on_change: Callable[[dict], None], camera: int | None = None,
                  on_enrol: Callable[[dict], None] = lambda e: None, owner: OwnerFace | None = None):
@@ -343,6 +361,7 @@ class Presence:
                                         config.FACE_SCORE_THRESHOLD, config.FACE_NMS_THRESHOLD, 10)
         rec = None                                   # SFace: loaded only for your remembered face
         tracker, cap, busy, check_at = Tracker(), None, False, 0.0
+        verdict: dict = {"at": -1e9, "boxes": [], "owner": None, "strangers": 0}   # D38
         try:
             while not self._stop.is_set():
                 t0 = time.monotonic()
@@ -364,6 +383,11 @@ class Presence:
                         self._set(state="off", faces=0, facing=False, why="no camera")
                         self._stop.wait(10)
                         continue
+                    # D38: 640x480 at a few fps, not the driver's default 30: we read 4.
+                    # The driver may refuse; whatever it gives is still used as before.
+                    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+                    cap.set(cv2.CAP_PROP_FPS, config.PRESENCE_CAMERA_FPS)
                 ok, frame = cap.read()
                 if not ok or frame is None:
                     cap.release()
@@ -395,7 +419,12 @@ class Presence:
                 near = max(faces, key=lambda f: f[2]) if faces else None
                 is_facing = bool(near is not None and facing(near))
                 owner_here, strangers = None, 0
-                if self.owner.known:
+                facing_boxes = [f[:4] for f in faces if facing(f)]
+                if self.owner.known and _same_faces(verdict, facing_boxes, t0):
+                    # D38: the same faces in the same places as half a second ago: the
+                    # identity verdict stands. Only the yes/no is kept, never a vector.
+                    owner_here, strangers = verdict["owner"], verdict["strangers"]
+                elif self.owner.known:
                     owner_here = False
                     for f in faces:
                         if not facing(f):
@@ -409,6 +438,7 @@ class Presence:
                             owner_here = True
                         else:
                             strangers += 1
+                    verdict.update(at=t0, boxes=facing_boxes, owner=owner_here, strangers=strangers)
                 del small, gray
                 state, away = tracker.update(t0, len(faces), is_facing, dark, owner_here, strangers)
                 self._set(state=state, faces=len(faces), facing=is_facing, looking_away=away,

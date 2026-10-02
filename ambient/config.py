@@ -30,6 +30,17 @@ GATE_PIXEL_DELTA = 12        # grey levels; below this is compression shimmer
 GATE_CHANGED_PCT = 0.25
 THUMB_WIDTH = 1280           # D27: large enough to read when opened big (was 640; ~2-3x storage)
 THUMB_JPEG_QUALITY = 65
+# D38: Huffman-optimised, progressive JPEG: measured -9.5 % on 80 real thumbnails,
+# decoded pixels identical, +6 ms to encode. Free disk, no quality change.
+THUMB_JPEG_OPTIMIZE = True
+# D38: OpenCV's default pool (16 threads) spent 3x the CPU on these tiny networks:
+# YuNet 640 px 65 ms CPU on 16 threads vs 20 ms on 1, at 8.5 vs 21.5 ms wall, both
+# far inside a 2 s tick or a 250 ms webcam frame. One thread, same outputs.
+CV_THREADS = 1
+# Faces are found at this width before blurring. It was 640 while thumbnails are
+# 1280 (D27), so a face too small to find at 640 could be legible in the thumbnail.
+# D38 spends some of the CPU saved above on finding them at full thumbnail size.
+FACE_DETECT_WIDTH = 1280
 
 # --- text extraction ------------------------------------------------------
 # Measured on a live Electron window: 317 nodes / 4.8k chars / ~230 ms. Chromium
@@ -156,6 +167,8 @@ OFFER_WAIT_S = 30            # "add it?" -> a bare "yes" counts for this long
 PRESENCE = True              # False: no webcam at all
 PRESENCE_CAMERA = 0          # OpenCV camera index
 PRESENCE_FPS = 4
+PRESENCE_CAMERA_FPS = 5      # D38: ask the camera for 5 fps, not its 30: we read 4, it decoded 30
+PRESENCE_REID_S = 0.5        # D38: re-check who a steady face is twice a second, not every frame
 PRESENCE_MIN_FACE = 0.06     # ignore faces narrower than this share of the frame (far away)
 AWAY_S = 6                   # no face this long -> away -> curtain
 WATCHED_S = 1.0              # a second face this long -> someone's looking

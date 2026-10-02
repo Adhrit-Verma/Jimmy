@@ -499,6 +499,43 @@ def to_snippets(items: list[dict]) -> list[Snippet]:
     return out
 
 
+class SpeakAsItStreams:
+    """D38: read an answer aloud a sentence at a time while it is still arriving,
+    instead of after the last word. Says exactly what speakable(full text) would:
+    whole sentences, in order, until the next would pass the limit."""
+
+    def __init__(self, speak: Callable[[str], None], limit: int = config.VOICE_MAX_CHARS):
+        self.speak, self.limit = speak, limit
+        self.buf, self.said, self.done = "", "", False
+
+    def feed(self, piece: str) -> None:
+        self.buf += piece
+        while not self.done:
+            m = re.search(r"[.!?]\s", self.buf)
+            if not m:
+                return
+            self._sentence(self.buf[:m.end()])
+            self.buf = self.buf[m.end():]
+
+    def end(self) -> None:
+        if not self.done and self.buf.strip():
+            self._sentence(self.buf)
+        self.done = True
+
+    def _sentence(self, s: str) -> None:
+        s = " ".join(s.split())
+        if not s:
+            return
+        if len(self.said) + len(s) > self.limit:
+            if not self.said:                           # one long sentence: its start, as before
+                self.speak(s[:self.limit])
+                self.said = s[:self.limit]
+            self.done = True
+            return
+        self.said = f"{self.said} {s}".strip()
+        self.speak(s)
+
+
 def speakable(text: str, limit: int = config.VOICE_MAX_CHARS) -> str:
     """The first sentences that fit, for reading aloud."""
     out = ""
@@ -529,6 +566,14 @@ class Voice:
 
     def stop(self) -> None:
         self._stop.set()
+        while True:                                     # and drop sentences still queued
+            try:
+                item = self._q.get_nowait()
+            except queue.Empty:
+                break
+            if item is None:
+                self._q.put(None)
+                break
 
     def close(self) -> None:
         self._stop.set()
@@ -544,8 +589,11 @@ class Voice:
         except Exception as exc:
             print(f"[voice] unavailable: {type(exc).__name__}: {exc}")
             return
+        speaking = False
         while (text := self._q.get()) is not None:
-            self.on_start()
+            if not speaking:                            # D38: one start/end per answer,
+                speaking = True                         # not per sentence: the mic stays
+                self.on_start()                         # paused between sentences
             try:
                 sapi.Volume = self.volume
                 sapi.Speak(text, 1)                     # 1 = asynchronous
@@ -556,7 +604,9 @@ class Voice:
             except Exception as exc:
                 print(f"[voice] {type(exc).__name__}: {exc}")
             finally:
-                self.on_end()
+                if self._q.empty() or self._stop.is_set():
+                    speaking = False
+                    self.on_end()
 
 
 class Asker:
@@ -983,7 +1033,14 @@ class Asker:
             last = self._conversation(now)
             mode, query = force or route(question, last, now)
             hindi = not force and bool(_HINDI.search(question)) and mode not in ("command", "nav")
-            if hindi or (mode in ("chat", "recall") and not force and _ACTIONISH.match(polite(question))):
+            picks = hindi or (mode in ("chat", "recall") and not force and _ACTIONISH.match(polite(question)))
+            if picks or mode in ("chat", "recall", "screen", "draft", "event"):
+                # D38: react now, before any model call; instant modes need no "thinking".
+                self.publish({"type": "thinking"})
+                jim = self._jim()           # and open the cloud connection meanwhile
+                if hasattr(getattr(jim, "llm", None), "warm"):
+                    threading.Thread(target=jim.llm.warm, daemon=True, name="warm").start()
+            if picks:
                 # D35: it sounds like an instruction the rules don't know. Let the model
                 # pick a tool (or ask back) instead of answering "I can't do that".
                 # D36: or it's Hindi: the model's English goes through the same rules.
@@ -1084,6 +1141,7 @@ class Asker:
                               "window": label, "terms": terms, "days": days})
                 jim = self._jim()
                 style = {"chat": CHAT_STYLE, "screen": SCREEN_STYLE}.get(mode, ANSWER_STYLE)
+                streamed = False
                 if mode != "chat" and not items:
                     text = ("I can't see a window I'm allowed to read." if mode == "screen" else
                             "Nothing I captured matches that.")
@@ -1096,10 +1154,17 @@ class Asker:
                     # The screen changes: a screen answer gets no history, and joins none,
                     # or the last screen's answer gets repeated for this one (D29).
                     session = f"screen-{aid}" if mode == "screen" else self.session
+                    voice = (SpeakAsItStreams(self.speak) if source == "voice" and self.speak
+                             and config.VOICE_ANSWERS else None)
                     for piece in jim.ask_stream(question, session=session,
                                                 snippets=to_snippets(items), instructions=style):
                         text += piece
                         self.publish({"type": "answer_delta", "id": aid, "text": piece})
+                        if voice:
+                            voice.feed(piece)
+                    if voice:
+                        voice.end()
+                        streamed = True
                 asks = text.rstrip().endswith("?")
                 self.publish({"type": "answer_end", "id": aid, "text": text, "awaiting": asks})
                 self.nav_until = now_ms() + config.NAV_WINDOW_S * 1000
@@ -1111,8 +1176,8 @@ class Asker:
                 if mode == "recall" and items and _SHOWME.match(question):
                     self.publish({"type": "open_evidence", "index": 0})    # "show me the form": up it comes
                 self.turns.append({"q": question, "a": text, "mode": mode, "query": query, "ts": now_ms()})
-                if source == "voice" and self.speak and config.VOICE_ANSWERS:
-                    self.speak(speakable(text))
+                if source == "voice" and self.speak and config.VOICE_ANSWERS and not streamed:
+                    self.speak(speakable(text))         # fixed replies; model answers spoke as they streamed
             except LLMError as exc:
                 self.publish({"type": "answer_error", "id": aid, "error": str(exc)[:200]})
             except Exception as exc:                    # an answer failing must never stop capture

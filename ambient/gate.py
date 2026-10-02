@@ -188,10 +188,13 @@ class Gate:
 
     def _distinctive(self, text: str, until: int) -> list[str]:
         out: list[str] = []
+        total = None                       # D38: counted once per moment, not once per word
         for w, _ in Counter(words(text)).most_common(config.RECALL_TERMS * 4):
             if w.isdigit():
                 continue
-            share = self.store.term_share(w, until)
+            if total is None:
+                total = self.store.block_count(until)
+            share = self.store.term_share(w, until, total)
             # Seen before (or nothing can match) but rare (or it matches everything).
             if 0 < share <= config.RECALL_MAX_TERM_SHARE:
                 out.append(w)

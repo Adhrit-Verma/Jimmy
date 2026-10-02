@@ -96,8 +96,20 @@ class LLM:
             self._client = httpx.Client(
                 base_url=self.base_url, transport=self._transport,
                 headers={"Authorization": f"Bearer {self.key}", "Accept": "application/json"},
-                timeout=httpx.Timeout(config.READ_TIMEOUT_S, connect=config.CONNECT_TIMEOUT_S))
+                timeout=httpx.Timeout(config.READ_TIMEOUT_S, connect=config.CONNECT_TIMEOUT_S),
+                limits=httpx.Limits(keepalive_expiry=config.KEEPALIVE_S))
         return self._client
+
+    def warm(self) -> None:
+        """Open (or keep) the connection before it's needed: a cheap GET of the model
+        list, so the TLS handshake overlaps with gathering evidence (D38). Errors are
+        ignored: the real call reports them."""
+        if not self.configured:
+            return
+        try:
+            self._http().get("/models", timeout=httpx.Timeout(10, connect=5))
+        except Exception:
+            pass
 
     def _body(self, messages, stream, max_tokens, temperature, thinking=None) -> dict:
         # Both spellings of the switch: NVIDIA's chat templates differ by model family.
@@ -209,21 +221,29 @@ def local_llm(model: str | None = None) -> LLM:
     return LLM(key="ollama", model=model or config.LOCAL_MODEL, base_url=config.LOCAL_BASE_URL)
 
 
+_EMBEDDERS: dict[str, LLM] = {}
+
+
 def embed(texts: list[str], model: str | None = None) -> list[list[float]]:
     """Meaning-vectors for `texts` from the local embedding model (Stage 5, D24).
-    The same client class, pointed at Ollama; raises LLMError if it's unreachable."""
+    The same client class, pointed at Ollama; raises LLMError if it's unreachable.
+
+    D38: one client per model, kept open (a new one per call paid the connection
+    every time), on Ollama's own endpoint so the model can be asked to stay loaded."""
     if not texts:
         return []
-    client = local_llm(model or config.EMBED_MODEL)
+    name = model or config.EMBED_MODEL
+    client = _EMBEDDERS.get(name) or _EMBEDDERS.setdefault(name, local_llm(name))
+    root = client.base_url.removesuffix("/v1")
     try:
         # Its own timeout: the first call loads ~1.2 GB into VRAM, and a batch of
         # chunks is slower than a chat reply (a 60 s limit timed out on first use).
-        resp = client._http().post("/embeddings", json={"model": client.model, "input": texts},
+        resp = client._http().post(f"{root}/api/embed",
+                                   json={"model": client.model, "input": texts,
+                                         "keep_alive": config.EMBED_KEEP_ALIVE},
                                    timeout=httpx.Timeout(300, connect=5))
         if resp.status_code != 200:
             raise LLMError(f"embeddings HTTP {resp.status_code}: {resp.text[:200]}")
-        return [d["embedding"] for d in sorted(resp.json()["data"], key=lambda d: d["index"])]
+        return resp.json()["embeddings"]
     except httpx.HTTPError as exc:
         raise LLMError(f"embedding model unreachable: {type(exc).__name__}: {exc}") from exc
-    finally:
-        client.close()

@@ -76,6 +76,8 @@ class ContextBus:
     def __init__(self, db_path: str | Path | None = None, monitor: int | None = None,
                  audio: bool = True, thumbs: bool = True, cards: bool = True,
                  overlay: bool = True, demo: str | None = None):
+        import cv2
+        cv2.setNumThreads(config.CV_THREADS)    # D38: same outputs, a third of the CPU
         self.store = Store(db_path or config.DB_PATH)
         self.exclusions = Exclusions(config.EXCLUSIONS_FILE)
         self.faces = FaceStage()
@@ -551,7 +553,18 @@ class ContextBus:
             self._audio.paused.set()       # at once, not at the next tick
 
     def _voice_ended(self) -> None:
-        self._speaking = False             # the next tick's audio policy resumes the mic
+        self._speaking = False
+        # D38: the mic came back at the next tick, up to 2 s later, and a quick "next"
+        # or a reply to Jimmy's question was lost. Back in 0.25 s (the room's echo of
+        # the voice has died by then), with the same checks a tick makes.
+        threading.Timer(0.25, self._resume_after_voice).start()
+
+    def _resume_after_voice(self) -> None:
+        if getattr(self, "_speaking", False) or not self._audio:
+            return
+        if now_ms() < self.paused_until or screen.is_locked():
+            return                         # paused or locked: the tick keeps the mic off
+        self._apply_audio_policy(sensitive=getattr(self, "_sensitive", False))
 
     def stop_running(self) -> None:
         """Quit from the overlay: the same clean shutdown as Ctrl-C."""
@@ -578,6 +591,18 @@ class ContextBus:
         from jimmy.core import LLMError
 
         from .recall import index
+        # D38: load the embedding model and open the cloud connection now, not on the
+        # first question (which waited ~6 s for bge-m3 and a fresh TLS handshake).
+        try:
+            from jimmy.core import embed
+            embed(["warm up"])
+        except Exception:
+            pass
+        if self._asker is not None:
+            try:
+                self._asker._jim().llm.warm()
+            except Exception as exc:
+                print(f"[ask] warm-up: {type(exc).__name__}: {exc}")
         while self._running:
             for _ in range(config.INDEX_EVERY_S):
                 if not self._running:

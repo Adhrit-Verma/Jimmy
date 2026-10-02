@@ -195,7 +195,8 @@ class FaceStage:
             return out, 0, []
 
         H, W = out.shape[:2]
-        scale = 640.0 / W if W > 640 else 1.0
+        width = config.FACE_DETECT_WIDTH
+        scale = width / W if W > width else 1.0
         small = cv2.resize(out, (int(W * scale), int(H * scale)),
                            interpolation=cv2.INTER_AREA) if scale != 1.0 else out
         self._det.setInputSize((small.shape[1], small.shape[0]))

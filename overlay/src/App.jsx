@@ -152,7 +152,7 @@ function Pill({ state, mood, prompt, typing, setTyping, flash, recent, onAsk, an
       >
         {mood === "listening" ? <Equalizer /> : (
           <span className="relative flex size-2">
-            {!paused && <span className={`absolute inline-flex size-full animate-ping rounded-full ${mood ? "bg-sky-400/60" : "bg-emerald-400/60"}`} />}
+            {!paused && mood && <span className="absolute inline-flex size-full animate-ping rounded-full bg-sky-400/60" />}
             <span className={`relative inline-flex size-2 rounded-full ${dot}`} />
           </span>
         )}
@@ -442,9 +442,7 @@ function Curtain({ why }) {
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(56,189,248,0.06),transparent_60%)]" />
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
         className="relative text-center">
-        <motion.div animate={{ opacity: [0.5, 1, 0.5] }} transition={{ duration: 3, repeat: Infinity }}>
-          <EyeOff size={30} className="mx-auto text-neutral-500" />
-        </motion.div>
+        <EyeOff size={30} className="mx-auto text-neutral-500" />
         <div className="mt-3 text-[16px] font-medium text-neutral-200">Privacy curtain</div>
         <div className="mt-1 text-[13px] text-neutral-500">{why}</div>
       </motion.div>
@@ -533,6 +531,7 @@ export default function App() {
       if (ev.type === "copy") say(ev.label || "Copied", "copy");
       if (ev.type === "close_all") { setOpenIndex(null); closeAnswer(); setCards([]); }   // "Jimmy, close your UI"
       if (ev.type === "presence") setPresence(ev);
+      if (ev.type === "thinking") { setMood("thinking"); setPrompt(null); }   // D38: react at once
       if (ev.type === "enrol") {
         clearTimeout(enrolTimer.current);
         setEnrol((cur) => ({ ...cur, ...ev }));

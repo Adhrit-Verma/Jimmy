@@ -35,8 +35,8 @@ function Highlight({ text, terms }) {
 }
 
 // A screenshot that can grow into the lightbox: same layoutId, Motion animates between.
-function Shot({ path, id, className, onClick }) {
-  const src = useThumb(path);
+function Shot({ path, id, className, onClick, w }) {
+  const src = useThumb(path, w);
   if (!src) return <div className={`animate-pulse bg-white/[0.05] ${className}`} />;
   return (
     <motion.img
@@ -96,7 +96,7 @@ function Evidence({ answer, onOpen }) {
           >
             {e.thumb && (
               <div className="relative">
-                <Shot path={e.thumb} id={e.ref} onClick={() => onOpen(i)}
+                <Shot path={e.thumb} id={e.ref} w={640} onClick={() => onOpen(i)}
                   className={`w-full rounded-lg ${i === 0 ? "aspect-video" : "aspect-[16/7]"}`} />
                 <div className="absolute right-1.5 top-1.5 flex gap-1">
                   {e.url && (
@@ -366,7 +366,9 @@ function Reply({ answer, onClose, onFollowUp, onCopied }) {
 // the backdrop or Esc sends it back. Arrows step through the other moments.
 function Lightbox({ items, index, setIndex, onClose }) {
   const item = items[index];
-  const src = useThumb(item?.thumb);
+  const full = useThumb(item?.thumb);
+  const preview = useThumb(item?.thumb, 640);
+  const src = full || preview;
   useEffect(() => {
     bridge?.pointerOverUi(true);
     const onKey = (ev) => {

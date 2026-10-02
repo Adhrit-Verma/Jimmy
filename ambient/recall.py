@@ -10,6 +10,7 @@ through `jimmy.core.embed`; this module only stores and compares vectors.
 from __future__ import annotations
 
 from functools import lru_cache
+from itertools import chain
 from pathlib import Path
 
 import numpy as np
@@ -66,16 +67,24 @@ def semantic(store: Store, query: str, since_ms: int = 0, until_ms: int = 1 << 6
     month-wide query gets slow.
     """
     model = model or jcfg.EMBED_MODEL
-    rows = store.vectors(model, since_ms, until_ms)
-    if not rows:
+    pages = store.vector_pages(model, since_ms, until_ms)
+    first = next(pages, None)
+    if first is None:
         return []
     q = np.asarray(embed([query], model)[0], dtype=np.float32)
     q /= np.linalg.norm(q) + 1e-9
-    mat = np.frombuffer(b"".join(r["vec"] for r in rows), dtype=np.float32).reshape(len(rows), -1)
-    scores = mat @ q
+    # D38: one page of vectors at a time; only the ids and scores are kept (12 bytes
+    # a chunk), and text is fetched for the winners alone. Same order, same ranking.
+    ids, scores = [], []
+    for page in chain([first], pages):            # chain, not (first, *pages): that loads them all
+        mat = np.frombuffer(b"".join(v for _, v in page), dtype=np.float32).reshape(len(page), -1)
+        scores.append(mat @ q)
+        ids.append(np.fromiter((i for i, _ in page), dtype=np.int64, count=len(page)))
+        del mat, page                             # one page alive at a time
+    scores, ids = np.concatenate(scores), np.concatenate(ids)
     best = np.argsort(-scores)[:k]
-    return [{**{k2: v for k2, v in rows[i].items() if k2 != "vec"}, "score": float(scores[i])}
-            for i in best]
+    rows = store.vector_rows([int(ids[i]) for i in best])
+    return [{**rows[int(ids[i])], "score": float(scores[i])} for i in best]
 
 
 def hybrid(store: Store, query: str, since_ms: int = 0, until_ms: int = 1 << 62,
@@ -133,26 +142,37 @@ _furniture: dict = {"at": 0.0, "lines": frozenset()}
 def furniture(store: Store, min_windows: int | None = None, ttl_s: float = 600) -> frozenset:
     """Lines that appear in several capture windows: interface, not content.
 
-    ponytail: recomputed from every stored block at most every 10 minutes. Fine
-    for weeks of captures; keep a running table if it gets slow.
+    D38: kept up to date incrementally. A refresh (at most every 10 minutes) reads
+    only the blocks stored since the last one, and a line that has reached the
+    threshold stops carrying its set of windows. Same lines as a full rebuild.
+    ponytail: the per-line map lives in RAM, ~100 B a distinct line; move it to a
+    SQL table (gate.line_windows too) if months of history make it heavy.
     """
     import time
-    from collections import defaultdict
 
     from . import config
     now = time.time()
-    if now - _furniture["at"] < ttl_s and _furniture.get("store") is store:
-        return _furniture["lines"]
     need = min_windows or config.PERSISTENT_LINE_WINDOWS
-    seen: dict[str, set] = defaultdict(set)
-    for wid, text in store.blocks_before(1 << 62):
+    st = _furniture
+    if now - st["at"] < ttl_s and st.get("store") is store and st.get("need") == need:
+        return st["lines"]
+    if st.get("store") is not store or st.get("need") != need:
+        st.update(store=store, need=need, last=0, seen={}, furniture=set())
+    seen, found = st["seen"], st["furniture"]
+    last = st["last"]
+    for bid, wid, text in store.blocks_after(st["last"]):
+        last = bid
         for ln in text.split("\n"):
             ln = ln.strip()
-            if ln:
-                seen[ln].add(wid)
-    lines = frozenset(ln for ln, w in seen.items() if len(w) >= need)
-    _furniture.update(at=now, lines=lines, store=store)
-    return lines
+            if not ln or ln in found:
+                continue
+            windows = seen.setdefault(ln, set())
+            windows.add(wid)
+            if len(windows) >= need:
+                found.add(ln)
+                del seen[ln]               # furniture now; its windows no longer matter
+    st.update(at=now, last=last, lines=frozenset(found))
+    return st["lines"]
 
 
 # --- the timeline window's reads (served by ambient/api.py) -----------------
@@ -165,8 +185,14 @@ def timeline_hooks(store: Store) -> dict:
 
     from . import config
 
+    days_cache: dict = {"key": None, "days": []}
+
     def get_timeline(p: dict) -> dict:
-        days = store.days()
+        # D38: the day list scans every frame; reuse it until a frame is added.
+        key = store.last_frame_id()
+        if key != days_cache["key"]:
+            days_cache.update(key=key, days=store.days())
+        days = days_cache["days"]
         day = p.get("day") or (days[0] if days else time.strftime("%Y-%m-%d"))
         start = int(datetime.strptime(day, "%Y-%m-%d").timestamp() * 1000)
         from .redact import is_own_window

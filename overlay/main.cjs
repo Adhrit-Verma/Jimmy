@@ -29,6 +29,7 @@ let timeline = null;
 // were last shown: the overlay's answer, or the timeline window.
 let target = "overlay";
 let curtain = false;
+let quitting = false;
 
 // Stage 5: the recall timeline. A normal, focusable window (unlike the overlay),
 // frameless with its own drag bar, same page bundle at #timeline. D31: the same
@@ -67,6 +68,12 @@ function openTimeline(view, params) {
   timeline.loadFile(path.join(__dirname, "dist", "index.html"), { hash: qs ? `${view}?${qs}` : view });
   timeline.once("ready-to-show", () => timeline.show());
   timeline.on("focus", () => { target = "timeline"; });
+  timeline.on("close", (e) => {
+    if (quitting) return;
+    e.preventDefault();          // D38: keep it for next time (~0.5-1 s to rebuild)
+    timeline.hide();
+    target = "overlay";
+  });
   timeline.on("closed", () => { target = "overlay"; });
   return timeline;
 }
@@ -259,5 +266,6 @@ app.whenReady().then(() => {
   }
 });
 
+app.on("before-quit", () => { quitting = true; });
 app.on("will-quit", () => globalShortcut.unregisterAll());
 app.on("window-all-closed", () => app.quit());

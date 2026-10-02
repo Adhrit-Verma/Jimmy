@@ -46,7 +46,10 @@ FOCUS_INTENT_MAX_H = 8       # a stated focus older than this has expired
 # Same OpenAI-compatible client, second endpoint. Card decisions run here by
 # default: private (screen text stays on the laptop), free, and immune to the
 # free tier's 503 "overloaded". Chat answers still use the cloud model.
-LOCAL_BASE_URL = os.environ.get("JIMMY_LOCAL_URL") or "http://localhost:11434/v1"
+# 127.0.0.1, not "localhost" (D38): on Windows "localhost" tries IPv6 first and
+# Ollama listens on IPv4, so every new connection waited ~2.4 s for the fallback.
+# Measured: a new connection 2.8 s via localhost, 0.7 s via 127.0.0.1.
+LOCAL_BASE_URL = os.environ.get("JIMMY_LOCAL_URL") or "http://127.0.0.1:11434/v1"
 LOCAL_MODEL = os.environ.get("JIMMY_LOCAL_MODEL") or "qwen2.5:3b"
 CARD_ENGINE = os.environ.get("JIMMY_CARD_ENGINE") or "local"   # "local" | "cloud"
 # RECALL needs two yeses (D22): the local model filters, the cloud confirms. Only
@@ -57,3 +60,9 @@ RECALL_VERIFY = os.environ.get("JIMMY_RECALL_VERIFY") or "cloud"
 # bge-m3 via local Ollama: multilingual (English + Hindi/Hinglish), chosen by the
 # human over embeddinggemma and nomic-embed-text. Text never leaves the laptop.
 EMBED_MODEL = os.environ.get("JIMMY_EMBED_MODEL") or "bge-m3"
+# D38: Ollama unloads a model 5 min after its last use, and the first question
+# after that waited ~6 s for bge-m3 (664 MB) to load. An hour, asked on each call.
+EMBED_KEEP_ALIVE = "60m"
+# D38: httpx closes an idle connection after 5 s by default, so the "one warm
+# connection" (D15) was cold for nearly every real question. Keep it two minutes.
+KEEPALIVE_S = 120
