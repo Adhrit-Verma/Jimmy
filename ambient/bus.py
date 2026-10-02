@@ -146,6 +146,9 @@ class ContextBus:
             # only hear an empty room (or someone else's).
             self._apply_audio_policy(sensitive=True, why="locked")
             return "locked"
+        if getattr(getattr(self, "_presence_obj", None), "enrolling", False):
+            # D37: the guided capture shows your face on screen; never capture that.
+            return "enrolling"
         if getattr(self, "_curtain", False):
             # D34: the curtain covers the screen, so a capture would store the curtain.
             # Audio goes on: "Jimmy, …" from across the room should still work.
@@ -352,10 +355,28 @@ class ContextBus:
             return True
         if st == "away" and config.CURTAIN_WHEN_AWAY:
             return True
+        if st == "stranger" and config.CURTAIN_WHEN_STRANGER:
+            return True                         # D37: someone who isn't you, at your screen
         if st == "watched":
             mode = config.CURTAIN_WHEN_WATCHED
             return mode == "always" or (mode == "sensitive" and self._sensitive)
         return bool(presence.get("looking_away"))
+
+    def _on_enrol(self, ev: dict) -> None:
+        """The guided capture's progress (D37): to the overlay every frame, to your ears
+        when the instruction changes and has held a moment (not every frame)."""
+        if self._api:
+            self._api.publish({"type": "enrol", **ev})
+        say, now = ev.get("say", ""), time.monotonic()
+        last = getattr(self, "_enrol_said", ("", 0.0))
+        if ev.get("done") or (say and say != last[0] and now - last[1] > 2.5):
+            self._enrol_said = (say, now)
+            if self._voice and say:
+                self._voice.say(say)
+        if ev.get("done"):
+            self._enrol_said = ("", 0.0)
+            if self._api:
+                self._api.publish({"type": "state", **self.overlay_state()})
 
     def set_volume(self, word: str, mem) -> str:
         """"Jimmy, speak softer / louder / mute your voice" (D35), remembered."""
@@ -398,7 +419,8 @@ class ContextBus:
         return {"paused": paused, "paused_until": self.paused_until if paused else 0,
                 "cards": self.gate is not None,
                 "focus": mem.current_intent(jcfg.FOCUS_INTENT_MAX_H) if mem else None,
-                **({"curtain": self._curtain, "presence": self._presence.get("state")}
+                **({"curtain": self._curtain, "presence": self._presence.get("state"),
+                    "owner": bool(self._presence_obj and self._presence_obj.owner.known)}
                    if getattr(self, "_presence_obj", None) or getattr(self, "_manual_curtain", False) else {})}
 
     def _intent_memory(self):
@@ -472,7 +494,12 @@ class ContextBus:
                                      "unremind": lambda: mem.set_reminder_state(None, "cancelled"),
                                      "open_file": os.startfile,
                                      "volume": lambda word: self.set_volume(word, mem),
-                                     "presence": lambda: self._presence if self._presence_obj else None})
+                                     "presence": lambda: self._presence if self._presence_obj else None,
+                                     "enrol": lambda: self._presence_obj.enrol() if self._presence_obj
+                                     else "The webcam is switched off in config (PRESENCE).",
+                                     "unenrol": lambda: self._presence_obj.forget() if self._presence_obj
+                                     else "The webcam is switched off in config (PRESENCE).",
+                                     "cancel_enrol": lambda: self._presence_obj and self._presence_obj.cancel_enrol()})
         # D32: the cards Jimmy writes itself. Deadlines need the local model.
         from jimmy.cards import local_engine
 
@@ -485,7 +512,7 @@ class ContextBus:
         # D34: presence from the webcam, for the privacy curtain.
         if config.PRESENCE:
             from .presence import Presence
-            self._presence_obj = Presence(self._on_presence).start()
+            self._presence_obj = Presence(self._on_presence, on_enrol=self._on_enrol).start()
         env = dict(os.environ, JIMMY_OVERLAY_URL=self._api.url, JIMMY_OVERLAY_TOKEN=self._api.token)
         # Started from an Electron app's terminal (VS Code, Claude), this is inherited
         # and makes electron.exe run as plain Node: no window, "app.whenReady" undefined.

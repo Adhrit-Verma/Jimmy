@@ -166,6 +166,16 @@ CURTAIN_WHEN_AWAY = True
 # hides its own panels and warns in the pill.
 CURTAIN_WHEN_WATCHED = "sensitive"   # "always" | "sensitive" | "never"
 LOOK_AWAY_S = 0              # >0: looking away this long also curtains (off: reading paper is normal)
+# --- your face, remembered (D37): only on "remember my face", DPAPI-encrypted ----
+OWNER_MATCH = 0.42           # cosine to your template; OpenCV's same-person line is 0.363, a bit stricter here
+STRANGER_S = 2.0             # someone who isn't you, at the screen, this long -> curtain
+CURTAIN_WHEN_STRANGER = True
+ENROL_FPS = 8                # frames a second while capturing (preview + checks)
+ENROL_TIMEOUT_S = 90
+ENROL_MIN_LIGHT = 70         # face-region mean grey: darker than this -> "turn on a light"
+ENROL_MAX_LIGHT = 210        # brighter -> "too much light on your face"
+ENROL_MIN_SHARP = 30         # Laplacian variance of the face crop: below -> "hold still" (motion blur)
+ENROL_MIN_AGREE = 0.5        # the straight-on samples must be this alike, or the capture is redone
 DARK_FRAME = 12              # mean grey below this = covered lens / dark room -> presence off
 
 # --- ask by voice, answers come to you (D25) --------------------------------

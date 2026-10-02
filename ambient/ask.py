@@ -53,7 +53,7 @@ def normalize(text: str) -> str:
 # "can you …", "please …", "… for me": the request inside the politeness (D35).
 _POLITE = re.compile(r"^(?:(?:hey|ok|okay|so|um|uh)\W+)?(?:(?:(?:can|could|would|will) you|please|"
                      r"i (?:want|need) you to|go ahead and|kindly)\s+)+", re.I)
-_POLITE_END = re.compile(r"\s+(?:please|for me|now|right now|jimmy)\W*$", re.I)
+_POLITE_END = re.compile(r"\s+(?:please|for me|(?<!not )now|right now|jimmy)\W*$", re.I)   # "not now" stays
 
 
 def polite(text: str) -> str:
@@ -90,6 +90,8 @@ _NOW = re.compile(r"\b(?:now|right now|currently|current|at the moment|in front 
                   r"this one|on (?:my|the) screen)\b", re.I)
 _SHOW = re.compile(r"\b(?:show|open|zoom|enlarge|bigger)\b.*\b(?:first|best|top|second|third|one|it|that|match)\b"
                    r"|\b(?:show|zoom|open)(?: it| that)?(?: bigger| bigger please)?$", re.I)
+_SHOW_ORDINAL = re.compile(r"\b(?:best match|top match|(?:first|second|third|fourth|fifth|last|best|top) "
+                           r"(?:one|match|result|moment))\b", re.I)
 _ORDINAL = {"first": 0, "best": 0, "top": 0, "second": 1, "third": 2, "fourth": 3, "fifth": 4, "last": -1}
 CLARIFY_Q = "Your screen right now, or something from earlier?"
 
@@ -151,6 +153,12 @@ _CMD = (
     ("copy_screen", re.compile(r"^(?:\w+\s+)?copy\s+(?:all\s+)?(?:of\s+)?(?:the\s+)?(?:text|everything|words|"
                                r"content|this)(?:\s+(?:on|from|in)\s+(?:my\s+|the\s+|this\s+)?"
                                r"(?:screen|window|page))?\W*$", re.I)),
+    # D37: your face, for the curtain: only ever on these words, only yours.
+    ("enrol", re.compile(r"^(?:remember|learn|save|scan|register|enrol+|memori[sz]e|recogni[sz]e|add)\s+"
+                         r"(?:my face|me|my face id)\W*$|^(?:set up|start|turn on) face (?:recognition|id|unlock)\W*$",
+                         re.I)),
+    ("unenrol", re.compile(r"^(?:forget|delete|remove|erase|clear|wipe)\s+my face(?: id)?\W*$|"
+                           r"^stop recogni[sz]ing me\W*$|^(?:turn off|disable) face (?:recognition|id)\W*$", re.I)),
     # D35: how loud Jimmy speaks, remembered across runs.
     ("volume", re.compile(r"^(?:speak|talk|be)\s+(softer|quieter|lower|louder|more quietly|more loudly|up)\W*$|"
                           r"^(?:turn|bring)\s+(?:your\s+)?(?:voice|volume)\s+(down|up)\W*$|"
@@ -182,7 +190,7 @@ _NAV = [
 _NAV = [(re.compile(rf"^(?:please\s+)?(?:{rx})(?:\s+please)?$", re.I), fn) for rx, fn in _NAV]
 # An app is a word or two: "just talking about lunch" is talk, not a filter.
 _FILTER = re.compile(r"^(?:only|just|filter(?: to| by)?|show only)\s+(\S+(?:\s\S+)?)\W*$", re.I)
-_UNFILTER = re.compile(r"^(?:all apps|show everything|show all|clear (?:the )?filter|no filter)\W*$", re.I)
+_UNFILTER = re.compile(r"^(?:(?:show )?all (?:the )?apps|show everything|show all|clear (?:the )?filter|no filter)\W*$", re.I)
 _SEARCH = re.compile(r"^(?:search|look) for\s+(.+?)\W*$", re.I)
 
 
@@ -241,12 +249,17 @@ reminders and a focus, draft replies, and move around your own panels by voice."
 TOOLS_Q = """You route one spoken request to Jimmy, a desktop assistant on the user's
 Windows laptop. Jimmy can do exactly these things (tool: what it does):
 - scroll {"dir": "up" or "down"}: scroll what's in front (Jimmy's panel or the window)
+- step {"by": 1 or -1}: the next or previous item in Jimmy's panel or timeline
+- close {}: close the one thing Jimmy has open (a picture, an answer)
 - close_ui {}: hide all of Jimmy's panels, cards and windows
+- goto {"when": "..."}: open Jimmy's timeline at a time ("yesterday at 3pm")
+- open_page {}: open the web page being discussed, in the browser
 - open {"view": "timeline" or "insights"}: open Jimmy's timeline or insights window
 - curtain {"on": true or false}: draw or lift the privacy curtain over the screen
 - pause {"minutes": number}: stop capturing for a while; resume {}: start again
 - focus {"text": "..."}: set what the user means to work on; unfocus {}
-- remind {"text": "...", "when": "..."}: set a reminder
+- remind {"text": "...", "when": "..."}: set a reminder; list_reminders {}: say them
+- remember_face {}: learn the user's face (guided); forget_face {}: delete it
 - copy_screen {}: copy the text of the window in front to the clipboard
 - volume {"level": "softer" or "louder" or "mute" or "unmute"}: Jimmy's speaking voice
 - answer {}: a question about the screen, the user's past, their time, or anything
@@ -260,7 +273,7 @@ Reply with JSON only: {"tool": "...", "args": {...}}"""
 # D36: Hindi requests (Devanagari) go through the model once, so they meet the same
 # rules as English ones.
 _HINDI = re.compile(r"[ऀ-ॿ]")
-_ACTIONISH = re.compile(r"^(?:turn|switch|close|open|hide|scroll|copy|paste|move|put|set|make|start|stop|"
+_ACTIONISH = re.compile(r"^(?:turn|switch|close|open|hide|scroll|copy|paste|move|put|set|make|start|stop|bring|"
                         r"enable|disable|mute|unmute|clear|play|pause|resume|lift|lower|raise|zoom|minimi[sz]e|"
                         r"maximi[sz]e|change|speak|talk|save|add|remind|focus|go to|take me|get rid|dismiss|"
                         r"select|click|type|press|delete|send|read out)\b", re.I)
@@ -345,7 +358,11 @@ def route(text: str, last: dict | None = None, now: int | None = None) -> tuple[
         return "presence", t
     if _CHAT.search(t) and not _PAST.search(t):
         return "chat", t
-    if last and last["mode"] in ("recall", "screen") and _SHOW.search(t) and len(t.split()) <= 8:
+    # "show me the best match" / "open the second one" mean the evidence on show, even
+    # with no conversation on record (there's none to show: Jimmy says so). Found by the
+    # command matrix (D37): without `last`, these searched for the words "best match".
+    if len(t.split()) <= 8 and _SHOW.search(t) and (
+            (last and last["mode"] in ("recall", "screen")) or _SHOW_ORDINAL.search(t)):
         return "show", t                          # "show me the first one": zoom evidence
     past = bool(_PAST.search(t))
     if _SCREEN.search(t) and not past:
@@ -688,6 +705,7 @@ class Asker:
         if kind == "hush":
             self.pending, self.listen_until = None, 0
             act.get("hush", lambda: None)()
+            act.get("cancel_enrol", lambda: None)()
             self.publish({"type": "answer_close"})
             return "Okay."
         if kind == "open":
@@ -734,6 +752,10 @@ class Asker:
                 return "I can't do that from here."
             act["curtain"](kind == "curtain")
             return "Curtain down." if kind == "curtain" else "Curtain lifted."
+        if kind in ("enrol", "unenrol"):
+            if kind not in act:
+                return "I can't do that from here."
+            return act[kind]()
         if kind == "close_ui":
             self.pending, self.listen_until, self.nav_until = None, 0, 0
             self.publish({"type": "close_all"})
@@ -787,10 +809,14 @@ class Asker:
         if not info:
             return "No, the webcam is off for me."
         st = info.get("state")
+        if st == "present" and info.get("owner"):
+            return "Yes, I can see you."                     # D37: your remembered face
         if st == "present":
             return "Yes, one face at the screen. I count faces; I don't recognise them."
         if st == "watched":
             return "I see more than one face, so I'm hiding my panels."
+        if st == "stranger":
+            return "I see someone, but not you, so the curtain is down."
         if st == "away":
             return "No one's in front of the camera right now."
         return f"No, the webcam is off for me{': ' + info['why'] if info.get('why') else ''}."
@@ -820,7 +846,9 @@ class Asker:
         """Carry out the model's pick through the same code a spoken command uses.
         False = "answer it after all"."""
         cmd = {"close_ui": ("close_ui", None), "resume": ("resume", None), "unfocus": ("unfocus", None),
-               "copy_screen": ("copy_screen", None),
+               "copy_screen": ("copy_screen", None), "open_page": ("open_url", None),
+               "remember_face": ("enrol", None), "forget_face": ("unenrol", None),
+               "list_reminders": ("reminders", None),
                "curtain": ("curtain" if args.get("on", True) is not False else "uncurtain", None),
                "pause": ("pause", float(args["minutes"]) if str(args.get("minutes", "")).replace(".", "", 1).isdigit()
                          else None),
@@ -828,20 +856,43 @@ class Asker:
                "open": ("open", "insights" if args.get("view") == "insights" else "timeline"),
                "volume": ("volume", args.get("level") if args.get("level") in ("softer", "louder", "mute", "unmute")
                           else "softer")}.get(tool)
-        if tool == "remind" and args.get("text"):
-            cmd, question = ("remind", None), f"remind me {args.get('when', '')} to {args['text']}"
+        if tool == "remind" and (args.get("text") or args.get("english")):
+            # Measured (D37): "when" comes back as "5" or "10 minutes from now", and the
+            # text in Hindi. The model's English sentence parses best; else tidy the parts.
+            eng = " ".join(str(args.get("english") or "").split())
+            when = re.sub(r"^(\d+\s*\w+) from now$", r"in \1", str(args.get("when") or "").strip(), flags=re.I)
+            if re.fullmatch(r"\d{1,2}(?::\d{2})?\s*(?:[ap]\.?m\.?)?", when, re.I):
+                when = f"at {when}"
+            question = eng if eng.lower().startswith("remind me") else f"remind me {when} to {args.get('text', '')}"
+            cmd = ("remind", None)
         if tool == "focus" and not (cmd and cmd[1]):
             cmd = None
         if cmd:
             said = self._do(cmd[0], cmd[1], question)
             self.publish({"type": "toast", "text": said, "icon": cmd[0]})
-        elif tool == "scroll":
-            ev = {"type": "ui", "action": "scroll", "dir": "up" if args.get("dir") == "up" else "down"}
+        elif tool in ("scroll", "step", "close"):
+            ev = ({"type": "ui", "action": "scroll", "dir": "up" if args.get("dir") == "up" else "down"}
+                  if tool == "scroll" else {"type": "ui", "action": "close"} if tool == "close"
+                  else {"type": "ui", "action": "step", "by": -1 if str(args.get("by")) == "-1" else 1})
             self.publish(ev)
             said = _nav_said(ev)
             self.publish({"type": "toast", "text": said, "icon": "nav"})
             self.nav_until = now_ms() + config.NAV_WINDOW_S * 1000
             return True                              # silent, like any navigation
+        elif tool == "goto" and args.get("when"):
+            from .plugin import time_window
+            w = time_window(f"show me {args['when']}", now_ms())
+            if not w:
+                return False
+            ev = {"type": "open_view", "view": "timeline"}
+            if w[1] - w[0] > 12 * 3600_000:
+                ev["day"] = time.strftime("%Y-%m-%d", time.localtime(w[0] / 1000))
+            else:
+                ev["ts"] = (w[0] + w[1]) // 2
+            self.publish(ev)
+            said = f"Here's {w[2]}."
+            self.publish({"type": "toast", "text": said, "icon": "open"})
+            self.nav_until = now_ms() + config.NAV_WINDOW_S * 1000
         elif tool in ("ask_back", "cannot"):
             said = " ".join(str(args.get("question" if tool == "ask_back" else "reason") or "").split())[:200]
             # ...and it writes about "Jimmy" in the third person; Jimmy is speaking.

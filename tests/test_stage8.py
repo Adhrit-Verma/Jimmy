@@ -190,6 +190,15 @@ def test_hindi_and_english_only():
                        curtain=lambda on: did.append(("curtain", on)))
     turn(lambda: a.hear(0, "mic", "जिमी, पर्दा लगा दो"))
     assert did[-1] == ("curtain", True)
+    # D37, as the real model answered: Hindi text, "10 minutes from now"; and a bare "5".
+    did.clear()
+    a, turn, _ = asker('{"tool": "remind", "args": {"text": "पानी पीना", "when": "10 minutes from now", '
+                       '"english": "Remind me to drink water in 10 minutes"}}', remind=lambda *r: did.append(r))
+    turn(lambda: a.hear(0, "mic", "जिमी, दस मिनट बाद पानी पीने की याद दिलाना"))
+    assert did == [("drink water", NOW + 10 * MIN, None)], did
+    a, turn, _ = asker('{"tool": "remind", "args": {"text": "Call Sam", "when": "5"}}', remind=lambda *r: did.append(r))
+    turn(lambda: a.hear(0, "mic", "Jimmy, set a reminder for 5 to call Sam"))
+    assert did[-1][0] == "Call Sam" and datetime.fromtimestamp(did[-1][1] / 1000).strftime("%H:%M") == "17:00"
     print("ok  Hindi or English only; Hindi requests meet the same rules")
 
 

@@ -268,8 +268,10 @@ def test_presence_states_never_recognise():
     else:
         raise AssertionError("Presence must refuse to be serialised")
     src = (Path(__file__).resolve().parents[1] / "ambient" / "presence.py").read_text(encoding="utf-8")
-    assert "FaceRecognizerSF" not in src and "feature(" not in src, "the webcam path never computes a face vector"
-    print("ok  presence: away / watched / off with hysteresis; no face vectors, no pickling")
+    # D37: a face vector is written in exactly one place: your own finished, guided capture.
+    assert src.count(".save(") == 1 and "self.owner.save(e.samples)" in src, "one write path, the owner's"
+    assert src.count("write_bytes") == 1 and "np.save" not in src and "imwrite" not in src, "no frame, no other vector"
+    print("ok  presence: away / watched / off with hysteresis; one write path; no pickling")
 
 
 def test_bus_curtain_rules():

@@ -2,7 +2,7 @@ import { Component, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   BarChart3, Bell, CalendarClock, Check, Clock, ExternalLink, Eye, EyeOff, Globe, History, Lightbulb, MessageCircle,
-  MonitorSmartphone, MoveRight, Pause, Play, Power, RotateCcw, Target, X,
+  MonitorSmartphone, MoveRight, Pause, Play, Power, RotateCcw, ScanFace, ShieldCheck, Target, X,
 } from "lucide-react";
 import Answer from "./Answer.jsx";
 
@@ -31,7 +31,7 @@ const SUGGEST = [
   { label: "Open insights", icon: BarChart3 },
 ];
 const FLASH_ICON = {
-  close_ui: X, copy_screen: Check, volume: MessageCircle, presence: Eye,
+  close_ui: X, copy_screen: Check, volume: MessageCircle, presence: Eye, enrol: ScanFace, unenrol: ScanFace,
   pause: Pause, resume: Play, focus: Target, unfocus: Target, open: ExternalLink, show: X, nav: MoveRight,
   remind: Bell, reminders: Bell, unremind: Bell, curtain: EyeOff, uncurtain: Eye, open_url: Globe,
 };
@@ -212,6 +212,10 @@ function Pill({ state, mood, prompt, typing, setTyping, flash, recent, onAsk, an
                   <Target size={12} /> Focus
                 </PillButton>
               )}
+              <PillButton label={state.owner ? "Forget my face" : "Remember my face, so the curtain knows you"}
+                onClick={() => bridge?.api("ask", { q: state.owner ? "forget my face" : "remember my face" })}>
+                <ScanFace size={12} /> {state.owner ? "Forget me" : "Remember me"}
+              </PillButton>
               <PillButton label={curtain ? "Lift the curtain (Ctrl+Alt+L)" : "Privacy curtain (Ctrl+Alt+L)"}
                 onClick={() => bridge?.api("curtain", { on: !curtain })}>
                 {curtain ? <Eye size={12} /> : <EyeOff size={12} />} {curtain ? "Lift" : "Curtain"}
@@ -351,6 +355,81 @@ function Card({ card, onGone, onDismiss, away }) {
   );
 }
 
+// D37: "remember my face". A live, mirrored preview with an oval to line up in,
+// the face box green when the frame is good, the instruction in words (also
+// spoken), three steps, and what is kept. Screen capture is off meanwhile.
+const ENROL_STEPS = ["Look straight", "One side", "Other side"];
+
+function EnrolPanel({ e }) {
+  const good = e.done ? !e.failed : e.ok;
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-14 z-[120] flex justify-center">
+      <motion.div
+        {...hover}
+        initial={{ opacity: 0, y: -10, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: -10, scale: 0.97 }} transition={{ type: "spring", stiffness: 420, damping: 34 }}
+        className={`pointer-events-auto w-[380px] rounded-2xl p-4 ${surface}`}
+      >
+        <div className="flex items-center gap-2 text-[13px] font-medium text-neutral-100">
+          <ScanFace size={15} className="text-sky-300" /> Remember my face
+          {!e.done && (
+            <button onClick={() => bridge?.api("ask", { q: "cancel" })} aria-label="Cancel"
+              className="ml-auto rounded-md p-1 text-neutral-500 hover:bg-white/10 hover:text-neutral-200"><X size={14} /></button>
+          )}
+        </div>
+        {!e.done ? (
+          <>
+            <div className="relative mt-3 aspect-[4/3] overflow-hidden rounded-xl bg-black">
+              {e.preview && <img src={e.preview} className="h-full w-full object-cover" draggable={false} />}
+              <div className="absolute inset-0 grid place-items-center">
+                <motion.div animate={{ borderColor: good ? "rgb(52 211 153)" : "rgba(255,255,255,0.45)" }}
+                  className="h-[72%] w-[46%] rounded-[50%] border-2 shadow-[0_0_0_999px_rgba(0,0,0,0.35)]" />
+              </div>
+              {e.box && (
+                <motion.div className={`absolute rounded-lg border-2 ${good ? "border-emerald-400" : "border-amber-300"}`}
+                  animate={{ left: `${e.box[0] * 100}%`, top: `${e.box[1] * 100}%`, width: `${e.box[2] * 100}%`, height: `${e.box[3] * 100}%` }}
+                  transition={{ type: "spring", stiffness: 600, damping: 40 }} />
+              )}
+              <div className="absolute inset-x-0 bottom-0 h-1 bg-white/10">
+                <motion.div className="h-full bg-emerald-400" animate={{ width: `${Math.round((e.progress || 0) * 100)}%` }} />
+              </div>
+            </div>
+            <div className="mt-3 flex gap-1.5">
+              {ENROL_STEPS.map((label, i) => (
+                <span key={label} className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]
+                  ${i < e.step ? "bg-emerald-400/15 text-emerald-200" : i === e.step ? "bg-white/10 text-neutral-100" : "text-neutral-500"}`}>
+                  {i < e.step ? <Check size={10} /> : <span className="tabular-nums">{i + 1}</span>} {label}
+                </span>
+              ))}
+            </div>
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.p key={e.say} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.15 }}
+                className={`mt-2.5 text-[15px] font-medium ${good ? "text-emerald-200" : "text-neutral-50"}`}>{e.say}</motion.p>
+            </AnimatePresence>
+          </>
+        ) : (
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="py-6 text-center">
+            <div className={`mx-auto grid size-12 place-items-center rounded-full ${e.failed ? "bg-amber-400/15 text-amber-200" : "bg-emerald-400/15 text-emerald-200"}`}>
+              {e.failed ? <X size={22} /> : <Check size={22} />}
+            </div>
+            <p className="mt-3 text-[14px] text-neutral-100">{e.say}</p>
+            {e.failed && (
+              <button onClick={() => bridge?.api("ask", { q: "remember my face" })}
+                className="mt-3 rounded-lg bg-white/10 px-3 py-1.5 text-[13px] text-neutral-100 hover:bg-white/15">Try again</button>
+            )}
+          </motion.div>
+        )}
+        <p className="mt-3 flex items-start gap-1.5 text-[11px] leading-snug text-neutral-500">
+          <ShieldCheck size={12} className="mt-px shrink-0" />
+          Only your face, as an encrypted template on this PC, used only for the privacy curtain. No photo is kept.
+          Say &ldquo;forget my face&rdquo; any time.
+        </p>
+      </motion.div>
+    </div>
+  );
+}
+
 // D34: the privacy curtain. Opaque, over everything Jimmy can cover (the main
 // process grows the window to the whole display while it's down).
 function Curtain({ why }) {
@@ -384,6 +463,8 @@ export default function App() {
   const [flash, setFlash] = useState(null);    // D31: a moment of feedback in the pill
   const [recent, setRecent] = useState([]);    // this session's typed questions; never saved
   const [presence, setPresence] = useState({ state: "off", curtain: false });   // D34
+  const [enrol, setEnrol] = useState(null);                                    // D37
+  const enrolTimer = useRef(null);
   const hideTimer = useRef(null);
   const flashTimer = useRef(null);
   const flashN = useRef(0);
@@ -452,6 +533,11 @@ export default function App() {
       if (ev.type === "copy") say(ev.label || "Copied", "copy");
       if (ev.type === "close_all") { setOpenIndex(null); closeAnswer(); setCards([]); }   // "Jimmy, close your UI"
       if (ev.type === "presence") setPresence(ev);
+      if (ev.type === "enrol") {
+        clearTimeout(enrolTimer.current);
+        setEnrol((cur) => ({ ...cur, ...ev }));
+        if (ev.done) enrolTimer.current = setTimeout(() => { setEnrol(null); bridge?.pointerOverUi(false); }, ev.failed ? 8000 : 3500);
+      }
       if (ev.type === "state" && "curtain" in ev) setPresence((p) => ({ ...p, curtain: ev.curtain, state: ev.presence }));
       if (ev.type === "answer_close") closeAnswer();
       if (ev.type === "card") setCards((cs) => [ev, ...cs.filter((c) => c.id !== ev.id)].slice(0, MAX_CARDS));
@@ -493,11 +579,13 @@ export default function App() {
   const away = presence.curtain || presence.state === "away";
   const curtainWhy = presence.manual ? "Ctrl+Alt+L, or say \u201cJimmy, lift the curtain\u201d"
     : presence.state === "watched" ? "Someone else is looking at a private page"
+    : presence.state === "stranger" ? "Someone else is at the screen"
     : "Look at the screen to lift it";
 
   return (
     <>
       <AnimatePresence>{presence.curtain && <Curtain key="curtain" why={curtainWhy} />}</AnimatePresence>
+      <AnimatePresence>{enrol && !presence.curtain && <EnrolPanel key="enrol" e={enrol} />}</AnimatePresence>
       <div className="relative z-[110]">
         <Pill state={state} mood={mood} prompt={prompt} typing={typing} setTyping={setTyping}
           flash={flash} recent={recent} onAsk={ask} answerOpen={!!answer} watched={watched} curtain={presence.curtain} />
