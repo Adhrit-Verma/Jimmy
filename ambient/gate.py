@@ -89,8 +89,10 @@ class Gate:
                  on_card: Callable[[Card], None] | None = None,
                  on_decision: Callable[[Candidate, Card | None, str], None] | None = None,
                  intent: str | None = None, background: bool = False,
-                 history_until: int | None = None):
+                 history_until: int | None = None,
+                 muted: Callable[[str], bool] | None = None):
         self.store, self.engine, self.memory = store, engine, memory
+        self.muted = muted              # D32: kinds of card you keep waving away, here
         # line -> capture windows it has appeared in. A line seen in several
         # windows is screen furniture (sidebar, friend list, own name, buttons),
         # not content (D22). Built only from the past: live loads history up to
@@ -293,6 +295,8 @@ class Gate:
         card, why = self.engine.decide(cand)
         with self._lock:
             blocked = self._card_blocked(cand.ts) if card else None
+            if card and not blocked and self.muted and self.muted(card.type):
+                blocked = "muted: dismissed here before"
             if card and not blocked:
                 self.cards.append(cand.ts)
                 if card.type == "FOCUS":

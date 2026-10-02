@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { BarChart3, ChevronLeft, ChevronRight, History, Mic, Search, X } from "lucide-react";
+import { BarChart3, ChevronLeft, ChevronRight, Globe, History, Mic, Search, X } from "lucide-react";
 import Insights, { Axis, Ribbon, colorOf, dayRange, hm } from "./Insights.jsx";
 
 // Stage 5: "what was that thing I saw on Tuesday". A day of blurred thumbnails
@@ -116,7 +116,15 @@ function Preview({ frame }) {
           </span>
           {frame.face_count > 0 && <span className="text-[11px] text-neutral-500">· {frame.face_count} face(s) blurred</span>}
         </div>
-        <div className="truncate text-[13px] text-neutral-500">{frame.title}</div>
+        <div className="flex items-center gap-2">
+          <span className="min-w-0 truncate text-[13px] text-neutral-500">{frame.title}</span>
+          {frame.url && (
+            <button onClick={() => bridge?.openUrl(frame.url)} title={frame.url}
+              className="flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[12px] text-neutral-300 hover:bg-white/10">
+              <Globe size={12} /> Open page
+            </button>
+          )}
+        </div>
       </div>
       <div className="flex min-h-0 flex-col gap-3">
         <section className="min-h-0 flex-1 overflow-y-auto rounded-xl bg-white/[0.03] p-3 ring-1 ring-white/[0.06] [scrollbar-width:thin]">
@@ -156,7 +164,7 @@ function Results({ data, onPick, onClose }) {
         <span>{data.results.length} results{data.window ? ` · ${data.window}` : ""}</span>
         <button onClick={onClose} aria-label="Close results" className="rounded p-1 hover:bg-white/10"><X size={12} /></button>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 [scrollbar-width:thin]">
+      <div data-scroll className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 [scrollbar-width:thin]">
         {data.results.length === 0 && <p className="px-2 text-[13px] text-neutral-500">Nothing found. Try fewer words, or another day.</p>}
         {data.results.map((r, i) => (
           <motion.button key={r.ref} onClick={() => onPick(r)}
@@ -214,6 +222,14 @@ function Tabs({ view, setView }) {
 
 const startView = location.hash.startsWith("#insights") ? "insights" : "timeline";
 
+// "chrome" -> "Chrome", whichever app on this day the words name; null if none.
+function appIn(frames, words) {
+  const w = (words || "").toLowerCase().trim();
+  if (!w) return null;
+  const names = [...new Set(frames.map((f) => f.name).filter(Boolean))];
+  return names.find((n) => n.toLowerCase() === w) || names.find((n) => n.toLowerCase().includes(w) || w.includes(n.toLowerCase())) || null;
+}
+
 export default function Timeline() {
   const [view, setView] = useState(startView);
   const [data, setData] = useState({ day: null, days: [], frames: [] });
@@ -225,7 +241,10 @@ export default function Timeline() {
   const [results, setResults] = useState(null);
   const [busy, setBusy] = useState(false);
   const jumpTo = useRef(null);         // ts to select once a day has loaded
+  const wantFilter = useRef(null);     // an app to filter to once a day has loaded
   const input = useRef(null);
+  const latest = useRef({});           // current state, for handlers registered once
+  const onUi = useRef(() => {});
 
   const shown = useMemo(() => (filter ? data.frames.filter((f) => f.name === filter) : data.frames),
                         [data.frames, filter]);
@@ -236,7 +255,8 @@ export default function Timeline() {
     bridge?.get("timeline", day ? { day } : {}).then((d) => {
       if (!d) return;
       setData(d);
-      setFilter(null);
+      setFilter(appIn(d.frames, wantFilter.current));
+      wantFilter.current = null;
       setSelected(jumpTo.current != null && d.frames.length ? nearest(d.frames, jumpTo.current) : Math.max(0, d.frames.length - 1));
       jumpTo.current = null;
     });
@@ -262,16 +282,31 @@ export default function Timeline() {
     setBusy(false);
   }, []);
 
-  // Deep links: #timeline?ts=…&q=… on open, or a "goto" event when already open.
-  const goto = useCallback((p) => {
+  // Deep links: #timeline?ts=…&q=…&filter=… on open, or a "goto" event when
+  // already open ("Jimmy, show me yesterday at 3", "only Chrome", D33).
+  const goto = useCallback((p, first = false) => {
     if (p.view) setView(p.view);
     if (p.q) { setQuery(p.q); search(p.q); }
+    const loads = p.ts || p.day || first;
+    if ("filter" in p) {
+      if (loads) wantFilter.current = p.filter;
+      else {
+        const app = appIn(latest.current.frames || [], p.filter);
+        const n = (app ? latest.current.frames.filter((f) => f.name === app) : latest.current.frames || []).length;
+        setView("timeline");
+        setFilter(app);
+        setSelected(Math.max(0, n - 1));
+      }
+    }
     if (p.ts) { jumpTo.current = Number(p.ts); load(dayOf(Number(p.ts))); }
-    else load(p.day || null);
+    else if (p.day || first) load(p.day || null);
   }, [load, search]);
   useEffect(() => {
-    goto(Object.fromEntries(new URLSearchParams(location.hash.split("?")[1] || "")));
-    return bridge?.onEvent((ev) => { if (ev.type === "goto") goto(ev); });
+    goto(Object.fromEntries(new URLSearchParams(location.hash.split("?")[1] || "")), true);
+    return bridge?.onEvent((ev) => {
+      if (ev.type === "goto") goto(ev);
+      if (ev.type === "ui") onUi.current(ev);
+    });
   }, [goto]);
 
   const dayIdx = data.days.indexOf(data.day);
@@ -300,6 +335,26 @@ export default function Timeline() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [shown.length, view, older, newer, load]);
+
+  latest.current = { frames: data.frames };
+  // D33: "next", "scroll down", "previous day", "close" by voice.
+  onUi.current = (ev) => {
+    const n = shown.length;
+    if (ev.action === "scroll") {
+      const box = document.querySelector(view === "insights" ? "[data-scroll=insights]" : results ? "[data-scroll]" : null);
+      if (box) box.scrollBy({ top: (ev.dir === "down" ? 1 : -1) * box.clientHeight * 0.7, behavior: "smooth" });
+      else setSelected((s) => Math.max(0, Math.min(n - 1, s + (ev.dir === "down" ? 10 : -10))));
+    } else if (ev.action === "step") {
+      setView("timeline");
+      setSelected((s) => Math.max(0, Math.min(n - 1, s + ev.by)));
+    } else if (ev.action === "edge") {
+      setView("timeline");
+      setSelected(ev.to === "first" ? 0 : Math.max(0, n - 1));
+    } else if (ev.action === "day") {
+      if (ev.by > 0 && newer) load(newer);
+      if (ev.by < 0 && older) load(older);
+    } else if (ev.action === "close") bridge?.closeWindow();
+  };
 
   const pick = (r) => {
     setView("timeline");

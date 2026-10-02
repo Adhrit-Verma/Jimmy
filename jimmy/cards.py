@@ -66,6 +66,17 @@ Answer "related": false only when it is clearly unrelated.
 Reply with JSON only: {{"related": true or false, "why": "<short>"}}"""
 
 
+# D32: one yes/no per line. Code found the date and writes the card; the model
+# only says whether the line is something to act on or attend.
+DEADLINE_Q = """<text>
+{text}
+</text>
+Question: does <text> state a deadline, due date, appointment or event on a
+specific day that the reader may need to act on or attend? A date that only
+says when something was posted, sent, updated or logged does not count.
+Reply with JSON only: {{"deadline": true or false}}"""
+
+
 def _fmt(ev: dict) -> str:
     when = time.strftime("%a %d %b %H:%M", time.localtime(ev["ts"] / 1000)) if ev.get("ts") else ""
     head = " · ".join(p for p in (when, ev.get("where", "")) if p)
@@ -150,6 +161,14 @@ class CardEngine:
                 time.sleep(5)
         return None
 
+    def is_deadline(self, text: str) -> bool | None:
+        """True / False, or None if the model couldn't be asked or answered nonsense."""
+        try:
+            ans = self.ask(DEADLINE_Q.format(text=" ".join(text.split())[:400]), "deadline")
+        except LLMError:
+            return None
+        return ans.get("deadline") is True if ans else None
+
     def decide(self, cand: Candidate) -> tuple[Card | None, str]:
         if not self.llm.configured:
             return None, "offline: no model to decide with"
@@ -187,6 +206,11 @@ class CardEngine:
             return None, "no earlier item is the same concrete thing"
         except LLMError as exc:
             return None, f"llm error: {exc}"
+
+
+def local_engine() -> CardEngine:
+    """The local model alone (D32: deadlines). Screen text never leaves the laptop."""
+    return CardEngine(local_llm())
 
 
 def default_engine() -> CardEngine:

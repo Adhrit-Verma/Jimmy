@@ -65,6 +65,10 @@ CREATE TABLE IF NOT EXISTS turns (
     role TEXT NOT NULL, text TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_turns_session ON turns(session, id);
+CREATE TABLE IF NOT EXISTS reminders (
+    id INTEGER PRIMARY KEY, created INT NOT NULL, text TEXT NOT NULL,
+    due_ts INT, app TEXT, state TEXT DEFAULT 'waiting'
+);
 """
 
 
@@ -126,6 +130,32 @@ class Memory:
         if not row or row["text"] == self._NO_INTENT or now_ms - row["ts"] > max_age_h * 3600_000:
             return None
         return dict(row)
+
+    # Reminders (D32): only ever what the user asked for, in their words. Due at a
+    # time, or when an app comes to the front ("when I open Chrome"). Never deleted:
+    # done or cancelled is a state.
+    def add_reminder(self, text: str, due_ts: int | None = None, app: str | None = None) -> int:
+        return self._write("INSERT INTO reminders(created, text, due_ts, app) VALUES (?,?,?,?)",
+                           (int(time.time() * 1000), text.strip(), due_ts, (app or "").lower() or None))
+
+    def due_reminders(self, now_ms: int, app: str | None = None) -> list[dict]:
+        with self._lock:
+            return [dict(r) for r in self.conn.execute(
+                "SELECT id, text, due_ts, app FROM reminders WHERE state = 'waiting' AND "
+                "((due_ts IS NOT NULL AND due_ts <= ?) OR (app IS NOT NULL AND ? LIKE '%' || app || '%'))",
+                (now_ms, (app or "").lower() or "\x00"))]
+
+    def reminders(self) -> list[dict]:
+        with self._lock:
+            return [dict(r) for r in self.conn.execute(
+                "SELECT id, text, due_ts, app FROM reminders WHERE state = 'waiting' ORDER BY COALESCE(due_ts, 1e18)")]
+
+    def set_reminder_state(self, rid: int | None, state: str) -> None:
+        """One reminder, or every waiting one when `rid` is None."""
+        if rid is None:
+            self._write("UPDATE reminders SET state = ? WHERE state = 'waiting'", (state,))
+        else:
+            self._write("UPDATE reminders SET state = ? WHERE id = ?", (state, rid))
 
     def add_turn(self, session: str, role: str, text: str) -> None:
         if text and text.strip():

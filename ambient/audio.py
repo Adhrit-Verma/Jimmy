@@ -46,7 +46,11 @@ def _own_mic_keys() -> set[str]:
 
 
 def other_app_using_mic() -> bool:
-    """True if any app other than us has the microphone open right now.
+    return other_app_using("microphone")
+
+
+def other_app_using(capability: str) -> bool:
+    """True if any app other than us has the device ("microphone", "webcam") open right now.
 
     Windows records this per app (LastUsedTimeStop == 0 while in use) and it is
     what drives the taskbar mic icon. It catches browser calls such as Google
@@ -85,7 +89,7 @@ def other_app_using_mic() -> bool:
                 except OSError:
                     continue
 
-    return scan(_MIC_STORE)
+    return scan(_MIC_STORE.rsplit("\\", 1)[0] + "\\" + capability)   # D34: "webcam" too
 
 
 def is_hallucination(text: str) -> bool:

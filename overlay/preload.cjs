@@ -16,4 +16,5 @@ contextBridge.exposeInMainWorld("jimmy", {
   focusAsk: () => ipcRenderer.send("focus-ask"),
   releaseFocus: () => ipcRenderer.send("release-focus"),
   copy: (text) => ipcRenderer.send("copy", String(text)),
+  openUrl: (url) => ipcRenderer.send("open-url", String(url)),
 });

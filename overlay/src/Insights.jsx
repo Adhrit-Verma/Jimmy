@@ -312,7 +312,7 @@ export default function Insights({ data: d, loading, onJump, onDay }) {
     { icon: ScanText, label: "New text", value: <CountUp value={d.words} />, sub: "words that appeared on screen" },
   ];
   return (
-    <div className={`min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-6 pt-4 transition-opacity [scrollbar-width:thin] ${loading ? "opacity-50" : ""}`}>
+    <div data-scroll="insights" className={`min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-6 pt-4 transition-opacity [scrollbar-width:thin] ${loading ? "opacity-50" : ""}`}>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-3">
         {tiles.map((t, i) => <Tile key={t.label} i={i} {...t} />)}
       </div>

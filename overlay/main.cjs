@@ -6,7 +6,7 @@
 // the page has no network access and no Node, just the small bridge in preload.cjs.
 //
 // Flags: --demo (fake cards, no Python needed)  --snapshot <file.png> (render, save, quit)
-const { app, BrowserWindow, clipboard, screen, ipcMain, globalShortcut } = require("electron");
+const { app, BrowserWindow, clipboard, screen, shell, ipcMain, globalShortcut } = require("electron");
 const fs = require("fs");
 const path = require("path");
 
@@ -20,10 +20,15 @@ const SNAP_DELAY = delayAt > 0 ? Number(process.argv[delayAt + 1]) : 2600;
 const HOTKEY = "Control+Alt+J";
 const TIMELINE_HOTKEY = "Control+Alt+T";
 const INSIGHTS_HOTKEY = "Control+Alt+I";
+const CURTAIN_HOTKEY = "Control+Alt+L";   // D34: the privacy curtain, by hand
 const OPEN_TIMELINE = process.argv.includes("--timeline");
 
 let win = null;
 let timeline = null;
+// D33: voice navigation ("next", "scroll down") goes to whichever Jimmy surface you
+// were last shown: the overlay's answer, or the timeline window.
+let target = "overlay";
+let curtain = false;
 
 // Stage 5: the recall timeline. A normal, focusable window (unlike the overlay),
 // frameless with its own drag bar, same page bundle at #timeline. D31: the same
@@ -35,6 +40,8 @@ function openTimeline(view, params) {
   if (Number.isFinite(Number(p.ts)) && p.ts) deep.ts = String(Number(p.ts));
   if (/^\d{4}-\d{2}-\d{2}$/.test(p.day || "")) deep.day = p.day;
   if (typeof p.q === "string" && p.q) deep.q = p.q.slice(0, 200);
+  if (typeof p.filter === "string") deep.filter = p.filter.slice(0, 60);
+  target = "timeline";
   if (timeline && !timeline.isDestroyed()) {
     timeline.webContents.send("event", { type: "goto", view, ...deep });
     timeline.show();
@@ -59,6 +66,8 @@ function openTimeline(view, params) {
   const qs = new URLSearchParams(deep).toString();
   timeline.loadFile(path.join(__dirname, "dist", "index.html"), { hash: qs ? `${view}?${qs}` : view });
   timeline.once("ready-to-show", () => timeline.show());
+  timeline.on("focus", () => { target = "timeline"; });
+  timeline.on("closed", () => { target = "overlay"; });
   return timeline;
 }
 
@@ -71,8 +80,28 @@ async function get(route, params) {
   return res.ok ? res.json() : null;
 }
 
+// Only pages Jimmy saw in a browser's address bar, and only web links.
+function openUrl(url) {
+  if (typeof url === "string" && /^https?:\/\/[^\s]+$/i.test(url)) shell.openExternal(url);
+}
+
 function send(event) {
-  if (event.type === "open_view") return openTimeline(event.view);   // "Jimmy, open insights"
+  if (event.type === "open_view") return openTimeline(event.view, event);   // "Jimmy, open insights"
+  if (event.type === "open_url") return openUrl(event.url);                  // "Jimmy, open that page"
+  if (event.type === "copy") clipboard.writeText(String(event.text || "").slice(0, 20_000));   // drafts
+  if (["answer_start", "open_evidence", "card"].includes(event.type)) target = "overlay";
+  if (event.type === "presence" || event.type === "state") {
+    const on = !!event.curtain;
+    if (on !== curtain && win && !win.isDestroyed()) {
+      curtain = on;
+      // Down: cover the whole display, taskbar included. Up: back to the work area.
+      const d = screen.getPrimaryDisplay();
+      win.setBounds(on ? d.bounds : d.workArea);
+    }
+  }
+  if (event.type === "ui" && target === "timeline" && timeline && !timeline.isDestroyed()) {
+    return timeline.webContents.send("event", event);
+  }
   if (win && !win.isDestroyed()) win.webContents.send("event", event);
 }
 
@@ -193,6 +222,7 @@ app.whenReady().then(() => {
   ipcMain.handle("get", (_e, route, params) => get(route, params));
   ipcMain.on("open-timeline", (_e, view, params) => openTimeline(view, params));
   ipcMain.on("copy", (_e, text) => clipboard.writeText(String(text).slice(0, 20_000)));
+  ipcMain.on("open-url", (_e, url) => openUrl(url));
   // Typing a question (D25) is the one time the overlay may take focus; it gives
   // it back as soon as the question is sent or dismissed.
   const focusAsk = () => {
@@ -212,6 +242,7 @@ app.whenReady().then(() => {
   globalShortcut.register(HOTKEY, () => call("toggle-pause"));
   globalShortcut.register(TIMELINE_HOTKEY, () => openTimeline());
   globalShortcut.register(INSIGHTS_HOTKEY, () => openTimeline("insights"));
+  globalShortcut.register(CURTAIN_HOTKEY, () => call("curtain", { on: !curtain }).catch(() => {}));
 
   if (OPEN_TIMELINE) {
     const t = openTimeline(process.argv.includes("--insights") ? "insights" : "timeline");

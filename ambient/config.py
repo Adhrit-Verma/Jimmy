@@ -126,6 +126,43 @@ INDEX_EVERY_S = 60           # embed new captures for meaning search this often 
 # frame counts until the next, up to this cap. A longer gap is away / idle.
 ACTIVE_GAP_S = 300
 
+# --- Jimmy on its own (D32) --------------------------------------------------
+# Each of these only touches Jimmy: it notices and shows a card. Anything that
+# would act on the world (set a focus, open a page, add an event) waits for a yes.
+RESUME_GAP_S = 45 * 60       # back after this long without a capture -> "Left off: …"
+SUGGEST_FOCUS_WINDOW_S = 20 * 60   # one window this much of the last N min, no focus set ->
+SUGGEST_FOCUS_SHARE = 0.6          # ...offer it as the focus
+SUGGEST_FOCUS_EVERY_S = 2 * 3600   # at most one offer this often
+RECAP_HOUR = 21              # the day's recap card shows at/after this local hour (once a day)
+RECAP_MIN_ACTIVE_S = 30 * 60  # ...if at least this much was on screen
+DEADLINE_SCAN_S = 300        # look for deadlines in new text this often
+DEADLINE_MAX_DAYS = 45       # a date further out than this is not a deadline worth a card
+DEADLINE_CHECKS_PER_HOUR = 20  # local-model yes/no calls, at most
+DEADLINE_EVE_HOUR = 17       # the day before: warn at/after this hour; on the day: after 7
+MUTE_AFTER_DISMISSALS = 3    # this many dismissals of a card kind in one app (14 days),
+MUTE_WINDOW_DAYS = 14        # ...and none used -> that kind stays quiet in that app
+NAV_WINDOW_S = 45            # after Jimmy shows you something, "next", "scroll down",
+                             # "close" work without saying "Jimmy" for this long (D33)
+OFFER_WAIT_S = 30            # "add it?" -> a bare "yes" counts for this long
+
+# --- privacy curtain: presence from your own webcam (D34) --------------------
+# Counts faces and reads head direction. Never recognises anyone: no face
+# vectors are computed from the webcam, nothing is stored (non-negotiable 2).
+PRESENCE = True              # False: no webcam at all
+PRESENCE_CAMERA = 0          # OpenCV camera index
+PRESENCE_FPS = 4
+PRESENCE_MIN_FACE = 0.06     # ignore faces narrower than this share of the frame (far away)
+AWAY_S = 6                   # no face this long -> away -> curtain
+WATCHED_S = 1.0              # a second face this long -> someone's looking
+RETURN_S = 0.6               # one face facing the screen this long -> curtain lifts
+CURTAIN_WHEN_AWAY = True
+# Someone else looking: "full" curtain only on a sensitive surface (banking,
+# password field), as the spec's shoulder-surf warning says; otherwise Jimmy
+# hides its own panels and warns in the pill.
+CURTAIN_WHEN_WATCHED = "sensitive"   # "always" | "sensitive" | "never"
+LOOK_AWAY_S = 0              # >0: looking away this long also curtains (off: reading paper is normal)
+DARK_FRAME = 12              # mean grey below this = covered lens / dark room -> presence off
+
 # --- ask by voice, answers come to you (D25) --------------------------------
 ASK_EVIDENCE = 6             # moments shown beside a spoken answer
 LISTEN_WINDOW_S = 8          # after "Jimmy" alone, the next thing said (within this) is the question

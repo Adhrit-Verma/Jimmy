@@ -30,6 +30,7 @@ class _Window:
     last_sig: np.ndarray | None = None
     seen_lines: set[str] = field(default_factory=set)
     last_thumb: str | None = None      # D31: reused when you switch back to an unchanged screen
+    last_url: str | None = None
 
 
 def new_lines(text: str, seen: set[str]) -> str:
@@ -97,6 +98,13 @@ class ContextBus:
         self._asker = None          # voice / typed questions (D25), set up with the overlay
         self._voice = None
         self._speaking = False
+        self._curtain = False         # D34: the privacy curtain is down: nothing is captured
+        self._manual_curtain = False
+        self._presence = {"state": "off"}
+        self._presence_obj = None
+        self._sensitive = False       # the last tick was an excluded surface or a password box
+        self._proactive = None        # D32
+        self._last_frame_ts = None
 
     # --- capture windows -------------------------------------------------
     def _expire_windows(self, now: float, ts: int, keep: str | None = None) -> None:
@@ -133,11 +141,25 @@ class ContextBus:
             if self._audio and not self._audio.paused.is_set():
                 self._audio.paused.set()
             return "paused"
+        if screen.is_locked():
+            # D32: locked means away. The screen shows nothing of yours; the mic would
+            # only hear an empty room (or someone else's).
+            self._apply_audio_policy(sensitive=True, why="locked")
+            return "locked"
+        if getattr(self, "_curtain", False):
+            # D34: the curtain covers the screen, so a capture would store the curtain.
+            # Audio goes on: "Jimmy, …" from across the room should still work.
+            self._apply_audio_policy(sensitive=False)
+            return "curtained"
         status = self._tick()
-        self._apply_audio_policy(sensitive=(status == "excluded"))
+        sensitive = status == "excluded"
+        if sensitive != getattr(self, "_sensitive", False):
+            self._sensitive = sensitive
+            self._refresh_curtain()         # someone looking + a bank page -> curtain
+        self._apply_audio_policy(sensitive=sensitive)
         return status
 
-    def _apply_audio_policy(self, sensitive: bool) -> None:
+    def _apply_audio_policy(self, sensitive: bool, why: str = "sensitive surface") -> None:
         """Pause audio on a sensitive surface -- unless a call is on (D9).
 
         A spoken OTP must not be transcribed, but glancing at a bank tab mid-call
@@ -156,7 +178,7 @@ class ContextBus:
         pause = speaking or (sensitive and not other_app_using_mic())
         if pause != self._audio.paused.is_set():
             (self._audio.paused.set if pause else self._audio.paused.clear)()
-            why = "Jimmy speaking" if speaking else "sensitive surface"
+            why = "Jimmy speaking" if speaking else why
             print(f"[audio] {'paused: ' + why if pause else 'resumed'}")
         if pause:
             self.counters.audio_paused_ticks += 1
@@ -168,6 +190,8 @@ class ContextBus:
 
         aw = screen.active_window()
         reason = self.exclusions.check(app=aw.app, title=aw.title)
+        if not reason and screen.focused_is_password():
+            reason = "password field"            # D32: typing a password: like a bank page
         # A page excluded by URL stays excluded while it's the same window and
         # title; otherwise an unchanged banking tab would skip the walk and
         # read as safe on the next tick.
@@ -195,9 +219,10 @@ class ContextBus:
             # screen kept counting for the app you left. One row, the thumbnail already
             # on disk, no text, no gate: the switch is all it records.
             if (aw.app, aw.title) != getattr(self, "_last_seen", None) and w.last_thumb:
-                self.store.add_frame(w.id, aw.app, aw.title, w.last_thumb, 0, ts)
+                self.store.add_frame(w.id, aw.app, aw.title, w.last_thumb, 0, ts, w.last_url)
                 self._last_seen = (aw.app, aw.title)
                 c.switch_frames += 1
+                self._captured(ts)
                 return "switched"
             return "unchanged"
 
@@ -218,7 +243,10 @@ class ContextBus:
         c.faces_blurred += face_count
 
         thumb = screen.save_thumb(blurred, ts) if self.want_thumbs else None
-        frame_id = self.store.add_frame(w.id, aw.app, aw.title, thumb, face_count, ts)
+        # D32: the page's address, to reopen it later. Only reached past both
+        # exclusion checks; query and fragment dropped (screen.clean_url).
+        url = screen.clean_url(wt.url) if wt.url else None
+        frame_id = self.store.add_frame(w.id, aw.app, aw.title, thumb, face_count, ts, url)
 
         # The frame row is always written (it's the timeline); text only if new.
         fresh = new_lines(wt.text, w.seen_lines)
@@ -235,8 +263,15 @@ class ContextBus:
 
         c.frames += 1
         w.last_sig = sig
-        w.last_thumb, self._last_seen = thumb, (aw.app, aw.title)
+        w.last_thumb, w.last_url, self._last_seen = thumb, url, (aw.app, aw.title)
+        self._captured(ts)
         return "captured"
+
+    def _captured(self, ts: int) -> None:
+        """A frame row was written. Back after a long gap? (D32: "Left off: …")"""
+        prev, self._last_frame_ts = getattr(self, "_last_frame_ts", None), ts
+        if getattr(self, "_proactive", None):
+            self._proactive.on_capture(ts, prev)
 
     # --- audio -----------------------------------------------------------
     def _on_audio(self, ts_start: int, ts_end: int, source: str, text: str) -> None:
@@ -265,13 +300,13 @@ class ContextBus:
             engine = None                      # Tier 1 still runs and logs candidates
 
         def on_card(card):
-            card_id = self.store.add_card(card.type, card.line, card.evidence, card.ts)
+            card_id = self.store.add_card(card.type, card.line, card.evidence, card.ts, app=self._app_now())
             print(f"\n[card] {card.type}: {card.line}   ({card.why})\n")
             if self._api:
                 # `at`: the earlier moment a RECALL points to, so the card can open it (D31).
                 at = next((e["ts"] for e in card.evidence if e.get("ts")), None)
                 self._api.publish({"type": "card", "id": card_id, "kind": card.type,
-                                   "line": card.line, "ts": card.ts, "at": at})
+                                   "line": card.line, "ts": card.ts, "at": at, "why": card.why})
 
         def on_decision(cand, card, why):
             if card is None:
@@ -279,7 +314,66 @@ class ContextBus:
 
         self._gate_memory = Memory(jcfg.MEMORY_DB)
         return Gate(self.store, engine, self._gate_memory, on_card=on_card,
-                    on_decision=on_decision, background=True, history_until=now_ms())
+                    on_decision=on_decision, background=True, history_until=now_ms(),
+                    muted=self._muted)
+
+    # --- D32: cards Jimmy writes itself, and learning from dismissals ------
+    def _app_now(self) -> str | None:
+        from .insights import app_name
+        seen = getattr(self, "_last_seen", None)
+        return app_name(seen[0]) if seen and seen[0] else None
+
+    def _muted(self, kind: str) -> bool:
+        return self.store.muted(kind, self._app_now(), now_ms() - config.MUTE_WINDOW_DAYS * 86_400_000,
+                                config.MUTE_AFTER_DISMISSALS)
+
+    def _show_card(self, kind: str, line: str, payload: dict) -> None:
+        if self._muted(kind):
+            print(f"[card] {kind} muted here: {line}")
+            return
+        ts = now_ms()
+        card_id = self.store.add_card(kind, line, payload, ts, app=self._app_now())
+        print(f"\n[card] {kind}: {line}\n")
+        if self._api:
+            self._api.publish({"type": "card", "id": card_id, "kind": kind, "line": line, "ts": ts, **payload})
+
+    # --- D34: the privacy curtain ------------------------------------------
+    def _on_presence(self, info: dict) -> None:
+        old = self._presence
+        self._presence = info
+        if (old.get("state"), old.get("looking_away")) != (info.get("state"), info.get("looking_away")):
+            print(f"[presence] {info['state']}{' (' + info['why'] + ')' if info.get('why') else ''}")
+            self._refresh_curtain(force=True)
+
+    def curtain_now(self) -> bool:
+        presence = getattr(self, "_presence", None) or {}
+        st = presence.get("state")
+        if getattr(self, "_manual_curtain", False):
+            return True
+        if st == "away" and config.CURTAIN_WHEN_AWAY:
+            return True
+        if st == "watched":
+            mode = config.CURTAIN_WHEN_WATCHED
+            return mode == "always" or (mode == "sensitive" and self._sensitive)
+        return bool(presence.get("looking_away"))
+
+    def set_curtain(self, on: bool) -> None:
+        """By hand: Ctrl+Alt+L, the pill, or "Jimmy, curtain" / "lift the curtain"."""
+        self._manual_curtain = on
+        if not on and self._presence.get("state") in ("away", "watched"):
+            self._presence = {**self._presence, "state": "present"}   # you're here: you just asked
+        self._refresh_curtain(force=True)
+
+    def _refresh_curtain(self, force: bool = False) -> None:
+        on = self.curtain_now()
+        if on == getattr(self, "_curtain", False) and not force:
+            return
+        self._curtain = on
+        if getattr(self, "_api", None):
+            self._api.publish({"type": "presence", "state": self._presence.get("state"),
+                               "watched": self._presence.get("state") == "watched",
+                               "curtain": on, "manual": self._manual_curtain,
+                               "why": self._presence.get("why", "")})
 
     # --- overlay (Stage 4) ------------------------------------------------
     def overlay_state(self) -> dict:
@@ -288,7 +382,9 @@ class ContextBus:
         mem = self._intent_memory()
         return {"paused": paused, "paused_until": self.paused_until if paused else 0,
                 "cards": self.gate is not None,
-                "focus": mem.current_intent(jcfg.FOCUS_INTENT_MAX_H) if mem else None}
+                "focus": mem.current_intent(jcfg.FOCUS_INTENT_MAX_H) if mem else None,
+                **({"curtain": self._curtain, "presence": self._presence.get("state")}
+                   if getattr(self, "_presence_obj", None) or getattr(self, "_manual_curtain", False) else {})}
 
     def _intent_memory(self):
         return getattr(self, "_gate_memory", None) or getattr(self, "_focus_memory", None)
@@ -332,6 +428,7 @@ class ContextBus:
             from jimmy import config as jcfg
             from jimmy.memory import Memory
             self._focus_memory = Memory(jcfg.MEMORY_DB)
+        mem = self._intent_memory()        # focus and reminders (D32) live in Jimmy's memory
         self._api = OverlayAPI({"state": self.overlay_state, "pause": self.pause,
                                 "resume": self.resume, "dismiss": self.dismiss,
                                 "post_ask": lambda b: self._asker.ask(str(b.get("q", "")).strip(), "typed")
@@ -340,13 +437,34 @@ class ContextBus:
                                 "post_quit": lambda b: self.stop_running(),
                                 "post_clarify": lambda b: self._asker.choose(str(b.get("choice", ""))),
                                 "post_focus": lambda b: self.set_focus(str(b.get("text", "")).strip() or None),
+                                "post_curtain": lambda b: self.set_curtain(bool(b.get("on"))),
+                                "post_card_used": lambda b: self.store.set_card_state(int(b.get("id", 0)), "used"),
+                                "post_accept": lambda b: self._api.publish(
+                                    {"type": "toast", "text": self._asker.accept(), "icon": "yes"}),
                                 **timeline_hooks(self.store)}).start()
         self._asker = Asker(self.store, self._api.publish,
                             speak=self._voice.say if self._voice else None,
                             screen_now=self.screen_now,
                             actions={"pause": self.pause, "resume": self.resume, "focus": self.set_focus,
                                      "hush": self._voice.stop if self._voice else (lambda: None),
-                                     "state": self.overlay_state})
+                                     "state": self.overlay_state, "curtain": self.set_curtain,
+                                     "remind": lambda what, due, app: mem.add_reminder(what, due, app),
+                                     "reminders": lambda: mem.reminders(),
+                                     "unremind": lambda: mem.set_reminder_state(None, "cancelled"),
+                                     "open_file": os.startfile})
+        # D32: the cards Jimmy writes itself. Deadlines need the local model.
+        from jimmy.cards import local_engine
+
+        from .proactive import Proactive
+        engine = local_engine() if config.DEADLINE_SCAN_S else None
+        self._proactive = Proactive(self.store, mem, self._show_card,
+                                    offer=lambda kind, data: self._asker.make_offer(kind, data),
+                                    say=self._voice.say if self._voice else None,
+                                    is_deadline=engine.is_deadline if engine else None)
+        # D34: presence from the webcam, for the privacy curtain.
+        if config.PRESENCE:
+            from .presence import Presence
+            self._presence_obj = Presence(self._on_presence).start()
         env = dict(os.environ, JIMMY_OVERLAY_URL=self._api.url, JIMMY_OVERLAY_TOKEN=self._api.token)
         # Started from an Electron app's terminal (VS Code, Claude), this is inherited
         # and makes electron.exe run as plain Node: no window, "app.whenReady" undefined.
@@ -393,6 +511,8 @@ class ContextBus:
         self._running = False
 
     def _stop_overlay(self) -> None:
+        if getattr(self, "_presence_obj", None):
+            self._presence_obj.stop()
         if getattr(self, "_voice", None):
             self._voice.close()
         if self._overlay_proc and self._overlay_proc.poll() is None:
@@ -470,6 +590,9 @@ class ContextBus:
                 t0 = time.monotonic()
                 try:
                     status = self.tick()
+                    if self._proactive and status != "paused":
+                        seen = getattr(self, "_last_seen", None) or ("", "")
+                        self._proactive.tick(now_ms(), *seen)
                 except Exception as exc:
                     status = f"error:{type(exc).__name__}:{exc}"
                 if verbose and (status.startswith("error") or time.monotonic() - last_report > 10):

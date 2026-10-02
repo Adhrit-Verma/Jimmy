@@ -43,6 +43,12 @@ CREATE TABLE IF NOT EXISTS embeddings (
     id INTEGER PRIMARY KEY, ref INT NOT NULL, ts INT NOT NULL,
     model TEXT NOT NULL, chunk TEXT NOT NULL, vec BLOB NOT NULL
 );
+-- D32: dates seen on screen or heard that a local model agreed are deadlines.
+-- `key` (normalised text + due day) keeps the same deadline from being stored twice.
+CREATE TABLE IF NOT EXISTS deadlines (
+    id INTEGER PRIMARY KEY, seen_ts INT NOT NULL, due_ts INT NOT NULL,
+    text TEXT NOT NULL, key TEXT NOT NULL UNIQUE, ref INT, state TEXT DEFAULT 'new'
+);
 CREATE INDEX IF NOT EXISTS ix_emb_ref ON embeddings(ref);
 CREATE INDEX IF NOT EXISTS ix_emb_ts ON embeddings(ts);
 CREATE INDEX IF NOT EXISTS ix_frames_ts ON frames(ts);
@@ -98,6 +104,10 @@ class Store:
             self.conn.executescript(SCHEMA)
             for tbl, fts in INDEXED:
                 self.conn.executescript(_FTS.format(tbl=tbl, fts=fts))
+            # D32: columns added after first release; older databases get them here.
+            for tbl, col in (("frames", "url TEXT"), ("cards", "app TEXT")):
+                if col.split()[0] not in {r[1] for r in self.conn.execute(f"PRAGMA table_info({tbl})")}:
+                    self.conn.execute(f"ALTER TABLE {tbl} ADD COLUMN {col}")
             self.conn.commit()
 
     # --- writes ----------------------------------------------------------
@@ -121,11 +131,11 @@ class Store:
             (ts or now_ms(), window_id),
         )
 
-    def add_frame(self, window_id, app, title, thumb_path=None, face_count=0, ts=None) -> int:
+    def add_frame(self, window_id, app, title, thumb_path=None, face_count=0, ts=None, url=None) -> int:
         return self._write(
-            "INSERT INTO frames(ts, window_id, app, title, thumb_path, face_count)"
-            " VALUES (?,?,?,?,?,?)",
-            (ts or now_ms(), window_id, app, title, thumb_path, face_count),
+            "INSERT INTO frames(ts, window_id, app, title, thumb_path, face_count, url)"
+            " VALUES (?,?,?,?,?,?,?)",
+            (ts or now_ms(), window_id, app, title, thumb_path, face_count, url),
         )
 
     def add_text(self, frame_id: int, source: str, text: str) -> int | None:
@@ -147,11 +157,66 @@ class Store:
             (ts_start, ts_end, window_id, source, speaker_ord, text),
         )
 
-    def add_card(self, type_: str, line: str, evidence: Any = None, ts=None, state="shown") -> int:
+    def add_card(self, type_: str, line: str, evidence: Any = None, ts=None, state="shown",
+                 app: str | None = None) -> int:
         return self._write(
-            "INSERT INTO cards(ts, type, line, evidence, state) VALUES (?,?,?,?,?)",
-            (ts or now_ms(), type_, line, json.dumps(evidence) if evidence is not None else None, state),
+            "INSERT INTO cards(ts, type, line, evidence, state, app) VALUES (?,?,?,?,?,?)",
+            (ts or now_ms(), type_, line, json.dumps(evidence) if evidence is not None else None, state, app),
         )
+
+    def muted(self, type_: str, app: str | None, since_ms: int, n: int) -> bool:
+        """D32: you waved this kind of card away `n` times in this app and never used
+        one. Jimmy learns from that instead of asking again."""
+        if not app:
+            return False
+        with self._lock:
+            d, u = self.conn.execute(
+                "SELECT COALESCE(SUM(state = 'dismissed'), 0), COALESCE(SUM(state = 'used'), 0) FROM cards "
+                "WHERE type = ? AND app = ? AND ts >= ?", (type_, app, since_ms)).fetchone()
+        return d >= n and u == 0
+
+    def cards_since(self, type_: str, since_ms: int) -> int:
+        with self._lock:
+            return self.conn.execute("SELECT COUNT(*) FROM cards WHERE type = ? AND ts >= ?",
+                                     (type_, since_ms)).fetchone()[0]
+
+    # --- deadlines (D32) ---------------------------------------------------
+    def add_deadline(self, seen_ts: int, due_ts: int, text: str, key: str, ref: int | None = None) -> bool:
+        with self._lock:
+            cur = self.conn.execute("INSERT OR IGNORE INTO deadlines(seen_ts, due_ts, text, key, ref) "
+                                    "VALUES (?,?,?,?,?)", (seen_ts, due_ts, text, key, ref))
+            self.conn.commit()
+            return cur.rowcount == 1
+
+    def has_deadline(self, key: str) -> bool:
+        with self._lock:
+            return self.conn.execute("SELECT 1 FROM deadlines WHERE key = ?", (key,)).fetchone() is not None
+
+    def deadlines(self, since_ms: int = 0, until_ms: int = 1 << 62) -> list[dict]:
+        with self._lock:
+            return [dict(r) for r in self.conn.execute(
+                "SELECT * FROM deadlines WHERE due_ts BETWEEN ? AND ? ORDER BY due_ts", (since_ms, until_ms))]
+
+    def set_deadline_state(self, did: int, state: str) -> None:
+        self._write("UPDATE deadlines SET state = ? WHERE id = ?", (state, did))
+
+    def new_text(self, after_id: int, after_audio: int, limit: int = 400) -> tuple[list[dict], int, int]:
+        """Screen blocks and mic speech stored since the given ids, for scanning."""
+        with self._lock:
+            blocks = [dict(r) for r in self.conn.execute(
+                "SELECT t.id AS ref, f.ts AS ts, t.text AS text FROM text_blocks t JOIN frames f ON f.id = t.frame_id "
+                "WHERE t.id > ? ORDER BY t.id LIMIT ?", (after_id, limit))]
+            speech = [dict(r) for r in self.conn.execute(
+                "SELECT -id AS ref, ts_start AS ts, text FROM audio_segments WHERE id > ? AND source = 'mic' "
+                "ORDER BY id LIMIT ?", (after_audio, limit))]
+        top_b = blocks[-1]["ref"] if blocks else after_id
+        top_a = -speech[-1]["ref"] if speech else after_audio
+        return blocks + speech, top_b, top_a
+
+    def last_ids(self) -> tuple[int, int]:
+        with self._lock:
+            return (self.conn.execute("SELECT COALESCE(MAX(id), 0) FROM text_blocks").fetchone()[0],
+                    self.conn.execute("SELECT COALESCE(MAX(id), 0) FROM audio_segments").fetchone()[0])
 
     # --- reads -----------------------------------------------------------
     def search(self, query: str, limit: int = 30, since_ms: int = 0,
@@ -270,13 +335,13 @@ class Store:
         """Every frame in a window, for the scrub strip."""
         with self._lock:
             return [dict(r) for r in self.conn.execute(
-                "SELECT id, ts, app, title, thumb_path, face_count FROM frames "
+                "SELECT id, ts, app, title, thumb_path, face_count, url FROM frames "
                 "WHERE ts BETWEEN ? AND ? ORDER BY ts", (since_ms, until_ms))]
 
     def frame(self, frame_id: int) -> dict | None:
         """One frame with the new text it stored and speech within 2 minutes of it."""
         with self._lock:
-            f = self.conn.execute("SELECT id, ts, app, title, thumb_path, face_count, window_id "
+            f = self.conn.execute("SELECT id, ts, app, title, thumb_path, face_count, window_id, url "
                                   "FROM frames WHERE id = ?", (frame_id,)).fetchone()
             if not f:
                 return None
@@ -292,7 +357,7 @@ class Store:
         """The frame behind a search hit: its own frame for screen text (ref > 0),
         the closest frame in time for speech (ref < 0), so every piece of evidence
         can show a thumbnail."""
-        cols = "f.id, f.ts, f.app, f.title, f.thumb_path"
+        cols = "f.id, f.ts, f.app, f.title, f.thumb_path, f.url"
         with self._lock:
             row = (self.conn.execute(f"SELECT {cols} FROM text_blocks t JOIN frames f "
                                      "ON f.id = t.frame_id WHERE t.id = ?", (ref,)).fetchone()
@@ -306,7 +371,7 @@ class Store:
         screen order): what the page or document the user is on now contains (D27).
         By title, because a capture window spans the whole app: all of Chrome's tabs."""
         with self._lock:
-            f = self.conn.execute("SELECT id, ts, app, title, thumb_path FROM frames WHERE window_id = ? "
+            f = self.conn.execute("SELECT id, ts, app, title, thumb_path, url FROM frames WHERE window_id = ? "
                                   "AND title IS ? ORDER BY ts DESC LIMIT 1", (window_id, title)).fetchone()
             text = "\n".join(r[0] for r in self.conn.execute(
                 "SELECT t.text FROM text_blocks t JOIN frames f ON f.id = t.frame_id "
@@ -316,7 +381,7 @@ class Store:
     def latest_frame(self, app: str, title: str, since_ms: int, until_ms: int) -> dict | None:
         with self._lock:
             row = self.conn.execute(
-                "SELECT id, ts, app, title, thumb_path FROM frames WHERE app IS ? AND title IS ? "
+                "SELECT id, ts, app, title, thumb_path, url FROM frames WHERE app IS ? AND title IS ? "
                 "AND ts BETWEEN ? AND ? ORDER BY ts DESC LIMIT 1",
                 (app, title, since_ms, until_ms)).fetchone()
         return dict(row) if row else None

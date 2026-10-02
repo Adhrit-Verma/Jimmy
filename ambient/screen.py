@@ -63,6 +63,44 @@ def active_window() -> ActiveWindow:
     return ActiveWindow(hwnd, _exe_for_pid(pid.value), buf.value)
 
 
+def is_locked() -> bool:
+    """True while Windows is locked (D32): the input desktop can't be switched to.
+    Nothing on screen then, and the mic would only hear an empty room."""
+    h = user32.OpenInputDesktop(0, False, 0x0100)          # DESKTOP_SWITCHDESKTOP
+    if not h:
+        return True
+    try:
+        return not user32.SwitchDesktop(h)
+    finally:
+        user32.CloseDesktop(h)
+
+
+def focused_is_password() -> bool:
+    """True if keyboard focus is in a password box (D32): treated like an excluded
+    surface, so neither the screen nor a spoken OTP is captured meanwhile."""
+    try:
+        import uiautomation as auto
+        c = auto.GetFocusedControl()
+        return bool(c and c.Element.CurrentIsPassword)
+    except Exception:
+        return False
+
+
+def clean_url(raw: str) -> str | None:
+    """What an address bar showed, as a link to reopen (D32). Query and fragment
+    are dropped (that's where tokens live); only http(s) pages are kept."""
+    from urllib.parse import urlsplit
+    raw = (raw or "").strip()
+    if not raw or " " in raw:
+        return None                       # a search being typed, not a page
+    if "://" not in raw:
+        raw = "https://" + raw
+    u = urlsplit(raw)
+    if u.scheme not in ("http", "https") or "." not in u.netloc:
+        return None
+    return f"{u.scheme}://{u.netloc}{u.path}"[:500]
+
+
 # --- UI Automation text ---------------------------------------------------
 
 # Buttons and menu items are left out: in the first real hour they were the bulk

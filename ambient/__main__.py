@@ -138,6 +138,33 @@ def _replay(a) -> int:
     return 0 if ok else 1
 
 
+def _deadlines(a) -> int:
+    """List what the deadline catcher stored, or run it over history (D32)."""
+    from . import proactive
+    from .db import Store
+    from .recall import furniture
+    fmt = lambda ts: time.strftime("%a %d %b %H:%M", time.localtime(ts / 1000))  # noqa: E731
+    with Store(a.db or config.DB_PATH) as store:
+        if a.scan:
+            rows, _, _ = store.new_text(0, 0, limit=1 << 30)
+            if a.dry:
+                junk = furniture(store)
+                for r in rows:
+                    for line in (ln.strip() for ln in r["text"].split("\n")):
+                        got = (12 <= len(line) <= 240 and line not in junk and proactive._DUE_WORDS.search(line)
+                               and proactive.parse_due(line, r["ts"]))
+                        if got:
+                            print(f"seen {fmt(r['ts'])}  due {fmt(got[0])}  {line[:110]}")
+                return 0
+            from jimmy.cards import local_engine
+            engine = local_engine()
+            n = proactive.find_deadlines(rows, engine.is_deadline, furniture(store), store, [1 << 30])
+            print(f"{n} new deadline(s) ({engine.calls} model checks)")
+        for d in store.deadlines():
+            print(f"due {fmt(d['due_ts'])}  [{d['state']}]  {d['text'][:110]}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # captured text on a cp1252 console
@@ -178,10 +205,18 @@ def main(argv: list[str] | None = None) -> int:
     rp.add_argument("--intent", help="pretend this focus intent held throughout (tests FOCUS)")
     rp.add_argument("--db", default=None)
 
+    dl = sub.add_parser("deadlines", help="deadlines Jimmy found (D32); --scan looks through history")
+    dl.add_argument("--scan", action="store_true", help="scan all stored text (the local model decides)")
+    dl.add_argument("--dry", action="store_true", help="with --scan: list date lines only, no model, nothing saved")
+    dl.add_argument("--db", default=None)
+
     a = ap.parse_args(argv)
 
     if a.cmd == "replay":
         return _replay(a)
+
+    if a.cmd == "deadlines":
+        return _deadlines(a)
 
     if a.cmd == "doctor":
         return _doctor()

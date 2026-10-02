@@ -1,7 +1,8 @@
 import { Component, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
-  BarChart3, Check, Clock, ExternalLink, History, MessageCircle, MonitorSmartphone, Pause, Play, Power, Target, X,
+  BarChart3, Bell, CalendarClock, Check, Clock, ExternalLink, Eye, EyeOff, Globe, History, Lightbulb, MessageCircle,
+  MonitorSmartphone, MoveRight, Pause, Play, Power, RotateCcw, Target, X,
 } from "lucide-react";
 import Answer from "./Answer.jsx";
 
@@ -29,7 +30,21 @@ const SUGGEST = [
   { label: "Pause for 30 minutes", icon: Pause },
   { label: "Open insights", icon: BarChart3 },
 ];
-const FLASH_ICON = { pause: Pause, resume: Play, focus: Target, unfocus: Target, open: ExternalLink, show: X };
+const FLASH_ICON = {
+  pause: Pause, resume: Play, focus: Target, unfocus: Target, open: ExternalLink, show: X, nav: MoveRight,
+  remind: Bell, reminders: Bell, unremind: Bell, curtain: EyeOff, uncurtain: Eye, open_url: Globe,
+};
+
+// D32: every kind of card, and how long it stays if you don't touch it.
+const KINDS = {
+  RECALL: { icon: History, label: "Recall", tone: "bg-white/[0.06] text-neutral-300" },
+  FOCUS: { icon: Target, label: "Focus", tone: "bg-violet-400/15 text-violet-200" },
+  RESUME: { icon: RotateCcw, label: "Welcome back", tone: "bg-sky-400/15 text-sky-200" },
+  REMIND: { icon: Bell, label: "Reminder", tone: "bg-amber-400/15 text-amber-200", ms: 60_000 },
+  DEADLINE: { icon: CalendarClock, label: "Deadline", tone: "bg-rose-400/15 text-rose-200", ms: 30_000 },
+  SUGGEST: { icon: Lightbulb, label: "Suggestion", tone: "bg-violet-400/15 text-violet-200", ms: 20_000 },
+  RECAP: { icon: BarChart3, label: "Your day", tone: "bg-emerald-400/15 text-emerald-200", ms: 20_000 },
+};
 
 // A render error in one panel must never blank the whole overlay (D26: one did,
 // taking the pill with it). The panel is dropped, the error logged to the
@@ -69,7 +84,7 @@ function Equalizer() {
   );
 }
 
-function Pill({ state, mood, prompt, typing, setTyping, flash, recent, onAsk, answerOpen }) {
+function Pill({ state, mood, prompt, typing, setTyping, flash, recent, onAsk, answerOpen, watched, curtain }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(-1);
@@ -112,12 +127,13 @@ function Pill({ state, mood, prompt, typing, setTyping, flash, recent, onAsk, an
     else send(q);
   };
 
-  const status = paused ? <span className="text-amber-300/90">Paused · {span(state.paused_until - Date.now())} left</span>
+  const status = curtain ? <span className="text-neutral-300">Curtain down</span>
+    : paused ? <span className="text-amber-300/90">Paused · {span(state.paused_until - Date.now())} left</span>
     : mood === "listening" ? <span className="text-sky-200">{prompt || "Listening… ask away"}</span>
     : mood === "thinking" ? <span className="shimmer">Thinking…</span>
     : mood === "answering" ? <span className="shimmer">Answering…</span>
     : <span className="text-neutral-400">Listening</span>;
-  const dot = paused ? "bg-amber-400" : mood ? "bg-sky-400" : "bg-emerald-400";
+  const dot = curtain ? "bg-neutral-500" : paused ? "bg-amber-400" : mood ? "bg-sky-400" : "bg-emerald-400";
   const FlashIcon = flash ? FLASH_ICON[flash.icon] || Check : null;
 
   return (
@@ -148,7 +164,7 @@ function Pill({ state, mood, prompt, typing, setTyping, flash, recent, onAsk, an
         ) : (
           <AnimatePresence mode="wait" initial={false}>
             <motion.span
-              key={flash ? `f${flash.id}` : `s${paused}${mood}`}
+              key={flash ? `f${flash.id}` : `s${paused}${mood}${curtain}`}
               initial={{ opacity: 0, y: 5, filter: "blur(2px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
               exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.16 }}
               onClick={() => !flash && !paused && startTyping()}
@@ -158,7 +174,12 @@ function Pill({ state, mood, prompt, typing, setTyping, flash, recent, onAsk, an
             </motion.span>
           </AnimatePresence>
         )}
-        {state.focus && !typing && !flash && (
+        {watched && !typing && (
+          <span className="flex items-center gap-1 rounded-full bg-amber-400/15 px-2 py-0.5 text-[11.5px] text-amber-200">
+            <Eye size={11} /> Someone's looking · panels hidden
+          </span>
+        )}
+        {state.focus && !typing && !flash && !curtain && !watched && (
           <span title={`Focus: ${state.focus.text}`}
             className="flex max-w-[220px] items-center gap-1 rounded-full bg-violet-400/10 px-2 py-0.5 text-[11.5px] text-violet-200">
             <Target size={11} className="shrink-0" />
@@ -187,6 +208,10 @@ function Pill({ state, mood, prompt, typing, setTyping, flash, recent, onAsk, an
                   <Target size={12} /> Focus
                 </PillButton>
               )}
+              <PillButton label={curtain ? "Lift the curtain (Ctrl+Alt+L)" : "Privacy curtain (Ctrl+Alt+L)"}
+                onClick={() => bridge?.api("curtain", { on: !curtain })}>
+                {curtain ? <Eye size={12} /> : <EyeOff size={12} />} {curtain ? "Lift" : "Curtain"}
+              </PillButton>
               <PillButton label={paused ? "Resume" : "Pause for 2 hours (Ctrl+Alt+J)"}
                 onClick={() => bridge?.api(paused ? "resume" : "pause", { minutes: 120 })}>
                 {paused ? <Play size={12} /> : <Pause size={12} />} {paused ? "Resume" : "Pause 2h"}
@@ -233,9 +258,21 @@ function Pill({ state, mood, prompt, typing, setTyping, flash, recent, onAsk, an
   );
 }
 
-function Card({ card, onGone, onDismiss }) {
-  const [held, setHeld] = useState(false);   // hovering keeps the card on screen
-  const left = useRef(CARD_MS);
+function CardAction({ onClick, children }) {
+  return (
+    <motion.button whileTap={{ scale: 0.95 }} onClick={onClick}
+      className="flex items-center gap-1 rounded-md bg-white/[0.07] px-2 py-1 text-[11.5px] text-neutral-200 transition-colors hover:bg-white/15">
+      {children}
+    </motion.button>
+  );
+}
+
+function Card({ card, onGone, onDismiss, away }) {
+  const kind = KINDS[card.kind] || KINDS.RECALL;
+  const total = kind.ms || CARD_MS;
+  const [hover, setHover] = useState(false);
+  const held = hover || away;                  // hovering, or you're not here: the card waits
+  const left = useRef(total);
   useEffect(() => {
     if (held) return;
     const started = Date.now();
@@ -243,10 +280,30 @@ function Card({ card, onGone, onDismiss }) {
     return () => { clearTimeout(t); left.current -= Date.now() - started; };
   }, [held]);
 
-  const focus = card.kind === "FOCUS";
-  const Icon = focus ? Target : History;
+  const Icon = kind.icon;
   const when = new Date(card.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  const show = () => { bridge?.openTimeline("timeline", { ts: card.at }); onGone(); };
+  const used = (fn) => () => { bridge?.api("card_used", { id: card.id }); fn?.(); onGone(); };
+  const acts = [];
+  if (card.at && card.kind !== "FOCUS") {
+    acts.push(<CardAction key="at" onClick={used(() => bridge?.openTimeline("timeline", { ts: card.at }))}>
+      <ExternalLink size={11} /> {card.kind === "DEADLINE" ? "Where I saw it" : "Show me then"}</CardAction>);
+  }
+  if (card.url) {
+    acts.push(<CardAction key="url" onClick={used(() => bridge?.openUrl(card.url))}><Globe size={11} /> Open page</CardAction>);
+  }
+  if (card.kind === "SUGGEST") {
+    acts.push(<CardAction key="yes" onClick={used(() => bridge?.api("focus", { text: card.focus }))}><Check size={11} /> Yes, focus</CardAction>);
+    acts.push(<CardAction key="no" onClick={onDismiss}>Not now</CardAction>);
+  }
+  if (card.kind === "RECAP") {
+    acts.push(<CardAction key="ins" onClick={used(() => bridge?.openTimeline("insights"))}><BarChart3 size={11} /> Open insights</CardAction>);
+  }
+  if (card.kind === "FOCUS") {
+    acts.push(<CardAction key="done" onClick={used(() => bridge?.api("focus", { text: "" }))}><Target size={11} /> I'm done with that</CardAction>);
+  }
+  if (card.kind === "REMIND") {
+    acts.push(<CardAction key="ok" onClick={used()}><Check size={11} /> Done</CardAction>);
+  }
 
   return (
     <motion.div
@@ -255,15 +312,15 @@ function Card({ card, onGone, onDismiss }) {
       animate={{ opacity: 1, x: 0, scale: 1 }}
       exit={{ opacity: 0, x: 28, transition: { duration: 0.18 } }}
       transition={{ type: "spring", stiffness: 420, damping: 34 }}
-      onMouseEnter={() => { bridge?.pointerOverUi(true); setHeld(true); }}
-      onMouseLeave={() => { bridge?.pointerOverUi(false); setHeld(false); }}
+      onMouseEnter={() => { bridge?.pointerOverUi(true); setHover(true); }}
+      onMouseLeave={() => { bridge?.pointerOverUi(false); setHover(false); }}
       className={`group pointer-events-auto relative w-80 overflow-hidden rounded-2xl p-3.5 ${surface}`}
     >
       <div className="flex items-center gap-2 text-[11px] text-neutral-400">
-        <span className={`flex size-5 items-center justify-center rounded-md ${focus ? "bg-violet-400/15 text-violet-200" : "bg-white/[0.06] text-neutral-300"}`}>
+        <span className={`flex size-5 items-center justify-center rounded-md ${kind.tone}`}>
           <Icon size={12} />
         </span>
-        <span className="uppercase tracking-wider">{focus ? "Focus" : "Recall"}</span>
+        <span className="uppercase tracking-wider">{kind.label}</span>
         <span className="ml-auto text-neutral-500">{when}</span>
         <button
           onClick={onDismiss}
@@ -274,29 +331,40 @@ function Card({ card, onGone, onDismiss }) {
         </button>
       </div>
       <p className="mt-2 text-[15px] font-medium leading-snug text-neutral-50">{card.line}</p>
-      {(card.at || focus) && (
-        <div className="mt-2.5 flex gap-1.5 opacity-60 transition group-hover:opacity-100">
-          {!focus && card.at && (
-            <button onClick={show} className="flex items-center gap-1 rounded-md bg-white/[0.07] px-2 py-1 text-[11.5px] text-neutral-200 hover:bg-white/15">
-              <ExternalLink size={11} /> Show me then
-            </button>
-          )}
-          {focus && (
-            <button onClick={() => { bridge?.api("focus", { text: "" }); onGone(); }}
-              className="flex items-center gap-1 rounded-md bg-white/[0.07] px-2 py-1 text-[11.5px] text-neutral-200 hover:bg-white/15">
-              <Target size={11} /> I'm done with that
-            </button>
-          )}
-        </div>
+      {card.why && <p className="mt-1 line-clamp-1 text-[11.5px] text-neutral-500" title={card.why}>{card.why}</p>}
+      {acts.length > 0 && (
+        <div className="mt-2.5 flex flex-wrap gap-1.5 opacity-70 transition group-hover:opacity-100">{acts}</div>
       )}
       {/* Time left: frozen while hovered, then runs out from where it stopped. */}
       <motion.div
         key={held ? "held" : `run-${left.current}`}
         className="absolute bottom-0 left-0 h-[2px] bg-white/25"
-        initial={{ width: `${(100 * left.current) / CARD_MS}%` }}
-        animate={{ width: held ? `${(100 * left.current) / CARD_MS}%` : "0%" }}
+        initial={{ width: `${(100 * left.current) / total}%` }}
+        animate={{ width: held ? `${(100 * left.current) / total}%` : "0%" }}
         transition={{ duration: held ? 0 : left.current / 1000, ease: "linear" }}
       />
+    </motion.div>
+  );
+}
+
+// D34: the privacy curtain. Opaque, over everything Jimmy can cover (the main
+// process grows the window to the whole display while it's down).
+function Curtain({ why }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.35 } }}
+      transition={{ duration: 0.12 }}
+      className="pointer-events-none absolute inset-0 z-[100] flex items-center justify-center bg-neutral-950"
+    >
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(56,189,248,0.06),transparent_60%)]" />
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
+        className="relative text-center">
+        <motion.div animate={{ opacity: [0.5, 1, 0.5] }} transition={{ duration: 3, repeat: Infinity }}>
+          <EyeOff size={30} className="mx-auto text-neutral-500" />
+        </motion.div>
+        <div className="mt-3 text-[16px] font-medium text-neutral-200">Privacy curtain</div>
+        <div className="mt-1 text-[13px] text-neutral-500">{why}</div>
+      </motion.div>
     </motion.div>
   );
 }
@@ -311,11 +379,32 @@ export default function App() {
   const [typing, setTyping] = useState(false);
   const [flash, setFlash] = useState(null);    // D31: a moment of feedback in the pill
   const [recent, setRecent] = useState([]);    // this session's typed questions; never saved
+  const [presence, setPresence] = useState({ state: "off", curtain: false });   // D34
   const hideTimer = useRef(null);
   const flashTimer = useRef(null);
   const flashN = useRef(0);
   const prev = useRef(null);
   const waiting = useRef(0);                   // a typed question sent, no answer_start yet
+  const live = useRef({});                     // latest state, for event handlers set up once
+  live.current = { answer, openIndex, cards };
+
+  // D33: "next", "scroll down", "close" by voice, on what's showing here.
+  const onUi = (ev) => {
+    const { answer: a, openIndex: oi, cards: cs } = live.current;
+    const n = a?.evidence?.length || 0;
+    if (ev.action === "scroll") {
+      document.querySelectorAll("[data-scroll]").forEach((el) =>
+        el.scrollBy({ top: (ev.dir === "down" ? 1 : -1) * el.clientHeight * 0.7, behavior: "smooth" }));
+    } else if (ev.action === "step" && n) setOpenIndex(oi == null ? 0 : Math.max(0, Math.min(n - 1, oi + ev.by)));
+    else if (ev.action === "edge" && n) setOpenIndex(ev.to === "first" ? 0 : n - 1);
+    else if (ev.action === "zoom" && n) setOpenIndex(oi ?? 0);
+    else if (ev.action === "unzoom") setOpenIndex(null);
+    else if (ev.action === "close") {
+      if (oi != null) setOpenIndex(null);
+      else if (a) closeAnswer();
+      else if (cs.length) drop(cs[0].id);
+    }
+  };
 
   const say = (text, icon) => {
     clearTimeout(flashTimer.current);
@@ -349,6 +438,10 @@ export default function App() {
         setState(ev);
       }
       if (ev.type === "toast") { waiting.current = 0; unthink(); say(ev.text, ev.icon); }
+      if (ev.type === "ui") onUi(ev);
+      if (ev.type === "copy") say("Draft copied", "copy");
+      if (ev.type === "presence") setPresence(ev);
+      if (ev.type === "state" && "curtain" in ev) setPresence((p) => ({ ...p, curtain: ev.curtain, state: ev.presence }));
       if (ev.type === "answer_close") closeAnswer();
       if (ev.type === "card") setCards((cs) => [ev, ...cs.filter((c) => c.id !== ev.id)].slice(0, MAX_CARDS));
       if (ev.type === "focus-ask") setTyping(true);
@@ -371,7 +464,8 @@ export default function App() {
       if (ev.type === "answer_evidence") {
         setMood((m) => (m === "thinking" ? "answering" : m));
         same((a) => ({ ...a, status: "answering", mode: ev.mode || a.mode, evidence: ev.evidence,
-                       terms: ev.terms, days: ev.days, window: ev.window, stats: ev.stats }));
+                       terms: ev.terms, days: ev.days, window: ev.window, stats: ev.stats,
+                       event: ev.event ?? a.event }));
       }
       if (ev.type === "answer_delta") same((a) => ({ ...a, status: "answering", text: a.text + ev.text }));
       if (ev.type === "answer_end" || ev.type === "answer_error") {
@@ -383,19 +477,28 @@ export default function App() {
     });
   }, []);
 
-  const drop = (id) => setCards((cs) => cs.filter((c) => c.id !== id));
+  function drop(id) { setCards((cs) => cs.filter((c) => c.id !== id)); }
+  const watched = presence.state === "watched" && !presence.curtain;   // someone else is looking
+  const away = presence.curtain || presence.state === "away";
+  const curtainWhy = presence.manual ? "Ctrl+Alt+L, or say \u201cJimmy, lift the curtain\u201d"
+    : presence.state === "watched" ? "Someone else is looking at a private page"
+    : "Look at the screen to lift it";
 
   return (
     <>
-      <Pill state={state} mood={mood} prompt={prompt} typing={typing} setTyping={setTyping}
-        flash={flash} recent={recent} onAsk={ask} answerOpen={!!answer} />
+      <AnimatePresence>{presence.curtain && <Curtain key="curtain" why={curtainWhy} />}</AnimatePresence>
+      <div className="relative z-[110]">
+        <Pill state={state} mood={mood} prompt={prompt} typing={typing} setTyping={setTyping}
+          flash={flash} recent={recent} onAsk={ask} answerOpen={!!answer} watched={watched} curtain={presence.curtain} />
+      </div>
+      {!watched && !presence.curtain && <>
       <div
         onMouseEnter={() => clearTimeout(hideTimer.current)}
         onMouseLeave={() => { if (answer?.status === "done") hideTimer.current = setTimeout(() => setAnswer(null), ANSWER_MS); }}
       >
         <Guard resetKey={answer?.id} onError={() => bridge?.pointerOverUi(false)}>
           <AnimatePresence>{answer && <Answer key={answer.id} answer={answer} onClose={closeAnswer}
-            openIndex={openIndex} onCloseEvidence={() => setOpenIndex(null)}
+            openIndex={openIndex} setOpenIndex={setOpenIndex}
             onFollowUp={() => { setTyping(true); bridge?.focusAsk(); }}
             onCopied={() => say("Copied", "copy")} />}</AnimatePresence>
         </Guard>
@@ -408,6 +511,7 @@ export default function App() {
               <Card
                 key={c.id}
                 card={c}
+                away={away}
                 onGone={() => { bridge?.pointerOverUi(false); drop(c.id); }}
                 onDismiss={() => { bridge?.pointerOverUi(false); drop(c.id); bridge?.api("dismiss", { id: c.id }); }}
               />
@@ -416,6 +520,7 @@ export default function App() {
         </div>
         </Guard>
       )}
+      </>}
     </>
   );
 }
