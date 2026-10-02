@@ -178,6 +178,14 @@ _CMD = (
     ("timer", re.compile(r"^(?:(?:set|start|put|make|run|begin)(?: up| on)?\s+)?(?:a\s+|an\s+|the\s+|my\s+)?"
                          r"(?:[\w.-]+[\s-]+(?:seconds?|secs?|minutes?|mins?|hours?|hrs?)\s+)?(?:timer|countdown)"
                          r"(?:\s+(?:for|of|on))?(?:\s+(.+?))?\W*$", re.I)),
+    # D40: the guided eye calibration. Whisper wrote "eye calibration" as "2i calibration".
+    ("calibrate", re.compile(r"^(?:(?:start|do|run|redo|begin)\s+)?(?:the\s+|my\s+|an?\s+)?"
+                             r"(?:eyes?|2i|i|ai|aye|gaze|eye contact|camera)\s+(?:calibration|calibrate)\W*$|"
+                             r"^(?:re)?calibrate(?:\s+(?:my|the|your))?(?:\s+(?:eyes?|gaze|eye contact|camera))?\W*$",
+                             re.I)),
+    # D40: another app holds the mic, so Jimmy thinks you're on a call; you aren't.
+    ("notcall", re.compile(r"^(?:i'?m|i am)\s+not\s+(?:on|in)\s+(?:a\s+)?(?:call|meeting)\W*$|"
+                           r"^(?:it'?s|this is)\s+not\s+a\s+call\W*$|^no call\W*$|^not on a call\W*$", re.I)),
     # D39: talking to Jimmy without its name (eye contact), on or off, remembered.
     ("eyes", re.compile(r"^(?:only (?:answer|listen|respond)(?: to| when i say)? (?:your|my) name|name only|"
                         r"(?:stop|don'?t) (?:listen(?:ing)?|answer(?:ing)?) without (?:your|the|my) name|"
@@ -349,6 +357,7 @@ Windows laptop. Jimmy can do exactly these things (tool: what it does):
 - timer {"seconds": number}: start a countdown timer; cancel_timer {}: stop it
 - forget {"when": "..."}: delete what Jimmy recorded in a span of time (it asks first)
 - remember_face {}: learn the user's face (guided); forget_face {}: delete it
+- calibrate_eyes {}: the guided eye calibration (so Jimmy knows when it's looked at)
 - copy_screen {}: copy the text of the window in front to the clipboard
 - volume {"level": "softer" or "louder" or "mute" or "unmute"}: Jimmy's speaking voice
 - answer {}: a question about the screen, the user's past, their time, or anything
@@ -801,22 +810,32 @@ class Asker:
         your lips still while it was said (a video, someone else in the room)."""
         act = self.actions
         words = text.split()
-        if not words or act.get("on_call", lambda: False)():
-            return None
-        spoke = act.get("spoke", lambda a, b: None)(t0, t1)
-        if spoke is False:
+        spoke = act.get("spoke", lambda a, b: None)(t0, t1)    # None until the lips are calibrated (D40)
+        if not words or spoke is False:
             return None
         if _CLOSER.match(polite(text)):
             self.followup_until = 0             # "okay, thanks": the conversation's over
             return None
+        # D40: a follow-up works on a call too: you were just talking to Jimmy.
         if (now_ms() < self.followup_until and (len(words) >= 2 or command(text) or nav(text))
                 and act.get("facing", lambda a, b: None)(t0, t1) is not False):
             return "follow-up"
-        if (spoke and act.get("eyes_on", lambda: config.EYE_CONTACT_ASKS)()
+        if not (act.get("eyes_on", lambda: config.EYE_CONTACT_ASKS)()
                 and now_ms() - self.others_at >= config.OTHERS_QUIET_S * 1000
                 and act.get("eye_contact", lambda a, b: False)(t0, t1) and for_jimmy(text)):
-            return "eye contact"
-        return None
+            return None
+        holders = act.get("call", lambda: [])()
+        if holders:
+            # D40: on a call, what you say is for the call: the name is needed. Say so
+            # (once in a while), or a Discord idling in a voice channel looks like Jimmy
+            # ignoring you.
+            if now_ms() - getattr(self, "_call_said", 0) > 120_000:
+                self._call_said = now_ms()
+                self.publish({"type": "toast", "icon": "presence",
+                              "text": f'On a call ({", ".join(holders[:2])}): say "Jimmy" first'})
+            print(f"[ask] not without the name: {', '.join(holders)} has the mic (a call?)")
+            return None
+        return "eye contact"
 
     def _arm(self, question: str) -> None:
         """After an answer to something you said: keep listening without the name, from
@@ -824,7 +843,8 @@ class Asker:
         c = command(question)
         if nav(question):
             return                              # moving around has its own window (NAV_WINDOW_S)
-        if _CLOSER.match(polite(question)) or (c and c[0] in ("hush", "close_ui", "pause", "eyes")):
+        if _CLOSER.match(polite(question)) or (c and c[0] in ("hush", "close_ui", "pause", "eyes", "enrol",
+                                                               "calibrate")):   # a guided panel: you'll be talking to it
             self.followup_until = self.armed_at = 0
             return
         self.armed_at = now_ms()
@@ -998,6 +1018,14 @@ class Asker:
             self.make_offer("forget", (since, until, label), bare=True)
             when = "everything I've captured" if label == "everything" else label
             return f"Delete {what} from {when}, {n['bytes'] / 1e6:,.0f} MB? It can't be undone. Say yes."
+        if kind == "calibrate":
+            return act["calibrate"]() if "calibrate" in act else "The webcam is switched off in config (PRESENCE)."
+        if kind == "notcall":
+            if "not_a_call" not in act:
+                return "I can't do that from here."
+            apps = act["not_a_call"]()
+            return (f"Okay: {', '.join(apps)} using the mic isn't a call. I'll listen without my name."
+                    if apps else "Nothing else is using the mic, so I don't think you're on a call.")
         if kind == "eyes":
             if "eye_mode" not in act:
                 return "I can't do that from here."
@@ -1106,6 +1134,7 @@ class Asker:
         cmd = {"close_ui": ("close_ui", None), "resume": ("resume", None), "unfocus": ("unfocus", None),
                "copy_screen": ("copy_screen", None), "open_page": ("open_url", None),
                "remember_face": ("enrol", None), "forget_face": ("unenrol", None),
+               "calibrate_eyes": ("calibrate", None),
                "list_reminders": ("reminders", None), "cancel_timer": ("untimer", None),
                "timer": ("timer", f"timer for {int(float(args['seconds']))} seconds")
                if str(args.get("seconds", "")).replace(".", "", 1).isdigit() else None,

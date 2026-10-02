@@ -216,6 +216,19 @@ class Enrolment:
 
 # --- presence --------------------------------------------------------------------
 
+def _preview(small: np.ndarray, gray: np.ndarray, faces) -> dict:
+    """What a guided panel shows: a small mirrored picture of you (a selfie), and the
+    face box. Sent to the overlay and dropped; never written."""
+    H, W = gray.shape
+    mirror = cv2.flip(cv2.resize(small, (320, int(320 * H / W))), 1)
+    jpg = cv2.imencode(".jpg", mirror, [cv2.IMWRITE_JPEG_QUALITY, 60])[1].tobytes()
+    box = None
+    if len(faces) == 1:
+        x, y, w, h = (float(v) for v in faces[0][:4])
+        box = [1 - (x + w) / W, y / H, w / W, h / H]                   # mirrored too
+    return {"box": box, "preview": "data:image/jpeg;base64," + base64.b64encode(jpg).decode()}
+
+
 class Tracker:
     """Per-frame observations -> a steady state, with hysteresis (D39).
 
@@ -367,23 +380,107 @@ def mouth_of(gray: np.ndarray, row) -> np.ndarray | None:
     return (p - p.mean()) / (p.std() + 8)
 
 
-class Gaze:
-    """Where you normally look, learnt while you work (D39): head turn, head tilt and
-    iris position while you're at the screen. Eye contact = all four inside that
-    zone; looking down at a phone or off to the side is outside it. RAM only, per
-    run; until it has learnt enough, facing the screen counts."""
+# --- eye calibration (D40): asked for after D39's silent auto-learning ---------------
 
-    def __init__(self, n: int = 600):
+# (what to say, what it measures, seconds counted once you've had time to do it)
+CAL_STEPS = (("Look at the camera.", "camera", 2.0), ("Now look at the middle of your screen.", "screen", 2.0),
+             ("Now look down at your keyboard.", "down", 2.0),
+             ("Now count out loud, one to five.", "talk", 3.0), ("Now stay still and quiet.", "quiet", 2.0))
+
+
+def calibrate(samples: dict) -> dict:
+    """Numbers from a finished calibration -> your gaze zone and lip threshold.
+
+    The zone: centred on where you looked at the camera and the screen, wide enough
+    for 90 % of those looks, and placed halfway to the nearest looks at the
+    keyboard when they're separable. Lips: halfway (geometric) between talking and
+    quiet movement, only if talking clearly moved more. No vector of your face:
+    head pose, iris offsets, a threshold."""
+    pos = np.asarray(samples["camera"] + samples["screen"], dtype=np.float32)
+    neg = np.asarray(samples["down"], dtype=np.float32)
+    center = np.median(pos, axis=0)
+    spread = np.maximum(np.median(np.abs(pos - center), axis=0) * 1.4826, config.GAZE_MIN_SPREAD)
+    dist = lambda x: np.max(np.abs(x - center) / spread, axis=1)  # noqa: E731
+    k_in = float(np.percentile(dist(pos), 90))
+    k_out = float(np.percentile(dist(neg), 10)) if len(neg) else 2 * k_in
+    apart = k_out > k_in * 1.1
+    talk, quiet = float(np.median(samples["talk"])), float(np.median(samples["quiet"]))
+    lips = talk > 1.6 * max(quiet, 1e-3)
+    return {"center": center.tolist(), "spread": spread.tolist(),
+            "k": (k_in + k_out) / 2 if apart else max(k_in * 1.2, config.GAZE_ZONE), "apart": apart,
+            "mouth": (talk * max(quiet, 1e-3)) ** 0.5 if lips else None}
+
+
+class Calibration:
+    """The guided eye calibration (D40), step by step. Collects head pose and iris
+    offsets per look, and mouth movement while you talk and while you're quiet.
+    Numbers only, no picture; lives until it's done."""
+
+    def __init__(self, started: float):
+        self.started = self.step_at = started
+        self.step = 0
+        self.samples: dict[str, list] = {name: [] for _, name, _ in CAL_STEPS}
+        self._mouths: deque = deque(maxlen=6)
+
+    def feed(self, t: float, gray: np.ndarray, faces: list) -> tuple[str, bool]:
+        """One frame: (what to tell you, whether it's counting)."""
+        say, name, need = CAL_STEPS[self.step]
+        if not faces:
+            return "I can't see your face. Sit in front of the camera.", False
+        if len(faces) > 1:
+            return "Just you, please: someone else is in view.", False
+        f, settle = faces[0], (3.0 if name == "talk" else 1.5)   # Jimmy reads the step out first
+        counting = t - self.step_at >= settle
+        if name in ("camera", "screen", "down"):
+            eyes = irises(gray, f)
+            if eyes is None:
+                return "Come a little closer, so I can see your eyes.", False
+            if counting:
+                self.samples[name].append([yaw_of(f), pitch_of(f), eyes[0], eyes[1]])
+        else:
+            m = mouth_of(gray, f)
+            if m is not None:
+                # Against the mouth ~0.25 s ago: the gap between frames outside calibration.
+                near = [(abs(t - pt - 0.25), p) for pt, p in self._mouths if 0.2 <= t - pt <= 0.4]
+                old = min(near, key=lambda x: x[0])[1] if near else None
+                self._mouths.append((t, m))
+                if counting and old is not None:
+                    self.samples[name].append(float(np.abs(m - old).mean()))
+        if counting and t - self.step_at >= settle + need and len(self.samples[name]) >= 4:
+            self.step, self.step_at = self.step + 1, t
+            self._mouths.clear()
+        return say, counting
+
+    @property
+    def done(self) -> bool:
+        return self.step >= len(CAL_STEPS)
+
+    @property
+    def progress(self) -> float:
+        return min(1.0, self.step / len(CAL_STEPS))
+
+
+class Gaze:
+    """Where you look when you mean the screen (D39, D40): head turn, head tilt and
+    iris position. With a calibration (D40), its zone; without, the zone is learnt
+    while you work, and until then facing the screen counts. Eye contact = inside
+    that zone; looking down at a phone or off to the side is outside it."""
+
+    def __init__(self, n: int = 600, cal: dict | None = None):
         self.samples: deque = deque(maxlen=n)
         self._zone: tuple[np.ndarray, np.ndarray] | None = None
+        self.cal = cal
 
     def __getstate__(self):
-        raise TypeError("gaze calibration is ephemeral by design and must never be serialised")
+        raise TypeError("gaze samples are ephemeral by design and must never be serialised")
 
     def contact(self, row, eyes: tuple[float, float] | None) -> bool:
         if not facing(row) or eyes is None:
             return False
         v = np.array([yaw_of(row), pitch_of(row), eyes[0], eyes[1]], dtype=np.float32)
+        if self.cal:
+            c, s = np.asarray(self.cal["center"]), np.asarray(self.cal["spread"])
+            return bool(np.max(np.abs(v - c) / s) <= self.cal["k"])
         self.samples.append(v)
         if len(self.samples) < config.GAZE_LEARN_N:
             return True
@@ -398,14 +495,16 @@ class Gaze:
 
 class Presence:
     def __init__(self, on_change: Callable[[dict], None], camera: int | None = None,
-                 on_enrol: Callable[[dict], None] = lambda e: None, owner: OwnerFace | None = None):
-        self.on_change, self.on_enrol = on_change, on_enrol
+                 on_enrol: Callable[[dict], None] = lambda e: None, owner: OwnerFace | None = None,
+                 cal: dict | None = None, on_calibrated: Callable[[dict], None] = lambda c: None):
+        self.on_change, self.on_enrol, self.on_calibrated = on_change, on_enrol, on_calibrated
         self.camera = config.PRESENCE_CAMERA if camera is None else camera
         self.owner = owner or OwnerFace()
         self.info = {"state": "starting", "faces": 0, "facing": False, "contact": False, "why": ""}
         self.track: Follow | None = None
         self.last_match = 1.0
-        self.gaze = Gaze()
+        self.gaze = Gaze(cal=cal)          # D40: your saved eye calibration, if any
+        self.contact_on = False            # D40: eye contact, steadied (the pill shows it)
         # D39: (epoch ms, eye contact, lips moving, facing) per frame of *you*, last two
         # minutes, so a spoken line can be checked against what the camera saw. Values
         # only; None where it couldn't tell.
@@ -413,6 +512,8 @@ class Presence:
         self._stop = threading.Event()
         self._enrol: Enrolment | None = None
         self._want_enrol = False
+        self._calib: Calibration | None = None     # D40
+        self._want_calib = False
 
     # Like FaceStage: nothing here is ever serialised.
     def __getstate__(self):
@@ -423,7 +524,8 @@ class Presence:
 
     @property
     def enrolling(self) -> bool:
-        return self._enrol is not None or self._want_enrol
+        """A guided panel showing your face is up (remember-my-face or eye calibration)."""
+        return self._enrol is not None or self._want_enrol or self._calib is not None or self._want_calib
 
     def start(self) -> "Presence":
         threading.Thread(target=self._run, daemon=True, name="presence").start()
@@ -441,8 +543,16 @@ class Presence:
 
     def cancel_enrol(self) -> None:
         if self.enrolling:
-            self._want_enrol, self._enrol = False, None
-            self.on_enrol({"done": True, "failed": True, "say": "Cancelled. Nothing was kept."})
+            kind = "eyes" if self._calib is not None or self._want_calib else "face"
+            self._want_enrol, self._enrol, self._want_calib, self._calib = False, None, False, None
+            self.on_enrol({"done": True, "failed": True, "kind": kind, "say": "Cancelled. Nothing was kept."})
+
+    def calibrate(self) -> str:
+        """Start the guided eye calibration (D40), on the presence thread."""
+        if self.info.get("state") == "off" and self.info.get("why"):
+            return f"I can't see the camera: {self.info['why']}."
+        self._want_calib = True
+        return "Let's calibrate your eyes. Follow the panel."
 
     def forget(self) -> str:
         known = self.owner.known
@@ -455,7 +565,11 @@ class Presence:
         return [h for h in list(self.history) if t0 <= h[0] <= t1]
 
     def spoke(self, t0: int, t1: int) -> bool | None:
-        """Did your lips move while this was said (epoch ms)? None: couldn't see them."""
+        """Did your lips move while this was said (epoch ms)? None: couldn't see them,
+        or the eye calibration hasn't measured your lips yet (D40: an unmeasured
+        threshold must not veto anything)."""
+        if not (self.gaze.cal or {}).get("mouth"):
+            return None
         m = [h[2] for h in self._during(t0 - 300, t1 + 300) if h[2] is not None]
         return None if len(m) < 2 else sum(m) / len(m) >= config.MOUTH_SHARE
 
@@ -499,16 +613,32 @@ class Presence:
             self.on_enrol({"done": True, "failed": False, "progress": 1.0,
                            "say": "Got it. I'll know you now. Say \"forget my face\" any time."})
             return
-        H, W = gray.shape
-        mirror = cv2.flip(cv2.resize(small, (320, int(320 * H / W))), 1)     # a mirror, like a selfie
-        jpg = cv2.imencode(".jpg", mirror, [cv2.IMWRITE_JPEG_QUALITY, 60])[1].tobytes()
-        box = None
-        if len(faces) == 1:
-            x, y, w, h = (float(v) for v in faces[0][:4])
-            box = [1 - (x + w) / W, y / H, w / W, h / H]                   # mirrored too
         self.on_enrol({"done": False, "step": e.step, "steps": len(STEPS), "say": say, "ok": ok,
-                       "progress": e.progress, "box": box,
-                       "preview": "data:image/jpeg;base64," + base64.b64encode(jpg).decode()})
+                       "progress": e.progress, **_preview(small, gray, faces)})
+
+    def _calib_tick(self, t: float, small: np.ndarray, gray: np.ndarray, faces) -> None:
+        """One frame of the eye calibration (D40)."""
+        c = self._calib
+        if t - c.started > config.ENROL_TIMEOUT_S:
+            self._calib = None
+            self.on_enrol({"done": True, "failed": True, "kind": "eyes",
+                           "say": "That took too long. Say \"eye calibration\" to try again."})
+            return
+        say, ok = c.feed(t, gray, faces)
+        if not c.done:
+            self.on_enrol({"done": False, "kind": "eyes", "step": c.step, "steps": len(CAL_STEPS), "say": say,
+                           "ok": ok, "progress": c.progress, **_preview(small, gray, faces)})
+            return
+        self._calib = None
+        cal = calibrate(c.samples)
+        self.gaze = Gaze(cal=cal)
+        self.on_calibrated(cal)
+        said = "Done. Look at the screen and just ask."
+        if not cal["apart"]:
+            said += " Looking down looked like looking at the screen to this camera, so that counts too."
+        if not cal["mouth"]:
+            said += " I couldn't see your lips move clearly, so they won't decide anything."
+        self.on_enrol({"done": True, "failed": False, "kind": "eyes", "progress": 1.0, "say": said})
 
     def _identify(self, t: float, small: np.ndarray, strong: list, on, rec, q: np.ndarray):
         """With your face remembered: who the followed face is. Judged when a track
@@ -576,7 +706,8 @@ class Presence:
             contact = self.gaze.contact(on, irises(gray, on))
             m = mouth_of(gray, on)
             if m is not None and tr.mouth is not None and t - tr.mouth_t <= 0.8:
-                moving = float(np.abs(m - tr.mouth).mean()) >= config.MOUTH_MOVING
+                moving = float(np.abs(m - tr.mouth).mean()) >= ((self.gaze.cal or {}).get("mouth")
+                                                                or config.MOUTH_MOVING)
             tr.mouth, tr.mouth_t = m, t
         elif mine:
             looking = False                     # followed, face not in view: turned away
@@ -652,6 +783,13 @@ class Presence:
                          if f[2] >= config.PRESENCE_MIN_FACE * small.shape[1]]
                 if self._want_enrol:
                     self._want_enrol, self._enrol = False, Enrolment(t0)
+                if self._want_calib:
+                    self._want_calib, self._calib = False, Calibration(t0)
+                if self._calib is not None:
+                    self._calib_tick(t0, small, gray, [f for f in faces if f[14] >= config.FACE_SCORE_THRESHOLD])
+                    del small, gray
+                    self._stop.wait(max(0.0, 1 / config.ENROL_FPS - (time.monotonic() - t0)))
+                    continue
                 if (self._enrol is not None or self.owner.known) and rec is None:
                     rec = cv2.FaceRecognizerSF.create(str(config.MODELS_DIR / SFACE), "")
                 if self._enrol is not None:
@@ -662,9 +800,16 @@ class Presence:
                     continue
                 state = self.observe(t0, small, gray, faces, rec, tracker)
                 del small, gray
-                recent = list(self.history)[-3:]
+                recent = list(self.history)[-5:]
+                # D40: steadied, so the pill doesn't flicker: on with 2 of the last 3
+                # frames, off only when 4 of the last 5 weren't (~1 s).
+                hits = [bool(h[1]) for h in recent]
+                if not self.contact_on and sum(hits[-3:]) >= 2:
+                    self.contact_on = True
+                elif self.contact_on and sum(hits) <= 1:
+                    self.contact_on = False
                 self._set(state=state, faces=len(faces), facing=bool(recent and recent[-1][3]),
-                          contact=sum(bool(h[1]) for h in recent) >= 2, owner=self.owner.known,
+                          contact=self.contact_on, owner=self.owner.known,
                           why="lens covered or dark" if state == "off" else
                           f"out of the picture; last match {self.last_match:.2f}, FOLLOW_MIN {config.FOLLOW_MIN}"
                           if state == "away" else "")

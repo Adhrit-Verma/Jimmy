@@ -455,6 +455,12 @@ class ContextBus:
         if mem:
             mem.forget_turns(since, until)
         before, after = self.store.compact()
+        # D40: the timeline and insights kept showing the deleted days (a cached day list,
+        # cached thumbnails, a hidden window still holding them). Start them fresh.
+        from .recall import _small
+        _small.cache_clear()
+        if self._api:
+            self._api.publish({"type": "data_changed"})
         print(f"[db] forgot {label}: {n['frames']} frames, {n['speech']} lines; "
               f"database {before / 1e6:.1f} -> {after / 1e6:.1f} MB, pictures -{n['bytes'] / 1e6:.0f} MB")
         return f"Deleted {label}: freed {(n['bytes'] + max(0, before - after)) / 1e6:,.0f} MB."
@@ -531,7 +537,7 @@ class ContextBus:
             print("[overlay] not built: cd overlay && npm install && npm run build")
             return
         from .ask import Asker, Voice
-        from .audio import other_app_using_mic
+        from .audio import app_label, mic_holders, not_a_call
         from .recall import timeline_hooks
         self._voice = Voice(on_start=self._voice_started, on_end=self._voice_ended) \
             if config.VOICE_ANSWERS else None
@@ -573,7 +579,11 @@ class ContextBus:
                                      "eye_contact": lambda a, b: bool(self._presence_obj
                                                                       and self._presence_obj.eye_contact(a, b)),
                                      "eyes_on": self._eyes_on, "eye_mode": self.set_eye_mode,
-                                     "on_call": other_app_using_mic,
+                                     # D40: who holds the mic (a call?), and "I'm not on a call"
+                                     "call": lambda: [app_label(k) for k in mic_holders()],
+                                     "not_a_call": lambda: [app_label(k) for k in not_a_call()],
+                                     "calibrate": lambda: self._presence_obj.calibrate() if self._presence_obj
+                                     else "The webcam is switched off in config (PRESENCE).",
                                      "voice_on": lambda: bool(self._voice and not self._voice.muted),
                                      "measure": self.store.measure, "forget": self.forget,
                                      "unremind": lambda: mem.set_reminder_state(None, "cancelled"),
@@ -597,7 +607,14 @@ class ContextBus:
         # D34: presence from the webcam, for the privacy curtain.
         if config.PRESENCE:
             from .presence import Presence
-            self._presence_obj = Presence(self._on_presence, on_enrol=self._on_enrol).start()
+            import json
+            cal = mem.setting("eye_calibration")     # D40: numbers, not a picture: see presence.calibrate
+            self._presence_obj = Presence(self._on_presence, on_enrol=self._on_enrol,
+                                          cal=json.loads(cal) if cal else None,
+                                          on_calibrated=lambda c: mem.set_setting("eye_calibration", json.dumps(c))
+                                          ).start()
+            if not cal:
+                print('[presence] eyes not calibrated yet: say "Jimmy, eye calibration" (about 20 s)')
         env = dict(os.environ, JIMMY_OVERLAY_URL=self._api.url, JIMMY_OVERLAY_TOKEN=self._api.token)
         # Started from an Electron app's terminal (VS Code, Claude), this is inherited
         # and makes electron.exe run as plain Node: no window, "app.whenReady" undefined.

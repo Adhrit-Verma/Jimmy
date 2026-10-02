@@ -45,8 +45,32 @@ def _own_mic_keys() -> set[str]:
     return {p.replace("\\", "#").lower() for p in paths if p}
 
 
+# D40: mic holders you said aren't a call ("Jimmy, I'm not on a call"), as
+# (app key, when it took the mic): taking the mic again counts as a new call.
+_NOT_A_CALL: set[tuple[str, int]] = set()
+
+
 def other_app_using_mic() -> bool:
-    return other_app_using("microphone")
+    return bool(mic_holders())
+
+
+def mic_holders() -> list[str]:
+    """Apps other than Jimmy holding the mic now, minus those you said aren't a
+    call. Names as Windows keys them ("C:#…#Discord.exe" or a package name)."""
+    return [k for k, start in _holders("microphone") if (k, start) not in _NOT_A_CALL]
+
+
+def not_a_call() -> list[str]:
+    """"I'm not on a call": the apps holding the mic now stop counting as a call,
+    until they let go of it and take it again."""
+    now = _holders("microphone")
+    _NOT_A_CALL.update(now)
+    return [k for k, _ in now]
+
+
+def app_label(key: str) -> str:
+    """"C:#Users#…#Discord.exe" -> "Discord"."""
+    return key.replace("#", "\\").rsplit("\\", 1)[-1].removesuffix(".exe").split("_")[0] or key
 
 
 def other_app_using(capability: str) -> bool:
@@ -56,40 +80,47 @@ def other_app_using(capability: str) -> bool:
     what drives the taskbar mic icon. It catches browser calls such as Google
     Meet, which a list of meeting-app exe names would miss.
 
-    ponytail: "someone else has the mic" is treated as "a call is on". Dictation
-    or a voice recorder also qualifies. Add a meeting-app allowlist only if that
-    turns out to matter.
+    ponytail: "someone else has the mic" is treated as "a call is on". Dictation,
+    a voice recorder or Discord idling in a voice channel also qualify (D40: it
+    did, a whole evening); "I'm not on a call" sets those aside (mic_holders).
     """
-    import winreg
-    own = _own_mic_keys()
+    if capability == "microphone":
+        return other_app_using_mic()
+    return bool(_holders(capability))
 
-    def scan(path: str) -> bool:
+
+def _holders(capability: str) -> list[tuple[str, int]]:
+    """(app key, LastUsedTimeStart) for every app but us with the device open."""
+    import winreg
+    own, out = _own_mic_keys(), []
+
+    def scan(path: str) -> None:
         try:
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, path)
         except OSError:
-            return False
+            return
         with key:
             i = 0
             while True:
                 try:
                     sub = winreg.EnumKey(key, i)
                 except OSError:
-                    return False
+                    return
                 i += 1
                 if sub == "NonPackaged":
-                    if scan(path + "\\" + sub):
-                        return True
+                    scan(path + "\\" + sub)
                     continue
                 if sub.lower() in own:
                     continue
                 try:
                     with winreg.OpenKey(winreg.HKEY_CURRENT_USER, path + "\\" + sub) as k:
                         if winreg.QueryValueEx(k, "LastUsedTimeStop")[0] == 0:
-                            return True
+                            out.append((sub, int(winreg.QueryValueEx(k, "LastUsedTimeStart")[0])))
                 except OSError:
                     continue
 
-    return scan(_MIC_STORE.rsplit("\\", 1)[0] + "\\" + capability)   # D34: "webcam" too
+    scan(_MIC_STORE.rsplit("\\", 1)[0] + "\\" + capability)   # D34: "webcam" too
+    return out
 
 
 def is_hallucination(text: str) -> bool:

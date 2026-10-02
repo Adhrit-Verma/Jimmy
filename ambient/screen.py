@@ -86,14 +86,57 @@ def focused_is_password() -> bool:
         return False
 
 
+def _uia_scroll(hwnd: int, down: bool) -> bool:
+    """D40: scroll the biggest part of the window that scrolls (a page, a chat) by a
+    page, through UI Automation: no input event, so it doesn't matter where your
+    pointer is or which box has the keyboard. Measured: Claude's "Chat messages"
+    and a Chrome page, found in ~0.1 s; a page down and up restored the exact place."""
+    try:
+        import uiautomation as auto
+        from uiautomation.uiautomation import _AutomationClient
+        with auto.UIAutomationInitializerInThread():
+            wake_accessibility(hwnd)
+            root = auto.ControlFromHandle(hwnd)
+            uia = _AutomationClient.instance().IUIAutomation
+            found = root.Element.FindAll(4, uia.CreatePropertyCondition(        # 4: all descendants
+                auto.PropertyId.IsScrollPatternAvailableProperty, True))
+            best = None
+            for i in range(found.Length):
+                c = auto.Control.CreateControlFromElement(found.GetElement(i))
+                sp = c.GetPattern(auto.PatternId.ScrollPattern)
+                r = c.BoundingRectangle
+                area = max(0, r.width()) * max(0, r.height())
+                if sp and sp.VerticallyScrollable and (best is None or area > best[0]):
+                    best = (area, sp)
+            rect = wintypes.RECT()
+            user32.GetWindowRect(hwnd, ctypes.byref(rect))
+            whole = max(1, (rect.right - rect.left) * (rect.bottom - rect.top))
+            # A small list isn't "the window" (VS Code's editor exposes no scrolling; the
+            # biggest scroller there is a side list): leave those to the mouse wheel.
+            if best is None or best[0] < 0.15 * whole:
+                return False
+            sp, before = best[1], best[1].VerticalScrollPercent
+            if (down and before >= 99.9) or (not down and 0 <= before <= 0.1):
+                return True                       # already at that end: nothing to do
+            sp.Scroll(auto.ScrollAmount.NoAmount,
+                      auto.ScrollAmount.LargeIncrement if down else auto.ScrollAmount.LargeDecrement)
+            return sp.VerticalScrollPercent != before
+    except Exception as exc:
+        print(f"[scroll] UI Automation: {type(exc).__name__}: {exc}")
+        return False
+
+
 def scroll_active(down: bool, notches: int = 5) -> bool:
-    """Scroll the window you're on, as your mouse wheel would (D35: "Jimmy, scroll
-    down" with nothing of Jimmy's to scroll). The only input Jimmy ever sends to
-    another app, and only when asked: no clicks, no typing. If the pointer isn't
-    over that window, Page Down/Up goes to it instead."""
+    """Scroll the window you're on (D35: "Jimmy, scroll down" with nothing of Jimmy's
+    to scroll). The only input Jimmy ever sends to another app, and only when asked:
+    no clicks, no typing. D40: through UI Automation first (it scrolled nothing in
+    the Claude app when the pointer sat over the message box); the mouse wheel, or
+    Page Down/Up if the pointer isn't over that window, only for windows without it."""
     hwnd = user32.GetForegroundWindow()
     if not hwnd:
         return False
+    if _uia_scroll(hwnd, down):
+        return True
     pt, rect = wintypes.POINT(), wintypes.RECT()
     user32.GetCursorPos(ctypes.byref(pt))
     user32.GetWindowRect(hwnd, ctypes.byref(rect))

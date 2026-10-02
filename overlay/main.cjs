@@ -107,6 +107,9 @@ function send(event) {
     }
   }
   if (event.type === "close_all" && timeline && !timeline.isDestroyed()) timeline.close();   // D35
+  // D40: history was deleted. The timeline window only ever hides, so it still held the
+  // deleted days and pictures; the next open builds it fresh.
+  if (event.type === "data_changed" && timeline && !timeline.isDestroyed()) { timeline.destroy(); return; }
   // Navigation goes to the timeline only while you're in it; after you click back into
   // another app, "scroll down" means that app (D35).
   if (event.type === "ui" && target === "timeline" && timeline && !timeline.isDestroyed() && timeline.isFocused()) {

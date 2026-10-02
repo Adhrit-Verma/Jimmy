@@ -174,6 +174,8 @@ def test_what_the_camera_saw_while_you_spoke():
     for i in range(20):                                # 5 s: facing, eye contact, lips moving from 2 s
         ts = 1_000_000 + i * 250
         p.history.append((ts, True, ts >= 1_002_000, True))
+    assert p.spoke(1_002_000, 1_004_000) is None, "D40: lips decide nothing until calibrated"
+    p.gaze.cal = {"center": [0, 0.5, 0, 0], "spread": [0.05] * 4, "k": 3, "mouth": 0.2}
     assert p.spoke(1_002_000, 1_004_000) and not p.spoke(1_000_000, 1_001_500)
     assert p.eye_contact(1_002_000, 1_004_000) and p.facing_during(1_002_000, 1_004_000)
     assert p.spoke(9_000_000, 9_001_000) is None, "no frames then: can't tell"
@@ -293,10 +295,10 @@ def test_a_conversation_without_the_name():
     hear("Jimmy, what can you do")
     a.voice_done()
     assert not hear("what is this then"), "the camera saw your lips still: a video or someone else"
-    a, hear, _, clock = asker(on_call=lambda: True)
+    a, hear, _, clock = asker(call=lambda: ["Discord"])
     hear("Jimmy, what can you do")
     a.voice_done()
-    assert not hear("and what else"), "on a call, speech is for the call"
+    assert hear("and what else"), "D40: a follow-up works on a call: you were just talking to Jimmy"
     a, hear, _, clock = asker(facing=lambda t0, t1: False)
     hear("Jimmy, what can you do")
     a.voice_done()
@@ -324,7 +326,95 @@ def test_eye_contact_means_you_mean_jimmy():
     assert not hear("what's on my screen"), "...means a conversation's on: eye contact alone isn't enough"
     clock[0] += ask_mod.config.OTHERS_QUIET_S * 1000
     assert hear("what's on my screen"), "quiet again: it is"
-    print("ok  eye contact: looking + lips + a request = no name; statements, others talking, 'name only' don't")
+    a, hear, _, clock = asker(eye_contact=lambda t0, t1: True)        # lips not calibrated: spoke is None
+    assert hear("what's on my screen"), "D40: before the lips are measured, eye contact alone is enough"
+    events = []
+    a, hear, _, clock = asker(**looking, call=lambda: ["Discord"])
+    a.publish = events.append
+    assert not hear("what's on my screen"), "on a call (Discord has the mic): the name is needed"
+    assert any("On a call (Discord)" in e.get("text", "") for e in events), "...and the pill says why"
+    print("ok  eye contact: looking + a request = no name; statements, others talking, calls, 'name only' don't")
+
+
+def test_calls_and_calibration():
+    import ambient.audio as audio
+    from ambient.presence import CAL_STEPS, Calibration, calibrate
+    real = audio._holders
+    try:
+        audio._holders = lambda cap: [("C:#Apps#Discord.exe", 7)]
+        assert audio.mic_holders() == ["C:#Apps#Discord.exe"] and audio.app_label("C:#Apps#Discord.exe") == "Discord"
+        assert audio.not_a_call() == ["C:#Apps#Discord.exe"] and audio.mic_holders() == [] \
+            and not audio.other_app_using_mic(), "'I'm not on a call': Discord idling doesn't count"
+        audio._holders = lambda cap: [("C:#Apps#Discord.exe", 9)]
+        assert audio.mic_holders(), "...until it takes the mic again"
+    finally:
+        audio._holders = real
+        audio._NOT_A_CALL.clear()
+    assert ask_mod.command("Jimmy I'm not on a call".split(" ", 1)[1]) == ("notcall", None)
+    for said in ("eye calibration", "2i calibration", "calibrate my eyes", "start eye calibration"):
+        assert ask_mod.command(said) == ("calibrate", None), said
+
+    # The calibration's arithmetic: camera and screen looks inside, keyboard looks out.
+    rng = np.random.default_rng(0)
+    look = lambda c: [list(np.array(c) + rng.normal(0, 0.01, 4)) for _ in range(12)]  # noqa: E731
+    cal = calibrate({"camera": look([0, 0.55, 0, -0.02]), "screen": look([0, 0.6, 0, 0.02]),
+                     "down": look([0, 0.9, 0, 0.12]), "talk": [0.5, 0.6, 0.4, 0.55], "quiet": [0.05, 0.08, 0.06]})
+    assert cal["apart"] and 0.08 < cal["mouth"] < 0.4, cal
+    g = Gaze(cal=cal)
+    assert g.contact(row(), (0.0, 0.0)), "facing, eyes in the middle: contact"
+    assert not g.contact(row(), (0.0, 0.12)), "eyes well down: none"
+    c, s, k = np.array(cal["center"]), np.array(cal["spread"]), cal["k"]
+    assert np.max(np.abs(np.array([0, 0.58, 0, 0.0]) - c) / s) <= k, "between camera and screen: contact"
+    assert np.max(np.abs(np.array([0, 0.9, 0, 0.12]) - c) / s) > k, "looking at the keyboard: no contact"
+    flat = calibrate({"camera": look([0, 0.6, 0, 0]), "screen": look([0, 0.6, 0, 0]), "down": look([0, 0.6, 0, 0]),
+                      "talk": [0.1, 0.1], "quiet": [0.1, 0.1]})
+    assert not flat["apart"] and flat["mouth"] is None, "can't tell apart: says so, and lips decide nothing"
+
+    # The guided steps, on drawn eyes and a mouth that opens while you "count".
+    gray, r = eye_img()
+    talking = gray.copy()
+    cv2.ellipse(talking, (int((r[10] + r[12]) / 2), int(r[11]) + 8), (30, 18), 0, 0, 360, 30, -1)
+    c, t = Calibration(0.0), 0.0
+    while not c.done and t < 60:
+        name = CAL_STEPS[c.step][1]
+        frame = (talking if int(t * 8) % 4 < 2 else gray) if name == "talk" else gray
+        say, _ = c.feed(t, frame, [r])
+        t += 0.125
+    assert c.done and all(len(v) >= 4 for v in c.samples.values()), {k: len(v) for k, v in c.samples.items()}
+    assert Calibration(0.0).feed(0, gray, [])[0].startswith("I can't see your face")
+
+    # Through the Presence glue: panel events (kind "eyes", a preview), the result saved.
+    events, saved = [], []
+    p = Presence(lambda i: None, on_enrol=events.append, owner=_Nobody(), on_calibrated=saved.append)
+    assert p.calibrate().startswith("Let's calibrate") and p.enrolling, "screen capture stops meanwhile"
+    p._want_calib, p._calib, t = False, Calibration(0.0), 0.0
+    small = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+    while p._calib is not None and t < 60:
+        name = CAL_STEPS[p._calib.step][1]
+        frame = (talking if int(t * 8) % 4 < 2 else gray) if name == "talk" else gray
+        p._calib_tick(t, cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR), frame, [r])
+        t += 0.125
+    assert saved and saved[0]["mouth"] and p.gaze.cal is saved[0], "saved, and in use at once"
+    assert events[0]["kind"] == "eyes" and events[0]["preview"].startswith("data:image/jpeg")
+    assert events[-1]["done"] and not events[-1]["failed"] and not p.enrolling
+    print("ok  calls and calibration: Discord set aside; the zone and lip threshold from five guided steps")
+
+
+def test_forget_refreshes_the_timeline():
+    import tempfile
+    from ambient.recall import timeline_hooks
+    with tempfile.TemporaryDirectory() as d:
+        s = _db_with_a_month(Path(d))
+        try:
+            get = timeline_hooks(s)["get_timeline"]
+            assert any(day.startswith("2026-09") for day in get({})["days"])
+            s.forget(int(datetime(2026, 9, 1).timestamp() * 1000), int(datetime(2026, 10, 1).timestamp() * 1000))
+            assert not any(day.startswith("2026-09") for day in get({})["days"]), "the day list forgets too"
+        finally:
+            s.close()
+    main = (Path(__file__).resolve().parents[1] / "overlay" / "main.cjs").read_text(encoding="utf-8")
+    assert '"data_changed"' in main and "timeline.destroy()" in main, "the hidden timeline window is rebuilt"
+    print("ok  after a forget: the day list, thumbnails and the timeline window start fresh")
 
 
 def test_timers():

@@ -34,7 +34,7 @@ const FLASH_ICON = {
   close_ui: X, copy_screen: Check, volume: MessageCircle, presence: Eye, enrol: ScanFace, unenrol: ScanFace,
   pause: Pause, resume: Play, focus: Target, unfocus: Target, open: ExternalLink, show: X, nav: MoveRight,
   remind: Bell, reminders: Bell, unremind: Bell, curtain: EyeOff, uncurtain: Eye, open_url: Globe,
-  timer: Timer, timers: Timer, untimer: Timer, forget: Trash2, eyes: Eye,
+  timer: Timer, timers: Timer, untimer: Timer, forget: Trash2, eyes: Eye, calibrate: Eye, notcall: Eye,
 };
 
 // D32: every kind of card, and how long it stays if you don't touch it.
@@ -177,15 +177,17 @@ function Pill({ state, mood, prompt, typing, setTyping, flash, recent, onAsk, an
         className={`pointer-events-auto flex items-center gap-2 rounded-full text-[12px] ${surface}
           ${compact ? "h-4 px-1.5 opacity-70" : "h-8 px-3"} ${mood === "listening" ? "ring-sky-400/40" : ""}`}
       >
-        {mood === "listening" ? <Equalizer /> : contact && !curtain && !paused ? (
-          // D39: Jimmy sees you looking at the screen: just ask, no name needed
-          <span title="I see you looking: just ask" className="flex"><Eye size={compact ? 9 : 12} className="text-sky-300" /></span>
-        ) : (
-          <span className="relative flex size-2">
-            {!paused && mood && <span className="absolute inline-flex size-full animate-ping rounded-full bg-sky-400/60" />}
-            <span className={`relative inline-flex size-2 rounded-full ${dot}`} />
-          </span>
-        )}
+        <span className="flex h-3 w-[14px] shrink-0 items-center justify-center">
+          {mood === "listening" ? <Equalizer /> : contact && !curtain && !paused ? (
+            // D39: Jimmy sees you looking at the screen: just ask, no name needed
+            <Eye size={11} className="text-sky-300" aria-label="I see you looking: just ask" />
+          ) : (
+            <span className="relative flex size-2">
+              {!paused && mood && <span className="absolute inline-flex size-full animate-ping rounded-full bg-sky-400/60" />}
+              <span className={`relative inline-flex size-2 rounded-full ${dot}`} />
+            </span>
+          )}
+        </span>
         {!compact && <span className="font-medium text-neutral-100">Jimmy</span>}
         {compact ? null : typing ? (
           <form onSubmit={submit} className="flex items-center">
@@ -390,9 +392,11 @@ function Card({ card, onGone, onDismiss, away }) {
 // the face box green when the frame is good, the instruction in words (also
 // spoken), three steps, and what is kept. Screen capture is off meanwhile.
 const ENROL_STEPS = ["Look straight", "One side", "Other side"];
+const EYE_STEPS = ["Camera", "Screen", "Keyboard", "Speak", "Quiet"];   // D40: eye calibration
 
 function EnrolPanel({ e }) {
   const good = e.done ? !e.failed : e.ok;
+  const eyes = e.kind === "eyes";                // D40: the same panel calibrates your eyes
   return (
     <div className="pointer-events-none absolute inset-x-0 top-14 z-[120] flex justify-center">
       <motion.div
@@ -402,7 +406,8 @@ function EnrolPanel({ e }) {
         className={`pointer-events-auto w-[380px] rounded-2xl p-4 ${surface}`}
       >
         <div className="flex items-center gap-2 text-[13px] font-medium text-neutral-100">
-          <ScanFace size={15} className="text-sky-300" /> Remember my face
+          {eyes ? <Eye size={15} className="text-sky-300" /> : <ScanFace size={15} className="text-sky-300" />}
+          {eyes ? "Eye calibration" : "Remember my face"}
           {!e.done && (
             <button onClick={() => bridge?.api("ask", { q: "cancel" })} aria-label="Cancel"
               className="ml-auto rounded-md p-1 text-neutral-500 hover:bg-white/10 hover:text-neutral-200"><X size={14} /></button>
@@ -426,7 +431,7 @@ function EnrolPanel({ e }) {
               </div>
             </div>
             <div className="mt-3 flex gap-1.5">
-              {ENROL_STEPS.map((label, i) => (
+              {(eyes ? EYE_STEPS : ENROL_STEPS).map((label, i) => (
                 <span key={label} className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]
                   ${i < e.step ? "bg-emerald-400/15 text-emerald-200" : i === e.step ? "bg-white/10 text-neutral-100" : "text-neutral-500"}`}>
                   {i < e.step ? <Check size={10} /> : <span className="tabular-nums">{i + 1}</span>} {label}
@@ -446,15 +451,17 @@ function EnrolPanel({ e }) {
             </div>
             <p className="mt-3 text-[14px] text-neutral-100">{e.say}</p>
             {e.failed && (
-              <button onClick={() => bridge?.api("ask", { q: "remember my face" })}
+              <button onClick={() => bridge?.api("ask", { q: eyes ? "eye calibration" : "remember my face" })}
                 className="mt-3 rounded-lg bg-white/10 px-3 py-1.5 text-[13px] text-neutral-100 hover:bg-white/15">Try again</button>
             )}
           </motion.div>
         )}
         <p className="mt-3 flex items-start gap-1.5 text-[11px] leading-snug text-neutral-500">
           <ShieldCheck size={12} className="mt-px shrink-0" />
-          Only your face, as an encrypted template on this PC, used only for the privacy curtain. No photo is kept.
-          Say &ldquo;forget my face&rdquo; any time.
+          {eyes ? <>Numbers only: where you look and how much your lips move, so you can ask without
+            &ldquo;Jimmy&rdquo;. No photo is kept. Say &ldquo;eye calibration&rdquo; to redo it.</>
+            : <>Only your face, as an encrypted template on this PC, used only for the privacy curtain. No photo is kept.
+            Say &ldquo;forget my face&rdquo; any time.</>}
         </p>
       </motion.div>
     </div>
@@ -565,7 +572,7 @@ export default function App() {
       if (ev.type === "thinking") { setMood("thinking"); setPrompt(null); }   // D38: react at once
       if (ev.type === "enrol") {
         clearTimeout(enrolTimer.current);
-        setEnrol((cur) => ({ ...cur, ...ev }));
+        setEnrol((cur) => ({ ...cur, kind: undefined, ...ev }));   // eye calibration events carry kind "eyes"
         if (ev.done) enrolTimer.current = setTimeout(() => { setEnrol(null); bridge?.pointerOverUi(false); }, ev.failed ? 8000 : 3500);
       }
       if (ev.type === "state" && "curtain" in ev) setPresence((p) => ({ ...p, curtain: ev.curtain, state: ev.presence }));

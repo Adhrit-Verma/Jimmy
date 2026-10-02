@@ -95,6 +95,7 @@ class Store:
         if self.path != ":memory:":
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
+        self.generation = 0              # D40: bumped when rows are deleted (forget)
         self.conn = sqlite3.connect(self.path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
@@ -536,6 +537,7 @@ class Store:
         left empty. Only after the user said yes (the Asker asks). Windows still
         open are kept, so capture can go on writing to them."""
         out: dict = {}
+        self.generation += 1             # D40: caches built on what's gone start over
         with self._lock:
             c, span = self.conn, (since_ms, until_ms)
             thumbs = [r[0] for r in c.execute(

@@ -59,6 +59,9 @@ CASES = [
     ("पाँच मिनट का टाइमर लगाओ", {"timer"}),
     ("टाइमर बंद करो", {"cancel_timer"}),
     ("सितंबर का सारा डेटा डिलीट कर दो", {"forget"}),
+    # D40
+    ("set up the eye tracking thing again", {"calibrate_eyes"}),
+    ("मेरी आँखों का कैलिब्रेशन करो", {"calibrate_eyes"}),
 ]
 
 

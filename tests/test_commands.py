@@ -129,6 +129,11 @@ MATRIX = [
     ("Jimmy erase the last hour", "command", "forget", "the last hour"),
     ("Jimmy delete the email from yesterday", "recall", None, None),     # not a forget: the tool pick says no
     ("Jimmy clear everything", "command", "close_ui", None),             # the UI, as before
+    ("Jimmy eye calibration", "command", "calibrate", None),
+    ("Jimmy 2i calibration", "command", "calibrate", None),            # what Whisper wrote on 2026-10-02
+    ("Jimmy calibrate my eyes", "command", "calibrate", None),
+    ("Jimmy I'm not on a call", "command", "notcall", None),
+    ("Jimmy it's not a call", "command", "notcall", None),
     ("Jimmy only answer to your name", "command", "eyes", "only answer to your name"),
     ("Jimmy listen without your name", "command", "eyes", "listen without your name"),
     ("okay hey jimmy what's on my screen", "screen", None, None),

@@ -154,10 +154,11 @@ def furniture(store: Store, min_windows: int | None = None, ttl_s: float = 600) 
     now = time.time()
     need = min_windows or config.PERSISTENT_LINE_WINDOWS
     st = _furniture
-    if now - st["at"] < ttl_s and st.get("store") is store and st.get("need") == need:
+    fresh = st.get("store") is store and st.get("need") == need and st.get("gen") == store.generation
+    if now - st["at"] < ttl_s and fresh:
         return st["lines"]
-    if st.get("store") is not store or st.get("need") != need:
-        st.update(store=store, need=need, last=0, seen={}, furniture=set())
+    if not fresh:                      # D40: a forget removes lines; count again from scratch
+        st.update(store=store, need=need, gen=store.generation, last=0, seen={}, furniture=set())
     seen, found = st["seen"], st["furniture"]
     last = st["last"]
     for bid, wid, text in store.blocks_after(st["last"]):
@@ -188,8 +189,9 @@ def timeline_hooks(store: Store) -> dict:
     days_cache: dict = {"key": None, "days": []}
 
     def get_timeline(p: dict) -> dict:
-        # D38: the day list scans every frame; reuse it until a frame is added.
-        key = store.last_frame_id()
+        # D38: the day list scans every frame; reuse it until a frame is added
+        # (D40: or deleted: after "delete September" it still listed September).
+        key = (store.last_frame_id(), store.generation)
         if key != days_cache["key"]:
             days_cache.update(key=key, days=store.days())
         days = days_cache["days"]
