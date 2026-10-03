@@ -127,6 +127,43 @@ def test_llm_errors_are_clear():
     print("ok  llm errors + retry")
 
 
+def test_retired_model_falls_back():
+    """D43: nemotron-3-super's end of life (HTTP 410) broke every answer. A gone
+    model now gives way: the tools model to the chat model, the chat model to
+    MODEL_FALLBACKS. Clients built for one model (vision, local) never switch."""
+    import jimmy.config as jc
+    gone, asked = {jc.TOOLS_MODEL}, []
+
+    def handler(req):
+        model = json.loads(req.content)["model"]
+        asked.append(model)
+        if model in gone:
+            return httpx.Response(410, text="end of life")
+        return httpx.Response(200, json={"choices": [{"message": {"content": "fine"}}]})
+
+    llm = LLM(key="k", transport=httpx.MockTransport(handler))
+    assert llm.chat_tools([], [])["content"] == "fine"
+    assert asked == [jc.TOOLS_MODEL, jc.MODEL], asked
+    gone, asked[:] = {jc.MODEL}, []
+    llm = LLM(key="k", transport=httpx.MockTransport(handler))
+    assert llm.chat([]) == "fine" and asked == [jc.MODEL, jc.MODEL_FALLBACKS[0]], asked
+    assert llm.chat([]) == "fine" and asked[-1] == jc.MODEL_FALLBACKS[0], "the switch sticks"
+    gone, asked[:] = {jc.MODEL, *jc.MODEL_FALLBACKS}, []
+    try:
+        LLM(key="k", transport=httpx.MockTransport(handler)).chat([])
+    except LLMError as exc:
+        assert "410" in str(exc), "all gone: the 410 reaches the user with its hint"
+    else:
+        raise AssertionError("no model left must raise")
+    try:
+        _llm(lambda r: httpx.Response(410, text="end of life")).chat([])
+    except LLMError as exc:
+        assert "410" in str(exc)
+    else:
+        raise AssertionError("a one-model client must not switch")
+    print("ok  retired model falls back")
+
+
 def test_fts_query_is_safe():
     assert fts_query("what was I reading about earlier?") is None, \
         "no topic words -> no keyword search; the plugin falls back to recent activity"

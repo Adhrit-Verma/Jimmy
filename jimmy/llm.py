@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import time
 from typing import Iterator
 
@@ -84,6 +85,11 @@ class LLM:
                  attempts: int | None = None, read_timeout_s: float | None = None):
         self.key = key if key is not None else api_key()
         self.model = model
+        # D43: only the default cloud client has a tools model and fallbacks; vision
+        # and local clients keep exactly the model they were given.
+        default = model == config.MODEL and base_url == config.BASE_URL
+        self.tools_model = config.TOOLS_MODEL if default else None
+        self.fallbacks = [m for m in config.MODEL_FALLBACKS if m != model] if default else []
         self.attempts = attempts or ATTEMPTS   # D41: a vision model with a fallback tries once
         self.read_timeout_s = read_timeout_s or config.READ_TIMEOUT_S
         self.base_url = base_url.rstrip("/")
@@ -128,8 +134,26 @@ class LLM:
         except Exception:
             detail = ""
         hint = {401: " (is NVIDIA_API_KEY correct?)", 403: " (key lacks access to this model?)",
-                404: " (model id wrong? JIMMY_MODEL)", 429: " (rate limited)"}.get(resp.status_code, "")
+                404: " (model id wrong? JIMMY_MODEL)", 410: " (model retired: set JIMMY_MODEL)", 429: " (rate limited)"}.get(resp.status_code, "")
         return LLMError(f"LLM HTTP {resp.status_code}{hint}: {detail}")
+
+    def _gone(self, resp: httpx.Response, body: dict) -> bool:
+        """D43: a retired model (404/410) gives way to the next one, for the rest of
+        this client's life, instead of breaking every answer. The tools model falls
+        back to the chat model; the chat model to MODEL_FALLBACKS."""
+        if resp.status_code not in (404, 410):
+            return False
+        self.fallbacks = [m for m in self.fallbacks if m != body["model"]]
+        if self.tools_model and body["model"] == self.tools_model:
+            self.tools_model = None
+        elif self.fallbacks:
+            self.model = self.fallbacks.pop(0)
+        else:
+            return False
+        print(f"[jimmy] model {body['model']} answered HTTP {resp.status_code}; now using {self.model}",
+              file=sys.stderr, flush=True)
+        body["model"] = self.model
+        return True
 
     def _require_key(self) -> None:
         if not self.configured:
@@ -147,7 +171,8 @@ class LLM:
         format) or `content`. Thinking off: measured on nemotron-3-super with it on,
         tool calls came back empty; off, 0.5-1.8 s and a sensible first step."""
         self._require_key()
-        body = {**self._body(messages, False, max_tokens, temperature, False), "tools": tools, "tool_choice": "auto"}
+        body = {**self._body(messages, False, max_tokens, temperature, False), "tools": tools, "tool_choice": "auto",
+                "model": self.tools_model or self.model}
         for attempt in range(self.attempts):
             try:
                 resp = self._http().post("/chat/completions", json=body)
@@ -158,6 +183,8 @@ class LLM:
                 continue
             if resp.status_code in config.RETRY_STATUSES and attempt < self.attempts - 1:
                 time.sleep(config.RETRY_WAIT_S)
+                continue
+            if self._gone(resp, body):
                 continue
             if resp.status_code != 200:
                 raise self._fail(resp)
@@ -187,6 +214,8 @@ class LLM:
             if resp.status_code in config.RETRY_STATUSES and attempt < self.attempts - 1:
                 time.sleep(config.RETRY_WAIT_S)
                 continue
+            if self._gone(resp, body):
+                continue
             if resp.status_code != 200:
                 raise self._fail(resp)
             msg = resp.json()["choices"][0]["message"]
@@ -207,6 +236,8 @@ class LLM:
                 with self._http().stream("POST", "/chat/completions", json=body) as resp:
                     if resp.status_code in config.RETRY_STATUSES and attempt < self.attempts - 1:
                         time.sleep(config.RETRY_WAIT_S)
+                        continue
+                    if self._gone(resp, body):
                         continue
                     if resp.status_code != 200:
                         raise self._fail(resp)

@@ -12,11 +12,17 @@ AMBIENT_DB = DATA_DIR / "ambient.db"   # read-only from here; the ambient layer 
 # --- the one LLM client (D14) -------------------------------------------------
 API_KEY_ENV = "NVIDIA_API_KEY"
 BASE_URL = os.environ.get("JIMMY_LLM_BASE_URL") or "https://integrate.api.nvidia.com/v1"
-# Measured 2026-09-22 (D17): ~1.0 s to first word, ~1.4 s for a full answer, clean
-# output. The first pick, nemotron-3.5-lightning, took 159 s and leaked reasoning
-# as plain text. The endpoint's public model list is NOT what an account can use:
-# several listed models return 404 or time out. Measure before switching.
-MODEL = os.environ.get("JIMMY_MODEL") or "nvidia/nemotron-3-super-120b-a12b"
+# D43: nemotron-3-super (D17's pick) reached end of life on 2026-10-03 (HTTP 410).
+# Measured that day, thinking off: nemotron-3-ultra answers through Jimmy's prompt in
+# 1.0-1.4 s to first word, 2.0-2.5 s in full, clean; but it returned HTTP 500 on 30
+# of 130 agent tool calls. gpt-oss-20b picked the right tool on 120/130, median
+# 1.4 s, so it drives the agent. nemotron-3.5-lightning took 45-66 s and wrote
+# garbage. The endpoint's public model list is NOT what an account can use: several
+# listed models return 404 or time out. Measure before switching.
+MODEL = os.environ.get("JIMMY_MODEL") or "nvidia/nemotron-3-ultra-550b-a55b"
+TOOLS_MODEL = os.environ.get("JIMMY_TOOLS_MODEL") or "openai/gpt-oss-20b"
+# A retired model (404/410) moves the chat to the next of these instead of failing.
+MODEL_FALLBACKS = ("openai/gpt-oss-20b",)
 # Thinking off: ~1 s to first word. On: ~2.5 s, same answer quality on recall
 # questions. Turn it on per call for heavy syntheses, not for chat.
 THINKING = False

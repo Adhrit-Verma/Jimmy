@@ -80,6 +80,7 @@ def d41(text: str, targets: list) -> tuple[str, str | None]:
 
 
 _LLM = None
+_MODEL = None
 
 
 def agent(text: str, targets: list, screen: str | None) -> tuple[str, str | None]:
@@ -100,7 +101,7 @@ def agent(text: str, targets: list, screen: str | None) -> tuple[str, str | None
     time.sleep(0.4)                  # the endpoint rate-limits bursts (429 on 3 of 130)
     global _LLM
     from jimmy.llm import LLM
-    _LLM = _LLM or LLM()
+    _LLM = _LLM or (LLM(model=_MODEL) if _MODEL else LLM())
     return first_decision(text, targets, screen, STATE, _LLM, now=NOW)
 
 
@@ -108,7 +109,10 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--system", default="agent", choices=["d41", "agent"])
     ap.add_argument("--only", type=int, default=0)
+    ap.add_argument("--model", default=None, help="one model for everything (default: config TOOLS_MODEL for tool picks)")
     a = ap.parse_args()
+    global _MODEL
+    _MODEL = a.model
     cases = json.loads((HERE / "eval" / "real_commands.json").read_text(encoding="utf-8"))["cases"]
     cases = cases[:a.only] if a.only else cases
     right = tool_right = 0
