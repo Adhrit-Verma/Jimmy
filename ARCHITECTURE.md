@@ -102,6 +102,7 @@ every screen reader charges.
 | `bus.py` | the one loop, capture-window lifecycle | screen on the calling thread, audio on its own |
 | `insights.py` | where the day went (D31) | estimated from frame times, gap-capped; no model, no new capture |
 | `proactive.py` | cards Jimmy writes itself (D32) | resume, focus offer, reminders, deadlines, recap; acts only on Jimmy |
+| `agent.py` | the agent (D42) | one loop with native tool calls: sees Jimmy's status, the user wiki's index, their lists and the window's numbered controls; acts, looks again; plan once + risky steps; code guards on ids, typed text and names |
 | `act.py` | the virtual cursor's hands (D41) | UI Automation controls of the window in front, matched by name, driven by their own patterns after a yes; no mouse or key events; apps opened by Start-menu shortcut |
 | `presence.py` | webcam presence for the curtain (D34, D37, D39) | finds your face once, then follows where you sit (template match when the face is lost); identity per track; resting looks while you're away; for your face only, "looking at the screen" and "lips moving" as yes/no history |
 | `__main__.py` | `run` / `search` / `stats` / `doctor` | `doctor` reports what actually works on this machine |
@@ -281,6 +282,11 @@ strip thumbnails (`/thumb?w=`), and deep links: `open_view` events and
    follow-ups, and the pill says so; lips veto only after "eye calibration"
    (Presence._calib_tick → presence.calibrate → settings); "scroll" → overlay →
    POST /scroll_window → screen.scroll_active → UI Automation ScrollPattern, else wheel
+ D42: route() keeps the fast commands; ask.to_agent() sends chat, history questions and
+   screen actions to agent.Agent: context → chat_tools → one tool → (read tools feed back,
+   screen actions wait for a plan's yes, Jimmy's features and questions end the request)
+   → Asker._agent_out runs it through _use_tool / the answer flow. Each request → a trace
+   (jimmy.db). jimmy/wiki.py (OKF) keeps the user wiki; its index is in every step.
  D41: route() places the clear phrases; everything else in chat/recall → the tool pick
    with <state> (reminders, goals, memories with ids + the last turn), while recall
    evidence is fetched in parallel; "answer" → on as before. Lists by voice →

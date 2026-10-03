@@ -252,6 +252,21 @@ optimised JPEG, face detection at thumbnail size.
 
 ---
 
+## Jimmy as an agent (D42) — built, and NOT built
+
+Built: the agent loop with native tools and full context; multi-step screen tasks
+(plan once + risky steps); look at the screen with numbered marks; find controls;
+close apps and tabs; the decision log and `jimmy trace`; the frozen real-command eval
+(95 %, baseline 71 %); the user wiki in OKF with confirm/delete in the Memory tab;
+calls kept by app name.
+
+| Not built | Why / what it needs |
+|---|---|
+| Whisper hint words from the screen | The agent's matching fixed the eval's mishearings; hint words need real recordings to prove they don't add errors. |
+| Clicking controls with no UI Automation pattern | Needs real mouse events: lands wherever the pointer's target is; its own design. |
+| Canvas apps (games, some editors) | No controls to number; vision could point at pixels, but acting needs the mouse. |
+| OKF for screen history | OKF's own guidance: curated core only; history stays search (a tool). |
+
 ## Hands and eyes (D41) — built, and NOT built
 
 Built: every unplaced request picked by the model with the user's lists in

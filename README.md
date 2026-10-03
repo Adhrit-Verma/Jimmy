@@ -157,12 +157,17 @@ enough and the pill says so; *"Jimmy, I'm not on a call"* if you aren't.
 <tr>
   <td><b>Your lists</b></td>
   <td><i>"show me my reminders"</i> · <i>"move the railway reminder to 10 tomorrow"</i> · <i>"my new goal is to learn AWS"</i> · <i>"mark the essay done"</i> · <i>"remember my standup moved to 11"</i> · <i>"what do you know about me?"</i></td>
-  <td>Reminders, goals and the things you told it, read and changed by voice. The <b>Memory</b> tab (timeline window, key 3) lists them to edit, tick off, select and delete.</td>
+  <td>Reminders, goals and the things you told it, read and changed by voice. The <b>Memory</b> tab (timeline window, key 3) lists them to edit, tick off, select and delete, plus <b>your wiki</b>: what Jimmy knows about you (projects, people, habits), which you confirm or delete.</td>
 </tr>
 <tr>
   <td><b>Hands</b></td>
-  <td><i>"click Sign in"</i> · <i>"press the play button"</i> · <i>"type hello into the search box"</i> · <i>"open Chrome"</i></td>
-  <td>Jimmy's own cursor glides to the control and rings it; it presses or types only after your <i>"yes"</i>, through Windows' accessibility, never your mouse. Apps open by name.</td>
+  <td><i>"click Sign in"</i> · <i>"the blue link"</i> · <i>"search YouTube for CarryMinati"</i> · <i>"close this tab"</i> · <i>"open Chrome"</i> · <i>"close Discord"</i></td>
+  <td>A task gets a short plan and one <i>"yes"</i>; Jimmy's own cursor then does each step and reads the screen again. Anything that can't be undone asks again. Through Windows' accessibility, never your mouse. It understands controls by name, and by look ("the yellow icon") by looking at the screen.</td>
+</tr>
+<tr>
+  <td><b>About Jimmy</b></td>
+  <td><i>"do you have a cursor?"</i> · <i>"am I on a call?"</i> · <i>"what did you just do?"</i> · <i>"Discord isn't a call"</i></td>
+  <td>Answered from its live state. Every request is logged: <code>python -m jimmy trace</code>.</td>
 </tr>
 <tr>
   <td><b>Proposals</b></td>
@@ -478,8 +483,10 @@ These are **absent code paths**, not settings that happen to be off.
   *"yes"*: a scroll, or pressing / typing into the control its cursor is showing you. It never moves
   your mouse, never acts in banking or password-manager windows, and never types into a password box.
 - **What leaves the laptop:** only the evidence shown with an answer (at most 6,000 characters, and
-  only with a key set), the rare RECALL candidates the cloud double-checks, and, for a question about
-  your screen, that window's latest picture (faces already blurred; never an excluded window). Set
+  only with a key set), the rare RECALL candidates the cloud double-checks, for a question about
+  your screen (or a task that needs a look) that window's latest picture (faces already blurred; never
+  an excluded window), the names of the window's buttons and boxes while Jimmy works out a request,
+  and once a day what it needs to keep your wiki (your lists, your questions to it, window titles). Set
   `JIMMY_RECALL_VERIFY=none` to keep cards fully local, and `VISION_SCREEN = False` for text-only
   screen answers.
 
@@ -541,15 +548,12 @@ The performance pass (D38) was checked for **equivalence on a frozen copy of the
 | + · Polish | Remember my face, English + Hindi, a performance pass | ✅ |
 | + · Live | A curtain that follows you, resting while you're away, asking without the name, timers, forgetting a span | ✅ |
 | + · Hands and eyes | Understanding in context, your lists by voice and in a Memory tab, seeing the screen, a virtual cursor (one action per yes) | ✅ |
-| **Next** · Multi-step tasks | Plans of several actions with a visible "Jimmy is driving" mode, plan approval and a hard stop before anything irreversible | 🧭 designed |
-
-Single actions are built, each confirmed. Multi-step tasks wait on one decision: how much of a plan
-to approve at once ([`TIMELINE.md`](TIMELINE.md) → Next). Other ideas are in [`SCOPE.md`](SCOPE.md) →
+| + · Agent | One loop that sees its state, your wiki, your lists and the screen; multi-step tasks on one yes; a decision log; 95 % on 130 real commands (was 71 %) | ✅ | Other ideas are in [`SCOPE.md`](SCOPE.md) →
 *Possible future changes*. The biggest known gap: the vision models this key can reach are
 mid-size, so a picture alone (canvases, video) is described less exactly than a window's text.
 
 <details>
-<summary><b>Checks</b>: 114 assert-based checks and a 169-utterance command matrix, no test framework</summary>
+<summary><b>Checks</b>: 123 assert-based checks, a 169-utterance command matrix and a 130-command live eval</summary>
 
 ```powershell
 .\.venv\Scripts\python.exe tests\test_stage1.py    # 15 · capture, blur, store
@@ -562,6 +566,8 @@ mid-size, so a picture alone (canvases, video) is described less exactly than a 
 .\.venv\Scripts\python.exe tests\test_stage8.py    #  7 · the first real session's misses
 .\.venv\Scripts\python.exe tests\test_stage9.py    # 14 · curtain that follows you, no-name asks, calibration, forget, timers
 .\.venv\Scripts\python.exe tests\test_stage10.py   #  7 · your lists by voice, heard feedback, cursor, Memory tab, vision
+.\.venv\Scripts\python.exe tests\test_stage11.py   #  9 · the agent: plans, risky steps, typing guard, trace, wiki
+.\.venv\Scripts\python.exe tests\eval_agent.py     #  live: 130 real commands, rules + agent (95 %)
 .\.venv\Scripts\python.exe tests\test_face.py      #  6 · remember my face
 .\.venv\Scripts\python.exe tests\test_commands.py  #  4 · 169 commands, talk that mustn't trigger, a drill
 .\.venv\Scripts\python.exe tests\eval_tools.py     #  live: the model's tool pick, English + Hindi
@@ -590,6 +596,7 @@ Jimmy/
 │   ├── insights.py       where the day went, estimated from captures
 │   ├── presence.py       webcam presence for the privacy curtain
 │   ├── act.py            the virtual cursor's hands (UI Automation, one action per yes)
+│   ├── agent.py          the agent: context, native tools, the loop, plan approval
 │   ├── api.py            127.0.0.1 API for the overlay (stdlib only)
 │   └── config.py         every tunable, with its reasoning
 ├── jimmy/              the core: the one LLM client, memory, card engine

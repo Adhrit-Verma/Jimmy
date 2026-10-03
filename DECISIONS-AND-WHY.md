@@ -1723,3 +1723,109 @@ controls without patterns; scrolling or pressing inside canvas apps; a local
 vision model (none fits beside Whisper and qwen in 6 GB).
 
 Checks: `tests\test_stage10.py` (7), matrix 169, `tests\eval_tools.py` 59 cases.
+
+
+### D42 — Jimmy as an agent: understanding in context, tasks, a decision log, the user wiki (OKF)
+
+**Source:** the human's session on 2026-10-03 (01:34–01:51, 78 commands, mostly
+driving Chrome with the cursor) and their ask for "triple-A" understanding, "even
+if we dump RAG or any system", with Google's Open Knowledge Format as a candidate.
+The plan was approved with all four recommendations (below).
+
+**What the session showed (no decision log existed; reconstructed from commands):**
+references by look ("the yellow cartoon icon", "the blue link", "the first
+link", "cross", "X"): 8+; whole tasks done one approved click at a time ("type
+YouTube and click search", "search Kariminaati"): 7+, 12 yeses; Whisper
+mishearing on-screen names ("Cathedral"/"Guest Road" = Guest mode, "Clues Grum" =
+close Chrome, "Carry Minotti"): 6+; no way to close apps or tabs: 4; questions
+about Jimmy answered from screen history ("Do you have cursor?", "Do you think I
+am on a call?"): 2; the call rule blocking its own off-switch ("I'm not in a
+call" without the name): 6 lines. Root cause: a rule router with a model bolted
+on, which never saw the screen's controls, couldn't take two steps, and didn't
+know its own state.
+
+**Measured first.** `tests/eval/real_commands.json`: every unique command from
+all four sessions (130, frozen), with the outcomes that would be right, and four
+invented screens for the clicking cases (`tests/eval/screens.json`).
+`tests/eval_agent.py` scores the first decision (tool, and the control for
+clicks). **Baseline, the D41 system: 92/130 (71 %).** Almost every screen task
+missed.
+
+**The agent (`ambient/agent.py`).** One loop: look, think, act, look again.
+- **Native tool calls** on the same model (nemotron-3-super): measured on this key
+  with thinking off, 0.5–1.8 s per step and a sensible first step; with thinking
+  on, empty. Other models that called tools took 3–19 s (gpt-oss-20b,
+  nemotron-ultra, glm-5.3-flash) or timed out (deepseek-v4.1-flash).
+- **Every step sees** `<status>` (what Jimmy can do + live state: paused, curtain,
+  webcam, eye contact, calibration, who holds the mic, voice, focus, timers),
+  `<you>` (the wiki's index), `<lists>` (reminders, goals, memories with ids),
+  `<screen>` (the window in front: its controls from UI Automation, numbered in
+  reading order, with type and rough place), the last turns, then the request.
+- **50 tools**: each of Jimmy's own features by name (as one generic tool the model
+  answered "show me my reminders" in words), `answer` (hands a question to the
+  evidence panel: history / screen / time / chat), `reply`, `ask_user`, `plan`,
+  `click` / `type_text` / `submit` by control number, `open_url`, `open_app`,
+  `close_app`, `look_at_screen` (a picture with the controls' numbers drawn on, to
+  the vision model, D41), `find_controls`, `search_history`, `read_wiki`, `done`.
+- **Rules stay as fast paths** (decision 4): Jimmy's own commands, navigation,
+  usage questions, presence. Chat, history questions, and anything done on the
+  screen go to the agent (`ask.to_agent`). If the agent fails (or the model can't
+  call tools), the D41 path answers and the agent rests 60 s.
+- **Approval (decision 1, "plan once + risky steps"):** a screen task with more
+  than one action starts with `plan`; one yes runs its steps; anything risky
+  (send, delete, pay, submit, close window, close an app…) asks again on its own;
+  a single action without a plan asks each time. Each action is shown by Jimmy's
+  cursor first, done through UI Automation patterns, then the screen is read again
+  for the next step. "No" or "stop" ends the task.
+- **Code guards, not prompt hopes:** a control number not on screen is refused;
+  text to type must be words the user said (or answered); a click whose control
+  shares no words with the request moves to the control that clearly does
+  ("youtube link" picked "Videos" once); a tab's Close is named "Close (tab …)",
+  the window's "Close window" (risky: "Click X" once picked the window's).
+- **`submit`** presses Enter, but only after focusing the box through UI Automation
+  and checking the focus landed there: the one key event Jimmy sends.
+
+**Result: 124/130 (95 %)** through the real pipeline (rules, then the agent),
+median 0.8 s per decision; two runs 124 and 125 (one was a 429). Left: "Copy only
+bold letters" (looked instead of saying it can't), "Clues Grum" (searched history
+for the mishearing), "Gary Minati" alone, "the first link" (took the "All" filter
+link, the topmost), "Google search YouTube" (the YouTube tile). **A live task on
+a throwaway WinForms window:** "search for carryminati" → plan (2 steps) → yes →
+typed → pressed Search → done, 8.7 s; the window's label read "Results for
+carryminati".
+
+**The decision log (`traces` in jimmy.db).** Every request: what was heard, how
+(name / eye contact / follow-up / reply / a yes), the route, each agent step
+(tool, arguments, ms, result), what Jimmy said, total ms. `python -m jimmy trace`;
+"Jimmy, what did you just do?". The next session's failures can be read, not
+guessed.
+
+**OKF (decision 3).** Google's Open Knowledge Format (June 2026, v0.2): Markdown
+concept files with YAML front matter, an `index.md`, links between concepts;
+agents read the index and open what they need. Its own guidance: a small curated
+core, not large unstructured history. So it is **not** a replacement for screen
+history (which stays in `ambient/recall.py`, now a tool the agent calls), but it
+is right for what Jimmy knows about the user: `jimmy/wiki.py`, `data/okf/`. Code
+writes goals, memories, reminders (`verified: human:user`) and app habits
+(`verified: machine`, from Insights) on every change; the model compiles project /
+person / interest pages from memories, goals, the user's own questions and window
+titles once a day while away (`generated: model:…`, `verified: unverified` until
+"Looks right" in the Memory tab, which a recompile keeps). The agent sees the
+index every step and reads pages with `read_wiki`.
+
+**Calls (fixing D40):** "Discord isn't a call" / "don't consider Discord as a
+call" is kept by app name in settings (`not_call_apps`), not until the app takes
+the mic again; it works without the name even while a call is detected; "am I on
+a call?" is answered from `<status>`.
+
+**Not built:** Whisper hint words from the screen (the agent's own matching of
+misheard names to control names fixed the eval's cases; hint words need real
+recordings to prove they don't add errors); real mouse clicks for controls
+without patterns; a stronger vision model (none reachable on this key).
+
+**Decisions (the human's, 2026-10-03):** 1. plan once + risky steps; 2.
+screenshots to the cloud for clicking by appearance are fine; 3. OKF for the user
+wiki only; 4. keep fast rules for common commands.
+
+Checks: `tests\test_stage11.py` (9), `tests\eval_agent.py` (130 real commands,
+live), matrix 169.

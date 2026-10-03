@@ -28,7 +28,8 @@ throughput.
    user confirms. This matches Jimmy's existing rule about self-modification.
    *(D41, the first actions on other apps: one at a time, each shown by Jimmy's own
    cursor and done only on the user's yes, through accessibility patterns, never
-   in excluded windows or password boxes.)*
+   in excluded windows or password boxes. D42, the human's call: a task's plan is
+   approved once; anything irreversible inside it still asks on its own.)*
 2. **Face stage never persists, enrols or names.** See "Stage 1b" below. These are
    absent code paths, not settings that default to off.
    *Amended by the human on 2026-10-02 (D37), one exception:* **the owner's own

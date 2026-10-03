@@ -23,8 +23,10 @@ asking without the name, forget a span, timers), its first-session fixes (D40: c
 eye calibration, UIA scroll, fresh timeline after a forget) and D41: every unplaced request
 picked by the model with your lists in context, reminders/goals/memories by voice and in a
 Memory tab, "listening…/heard" feedback, seeing the screen (vision model), and a virtual
-cursor that presses or types after a yes. Next: multi-step tasks, waiting on the human's
-approval-level decision (`TIMELINE.md` → Next).** "Jimmy, …" → an
+cursor that presses or types after a yes. **D42: Jimmy is an agent** (`ambient/agent.py`):
+one loop that sees its own state, the user's wiki (OKF), their lists and the window's
+controls, picks native tools, runs multi-step screen tasks on one yes for a plan, and logs
+every decision (`python -m jimmy trace`). 95 % on the 130 real commands (was 71 %).** "Jimmy, …" → an
 evidence panel and a spoken answer, with no typing needed. Stage 3 (trigger gate) passed its 5-check
 list, blind-judged (D19–D22). Stage 4 is the Electron overlay (D23). Stage 5 is hybrid
 keyword + meaning recall and a timeline window (D24). Remaining work lives in
@@ -98,7 +100,11 @@ cd overlay; npm install; npm run build   # once, and after any change under over
 .\.venv\Scripts\python.exe tests\test_face.py     # 6 checks: remember-my-face capture, template, tracker
 .\.venv\Scripts\python.exe tests\test_stage9.py   # 14 checks: curtain follows you, presence thread, no-name asks, calls, calibration, forget, timers
 .\.venv\Scripts\python.exe tests\test_stage10.py  # 7 checks: lists by voice, remind asks what, heard feedback, cursor, Memory tab, vision fallback
+.\.venv\Scripts\python.exe tests\test_stage11.py  # 9 checks: the agent loop, plan/risky approval, typing guard, trace, calls, wiki
 .\.venv\Scripts\python.exe tests\test_commands.py # the command matrix: 169 utterances, talk, a drill
+.\.venv\Scripts\python.exe tests\eval_agent.py    # live: 130 real commands through rules + agent (95 %); --system d41 = 71 %
+.\.venv\Scripts\python.exe -m jimmy trace -n 20   # the decision log: heard, how, route, steps, said
+.\.venv\Scripts\python.exe -m jimmy wiki --build  # the user wiki (OKF) in data/okf; without --build prints its index
 .\.venv\Scripts\python.exe -m ambient forget "1 to 15 September"   # shows what goes, asks first
 .\.venv\Scripts\python.exe -m ambient compact      # VACUUM + FTS optimize (also runs while you're away)
 .\.venv\Scripts\python.exe tests\eval_tools.py    # live: the model's tool pick (59 cases, with sample lists; needs the key)
@@ -157,6 +163,11 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `ambient/act.py` | D41: the virtual cursor's hands: UI Automation controls of the window in front, name matching, `perform` (Invoke/Toggle/Select/Expand/SetValue) after a yes; opening apps by Start-menu shortcut. |
 | `overlay/src/Memory.jsx` | D41: the Memory tab: reminders, goals, memories; edit, done, delete, select. |
 | `tests/test_stage10.py` | D41 check: lists by voice through the tool pick, reminder ask-back, heard feedback, cursor offer/yes, Memory API, vision fallback. |
+| `ambient/agent.py` | D42: the agent. Context (`<status>`, `<you>`, `<lists>`, `<screen>`), 50 native tools, the loop, plan/risky approval, code guards (`name_check`, `said_by_user`), `first_decision` for the eval. |
+| `jimmy/wiki.py` | D42: the user wiki in Open Knowledge Format: code pages (goals, memories, reminders, habits), model pages (projects, people, interests), index, verify. `data/okf/`. |
+| `tests/test_stage11.py` | D42 check: the agent with a scripted model, through the Asker, traces, calls by name, the wiki. |
+| `tests/eval/` | D42: frozen real commands (`real_commands.json`) and invented screens (`screens.json`). Don't edit labels; add new files. |
+| `tests/eval_agent.py` | D42: live, the first decision on the frozen set: `--system agent` (rules + agent) or `d41` (the baseline). |
 | `tests/equiv_db.py` | D38: before/after equivalence of 43 read paths on a frozen copy of the real DB. Use it for any change to db/recall/insights/gate. |
 | `overlay/src/main.jsx` | picks the page by hash: the overlay, or `#timeline` / `#insights`; reduced motion respected. |
 | `overlay/src/index.css` | the transparent sheet, and the transform-only keyframes (equalizer, shimmer, progress). |
@@ -220,11 +231,12 @@ setting that defaults to off.
 11. **Jimmy proposes; you approve** (D32). Focus, page, draft, calendar event:
    each waits for your yes, and drafts/events go no further than your
    clipboard or your calendar app's own confirm.
-12. **Jimmy acts on another app only through UI Automation patterns, one action
-   per yes** (D35 scroll, widened by D41). Scroll when asked; press / tick / pick /
-   open / type only after Jimmy's virtual cursor has shown the control and you said
-   yes. No mouse or key events, never in excluded windows, never into a password
-   box. Multi-step tasks need their own approval design (the human's call).
+12. **Jimmy acts on another app only through UI Automation patterns, after a yes**
+   (D35 scroll, D41, D42). Each action is shown by Jimmy's cursor; one yes approves a
+   plan's steps, anything risky asks again on its own, a lone action asks each time.
+   No mouse events; the one key is Enter (`submit`), sent only after UI Automation
+   focused that box and the focus was checked. Never in excluded windows, never into
+   a password box, never text the user didn't say.
 
 ---
 
@@ -292,6 +304,10 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` (0.7–3.5 s; once 503 "request
   limit") and `meta/llama-3.2-11b-vision-instruct` (1.1–9 s). Gemma 4, Kimi K3,
   GLM-5.3, llama-3.2-90b-vision time out; phi-3-vision, gemma-3, vila, cosmos 404.
+- **Native tool calls (D42):** nemotron-3-super with thinking **off**: 0.5–1.8 s per
+  agent step; with thinking on it returned nothing. gpt-oss-20b 3–5 s, nemotron-ultra
+  1–9 s, glm-5.3-flash 19–36 s, deepseek-v4.1-flash timed out. A live 2-step task on a
+  WinForms window: 8.7 s from request to done (plan, yes, type, click).
 - **UI Automation controls (D41):** one `FindAll` on pattern availability: the
   Claude app, 113 actionable controls in 0.43 s. WinForms buttons and boxes take
   Invoke / SetValue; Tk windows expose nothing.
@@ -405,6 +421,13 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
 - **UI Automation off the main thread needs `auto.UIAutomationInitializerInThread()`**
   (the scroll runs on an API thread). `uiautomation`'s client is in
   `uiautomation.uiautomation._AutomationClient`; `TreeScope_Descendants` is 4.
+- **Read the decision log first** (D42): `python -m jimmy trace` shows what Jimmy
+  heard, how, which tools it called with what, and what it said. Then add the miss
+  to a new eval file, not to the frozen one.
+- **Agent tool ids are in reading order** (top to bottom, then left to right), so a
+  window's caption buttons come first. Tests that script ids must count them.
+- **Ambient code never builds a model client, even in eval helpers** (invariant 7):
+  `first_decision` takes the `llm` from its caller.
 - **Every unplaced request now costs one tool pick** (D41). Keep the rules for the
   fast, unambiguous phrases; the model resolves the rest with `<state>`. A failed
   pick pauses picks for 60 s (`_pick_down_until`). Re-run `tests/eval_tools.py`

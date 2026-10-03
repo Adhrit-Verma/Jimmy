@@ -277,7 +277,16 @@ memories(id INT PK, ts INT, source TEXT, text TEXT)   -- + memories_fts (externa
                                                       -- D41: + an UPDATE trigger, so edits re-index
 turns(id INT PK, ts INT, session TEXT, role TEXT /* 'user' | 'assistant' */, text TEXT)
 goals(id INT PK, created INT, text TEXT, state TEXT /* active|done|deleted */, done_ts INT)  -- D41
+traces(id INT PK, ts INT, heard TEXT, via TEXT, route TEXT, steps TEXT /* JSON */, said TEXT, ms INT)  -- D42
 ```
+
+D42: each agent step sends the model `<status>` (Jimmy's live state), `<you>` (the
+wiki's index), `<lists>`, `<screen>` (the window in front's control names, numbered,
+with rough positions; nothing from excluded windows), the last three turns and the
+request; read tools add their results (a look at the screen sends the latest blurred
+thumbnail with numbers drawn on). The wiki's daily compile sends memories, goals, the
+user's own questions to Jimmy (14 days) and the titles of their most-used windows.
+`data/okf/` holds the wiki (Markdown, never committed).
 
 D41: the tool pick sends the model the request, the last turn, and `<state>`: the
 waiting reminders, active goals and memories (text + id, ≤ 12 each). A screen

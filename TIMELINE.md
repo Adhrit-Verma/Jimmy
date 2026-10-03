@@ -213,6 +213,14 @@ call, an unmeasured lip veto, no visible calibration, a flickering eye, a stale
 timeline after a forget, scroll in Claude). Checks: `tests\test_stage9.py` (14),
 matrix (154), eval 41/41.
 
+## Jimmy as an agent · **built 2026-10-03 (D42)**
+
+The agent loop, multi-step tasks (stage (b) of mouse/keyboard control, with the
+human's "plan once + risky steps"), the decision log, the user wiki (OKF). Gate:
+the 130 real commands at ≥ 95 % through rules + agent: **124/130** (baseline 92).
+Checks: `tests\test_stage11.py` (9), `tests\eval_agent.py`. Live acceptance on the
+human's apps is open: read `python -m jimmy trace` after the next session.
+
 ## Hands and eyes · **built 2026-10-03 (D41)**
 
 Understanding in context (every unplaced request picked by the model with the
@@ -228,6 +236,8 @@ right in two runs). Live acceptance on the human's apps is open.
 
 **As of 2026-10-02 (end of the D31–D39 sessions):**
 
+0. **Done 2026-10-03 (D42):** stage (b) too: multi-step tasks, plan once + risky
+   steps (the human's answer to the open question below).
 1. **Mouse/keyboard control ("agentic") — stage (a), single confirmed actions, BUILT
    (D41: the virtual cursor, every action waits for a yes, all apps except excluded
    windows). Stage (b), multi-step tasks with plan approval, waits on the human's
