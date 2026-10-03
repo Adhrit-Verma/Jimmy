@@ -48,6 +48,9 @@ def _own_mic_keys() -> set[str]:
 # D40: mic holders you said aren't a call ("Jimmy, I'm not on a call"), as
 # (app key, when it took the mic): taking the mic again counts as a new call.
 _NOT_A_CALL: set[tuple[str, int]] = set()
+# D42: apps the user said are never a call ("Discord isn't a call"), by name; kept in
+# Jimmy's settings and loaded at start, so it survives a restart.
+NOT_CALL_APPS: set[str] = set()
 
 
 def other_app_using_mic() -> bool:
@@ -57,7 +60,8 @@ def other_app_using_mic() -> bool:
 def mic_holders() -> list[str]:
     """Apps other than Jimmy holding the mic now, minus those you said aren't a
     call. Names as Windows keys them ("C:#…#Discord.exe" or a package name)."""
-    return [k for k, start in _holders("microphone") if (k, start) not in _NOT_A_CALL]
+    return [k for k, start in _holders("microphone")
+            if (k, start) not in _NOT_A_CALL and app_label(k).lower() not in NOT_CALL_APPS]
 
 
 def not_a_call() -> list[str]:

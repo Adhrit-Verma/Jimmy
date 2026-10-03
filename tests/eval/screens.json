@@ -1,0 +1,28 @@
+{
+  "_note": "Window caption buttons are named as Jimmy shows them (\"Close window\", D42). Invented screens for tests/eval_agent.py (D42). Never real captures. Each control: [type, name, x%, y%] in reading order.",
+  "chrome_profiles": {"app": "chrome.exe", "title": "Google Chrome", "controls": [
+    ["button", "Minimize", 92, 1], ["button", "Close window", 98, 1],
+    ["text", "Who's using Chrome?", 50, 20],
+    ["button", "Adhrit", 35, 45], ["button", "Work", 50, 45], ["button", "Add", 65, 45],
+    ["button", "Guest mode", 50, 80], ["checkbox", "Show on startup", 50, 90]]},
+  "google_home": {"app": "chrome.exe", "title": "New Tab - Google Chrome", "controls": [
+    ["tab", "New Tab", 8, 2], ["button", "Close (tab New Tab)", 14, 2], ["button", "New Tab", 17, 2],
+    ["button", "Back", 1, 6], ["button", "Reload", 4, 6], ["edit", "Address and search bar", 40, 6],
+    ["link", "Gmail", 85, 12], ["link", "Images", 89, 12],
+    ["edit", "Search Google or type a URL", 50, 40], ["button", "Google Search", 44, 50],
+    ["button", "I'm Feeling Lucky", 56, 50], ["link", "YouTube", 40, 62], ["link", "WhatsApp", 50, 62]]},
+  "google_results": {"app": "chrome.exe", "title": "carryminati - Google Search - Google Chrome", "controls": [
+    ["tab", "carryminati - Google Search", 8, 2], ["button", "Close (tab carryminati - Google Search)", 14, 2],
+    ["tab", "YouTube", 22, 2], ["button", "Close (tab YouTube)", 28, 2], ["button", "New Tab", 31, 2],
+    ["button", "Close window", 98, 1], ["edit", "Address and search bar", 40, 6],
+    ["edit", "Search", 35, 12], ["button", "Google Search", 62, 12],
+    ["link", "All", 20, 17], ["link", "Videos", 25, 17], ["link", "Images", 30, 17],
+    ["link", "CarryMinati - YouTube", 30, 26], ["link", "CarryMinati - Wikipedia", 30, 38],
+    ["button", "Why is CarryMinati famous?", 30, 50], ["button", "What is CarryMinati's real name?", 30, 55],
+    ["link", "CarryMinati (@carryminati) - Instagram", 30, 66]]},
+  "youtube_home": {"app": "chrome.exe", "title": "YouTube - Google Chrome", "controls": [
+    ["tab", "YouTube", 8, 2], ["button", "Close (tab YouTube)", 14, 2], ["edit", "Address and search bar", 40, 6],
+    ["link", "YouTube Home", 6, 12], ["edit", "Search", 45, 12], ["button", "Search", 60, 12],
+    ["button", "Search with your voice", 64, 12], ["link", "Home", 3, 20], ["link", "Shorts", 3, 27],
+    ["link", "Subscriptions", 3, 34], ["button", "Got it", 50, 70], ["button", "Sign in", 95, 12]]}
+}

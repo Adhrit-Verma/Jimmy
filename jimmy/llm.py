@@ -141,6 +141,33 @@ class LLM:
         self._require_key()
         return self._once(self._body(messages, False, max_tokens, temperature, thinking))
 
+    def chat_tools(self, messages: list[dict], tools: list[dict], *, max_tokens: int = 500,
+                   temperature: float = 0.0) -> dict:
+        """D42: one step of the agent. The model's message, with `tool_calls` (OpenAI
+        format) or `content`. Thinking off: measured on nemotron-3-super with it on,
+        tool calls came back empty; off, 0.5-1.8 s and a sensible first step."""
+        self._require_key()
+        body = {**self._body(messages, False, max_tokens, temperature, False), "tools": tools, "tool_choice": "auto"}
+        for attempt in range(self.attempts):
+            try:
+                resp = self._http().post("/chat/completions", json=body)
+            except httpx.HTTPError as exc:
+                if attempt == self.attempts - 1:
+                    raise LLMError(f"LLM unreachable: {type(exc).__name__}: {exc}") from exc
+                time.sleep(config.RETRY_WAIT_S)
+                continue
+            if resp.status_code in config.RETRY_STATUSES and attempt < self.attempts - 1:
+                time.sleep(config.RETRY_WAIT_S)
+                continue
+            if resp.status_code != 200:
+                raise self._fail(resp)
+            msg = resp.json()["choices"][0]["message"]
+            f = ThinkFilter()
+            msg["content"] = (f.feed(msg.get("content") or "") + f.flush()).strip()
+            if msg.get("tool_calls") or msg["content"]:
+                return msg
+        raise LLMError(EMPTY)
+
     def chat_stream(self, messages: list[dict], *, max_tokens: int = config.MAX_TOKENS,
                     temperature: float = config.TEMPERATURE) -> Iterator[str]:
         """The answer token by token. A plain function, not a generator, so a

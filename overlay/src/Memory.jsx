@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Bell, Brain, Check, Pencil, Plus, RotateCcw, Target, Trash2, X } from "lucide-react";
+import { Bell, BookOpen, Brain, Check, ChevronRight, Pencil, Plus, RotateCcw, Target, Trash2, X } from "lucide-react";
 
 // D41: what Jimmy keeps for you, editable: reminders, goals, and things you asked it
 // to remember. The same lists Jimmy changes by voice ("move that reminder to 10").
@@ -106,6 +106,37 @@ function Section({ icon: Icon, title, kind, items, empty, sel, toggle, op, hint 
   );
 }
 
+// D42: the user wiki (OKF). Pages Jimmy wrote from your words are confirmed already;
+// pages the model compiled say "unconfirmed" until you say they look right.
+function WikiPage({ page, op }) {
+  const [open, setOpen] = useState(false);
+  const sure = String(page.verified || "").startsWith("human") || String(page.verified || "").startsWith("machine");
+  return (
+    <li className="rounded-lg hover:bg-white/[0.03]">
+      <div className="flex items-center gap-2 px-3 py-2">
+        <button onClick={() => setOpen((o) => !o)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+          <ChevronRight size={13} className={`shrink-0 text-neutral-500 transition ${open ? "rotate-90" : ""}`} />
+          <span className="truncate text-[13px] text-neutral-100">{page.title || page.path}</span>
+          <span className="shrink-0 rounded-full bg-white/[0.06] px-1.5 text-[10.5px] text-neutral-400">{page.type}</span>
+          {!sure && <span className="shrink-0 rounded-full bg-amber-400/15 px-1.5 text-[10.5px] text-amber-200">unconfirmed</span>}
+          <span className="truncate text-[12px] text-neutral-500">{page.description}</span>
+        </button>
+        {!sure && (
+          <button onClick={() => op({ op: "verify", kind: "wiki", path: page.path })} title="This is right"
+            className="flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-[11.5px] text-emerald-200 hover:bg-emerald-400/10">
+            <Check size={12} /> Looks right
+          </button>
+        )}
+        {String(page.path).match(/^(projects|people|interests)\//) && (
+          <button onClick={() => op({ op: "delete", kind: "wiki", path: page.path })} aria-label="Delete page" title="Delete page"
+            className="shrink-0 rounded p-1 text-rose-300 hover:bg-rose-500/15"><Trash2 size={13} /></button>
+        )}
+      </div>
+      {open && <pre className="whitespace-pre-wrap px-9 pb-3 font-sans text-[12.5px] leading-relaxed text-neutral-300">{page.body}</pre>}
+    </li>
+  );
+}
+
 export default function Memory() {
   const [data, setData] = useState(null);
   const [sel, setSel] = useState(() => new Set());
@@ -142,6 +173,17 @@ export default function Memory() {
         empty="No goals yet. Saying “focus on …” adds one too." hint="New goal…" />
       <Section icon={Brain} title="Things I remember" kind="memory" items={data.memories} sel={sel} toggle={toggle} op={op}
         empty="Nothing yet. Say “Jimmy, remember that …”." hint="Something to remember…" />
+      <section className="rounded-2xl bg-white/[0.03] p-4 ring-1 ring-white/[0.06]">
+        <h2 className="mb-1 flex items-center gap-2 text-[13px] font-medium text-neutral-100">
+          <BookOpen size={15} className="text-sky-300" /> What I know about you
+          <span className="text-neutral-500">{(data.wiki || []).length}</span>
+        </h2>
+        <p className="mb-2 px-1 text-[12px] text-neutral-500">Your wiki: Jimmy reads it before it acts. Rebuilt from your lists as they change, and from your week once a day.</p>
+        <ul className="flex flex-col">
+          {(data.wiki || []).map((pg) => <WikiPage key={pg.path} page={pg} op={op} />)}
+          {!(data.wiki || []).length && <li className="px-3 py-2 text-[12.5px] text-neutral-500">Nothing yet.</li>}
+        </ul>
+      </section>
       <AnimatePresence>
         {sel.size > 0 && (
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 12 }}

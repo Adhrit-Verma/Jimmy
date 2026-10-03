@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import time
 from typing import Iterable
@@ -126,6 +127,25 @@ def _doctor() -> int:
     return 1 if bad else 0
 
 
+def _trace(n: int) -> int:
+    """D42: the decision log, readable."""
+    import time as _t
+
+    from .memory import Memory
+    mem = Memory(config.MEMORY_DB)
+    for r in reversed(mem.traces(n)):
+        when = _t.strftime("%m-%d %H:%M:%S", _t.localtime(r["ts"] / 1000))
+        print(f"{when}  [{r['via'] or '?'}] {r['heard']!r}  -> {r['route']}  ({r['ms']} ms)")
+        for st in r["steps"]:
+            res = f"  => {st['result']!r}" if st.get("result") else ""
+            print(f"      {st['tool']}({json.dumps(st.get('args') or {}, ensure_ascii=False)[:100]}) "
+                  f"{st.get('ms', '')}ms{res[:120]}")
+        if r["said"]:
+            print(f"      said: {r['said'][:160]!r}")
+    mem.close()
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # model text on a cp1252 console
@@ -144,7 +164,29 @@ def main(argv: list[str] | None = None) -> int:
     f = sub.add_parser("focus", help="say what you mean to be doing (FOCUS cards), or show it")
     f.add_argument("intent", nargs="?")
     f.add_argument("--clear", action="store_true")
+    t = sub.add_parser("trace", help="what Jimmy heard, decided and did, newest first (D42)")
+    t.add_argument("-n", type=int, default=15)
+    w = sub.add_parser("wiki", help="the user wiki (OKF): build it, or print its index (D42)")
+    w.add_argument("--build", action="store_true")
     args = ap.parse_args(argv)
+    if args.cmd == "trace":
+        return _trace(args.n)
+    if args.cmd == "wiki":
+        from . import wiki
+        if not args.build:
+            print(wiki.index_text())
+            return 0
+        from ambient.db import Store
+
+        from .llm import LLM
+        from .memory import Memory
+        mem, store, llm = Memory(config.MEMORY_DB), Store(config.AMBIENT_DB), LLM()
+        try:
+            print(wiki.build(mem, store, llm))
+        finally:
+            mem.close()
+            store.close()
+        return 0
 
     if args.cmd == "chat":
         return _chat(args.session)

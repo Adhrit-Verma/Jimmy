@@ -163,6 +163,7 @@ OFFER_WAIT_S = 30            # "add it?" -> a bare "yes" counts for this long
 TIMER_SHOW_S = 3600          # D39: timers and reminders due within this long count down on the pill
 COMPACT_AFTER_AWAY_S = 600   # D39: away this long -> tidy the database (VACUUM + index merge)...
 COMPACT_EVERY_H = 24         # ...at most this often
+WIKI_EVERY_H = 24            # D42: the model-written wiki pages, recompiled while away, this often
 
 # --- privacy curtain: presence from your own webcam (D34, D39) ---------------
 # D39: your face is found once, then the place you sit is followed. Where you look

@@ -76,6 +76,11 @@ CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE ON memories BEGIN
     INSERT INTO memories_fts(rowid, text) VALUES (new.id, new.text);
 END;
 -- D41: what you're working towards, in your words. "Focus on X" also makes X a goal.
+-- D42: what Jimmy heard, how, what it decided and did, and what it said. One row a request.
+CREATE TABLE IF NOT EXISTS traces (
+    id INTEGER PRIMARY KEY, ts INT NOT NULL, heard TEXT, via TEXT, route TEXT,
+    steps TEXT, said TEXT, ms INT
+);
 CREATE TABLE IF NOT EXISTS goals (
     id INTEGER PRIMARY KEY, created INT NOT NULL, text TEXT NOT NULL,
     state TEXT DEFAULT 'active', done_ts INT
@@ -260,6 +265,21 @@ class Memory:
             n = self.conn.execute("DELETE FROM turns WHERE ts >= ? AND ts < ?", (since_ms, until_ms)).rowcount
             self.conn.commit()
         return n
+
+    def add_trace(self, t: dict) -> None:
+        import json
+        self._write("INSERT INTO traces(ts, heard, via, route, steps, said, ms) VALUES (?,?,?,?,?,?,?)",
+                    (int(t.get("ts") or time.time() * 1000), str(t.get("heard") or "")[:500], t.get("via") or "",
+                     t.get("route") or "", json.dumps(t.get("steps") or [], ensure_ascii=False)[:8000],
+                     str(t.get("said") or "")[:500], int(t.get("ms") or 0)))
+
+    def traces(self, n: int = 20) -> list[dict]:
+        import json
+        with self._lock:
+            rows = [dict(r) for r in self.conn.execute("SELECT * FROM traces ORDER BY id DESC LIMIT ?", (n,))]
+        for r in rows:
+            r["steps"] = json.loads(r["steps"] or "[]")
+        return rows
 
     def recent_turns(self, session: str, n: int) -> list[dict]:
         sql = """SELECT role, text FROM (SELECT id, role, text FROM turns WHERE session=?

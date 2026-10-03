@@ -164,6 +164,22 @@ class Jimmy:
         pieces = self._with_image(msgs, image) if image else self.llm.chat_stream(msgs)
         return self._save_as_it_streams(pieces, session)
 
+    def look(self, image: str, prompt: str) -> str:
+        """D42: one look at a picture for the agent ("which number is the blue link?").
+        The vision models in order, once each; "" if none answers."""
+        msg = [{"role": "user", "content": [{"type": "text", "text": prompt},
+                                            {"type": "image_url", "image_url": {"url": image}}]}]
+        for model in config.VISION_MODELS:
+            vision = LLM(key=self.llm.key, model=model, base_url=self.llm.base_url,
+                         transport=self.llm._transport, attempts=1, read_timeout_s=config.VISION_READ_TIMEOUT_S)
+            try:
+                return vision.chat(msg, max_tokens=250, temperature=0.0)
+            except LLMError as exc:
+                print(f"[vision] {model}: {str(exc)[:120]}; trying the next")
+            finally:
+                vision.close()
+        return ""
+
     def _with_image(self, msgs: list[dict], image: str) -> Iterator[str]:
         """D41: the vision models in order, once each, then the text model alone.
         The instructions and context go in the user turn beside the picture: one of

@@ -192,6 +192,8 @@ _CMD = (
                              re.I)),
     # D40: another app holds the mic, so Jimmy thinks you're on a call; you aren't.
     ("notcall", re.compile(r"^(?:i'?m|i am)\s+not\s+(?:on|in)\s+(?:a\s+)?(?:call|meeting)\W*$|"
+                           r"^(?:don'?t|never|do not)\s+(?:consider|count|treat)\s+\w+\s+as\s+(?:a\s+)?call\W*$|"
+                           r"^\w+\s+(?:is not|isn'?t)\s+(?:a\s+call|using (?:my |the )?mic)\W*$|"
                            r"^(?:it'?s|this is)\s+not\s+a\s+call\W*$|^no call\W*$|^not on a call\W*$", re.I)),
     ("click", re.compile(r"^(?:click|press|tap|hit|push)(?:\s+on)?\s+(?:the\s+)?(.{2,60}?)\W*$", re.I)),
     ("type", re.compile(r"^(?:type|enter)\s+(.{1,200}?)\s+(?:in|into|in to)\s+(?:the\s+)?(.{2,60}?)\W*$", re.I)),
@@ -199,6 +201,9 @@ _CMD = (
                             r"(chrome|google chrome|spotify|discord|vs ?code|visual studio code|word|excel|powerpoint|"
                             r"notepad|calculator|whatsapp|telegram|teams|zoom|edge|firefox|file explorer|explorer|"
                             r"settings|steam|obs|vlc|slack|notion|outlook)(?:\s+app)?\W*$", re.I)),
+    # D42: the decision log, asked for by voice.
+    ("lastdid", re.compile(r"^(?:what did you (?:just )?do|what have you (?:just )?done|what happened(?: just now)?|"
+                           r"why did you (?:do|say) that|what did you (?:hear|understand))\W*$", re.I)),
     # D39: talking to Jimmy without its name (eye contact), on or off, remembered.
     ("eyes", re.compile(r"^(?:only (?:answer|listen|respond)(?: to| when i say)? (?:your|my) name|name only|"
                         r"(?:stop|don'?t) (?:listen(?:ing)?|answer(?:ing)?) without (?:your|the|my) name|"
@@ -211,14 +216,14 @@ _CMD = (
     # D34: the privacy curtain by hand. Raised by voice; lifted by voice, hotkey or presence.
     ("curtain", re.compile(r"^(?:(?:turn on|switch on|enable|start|activate|put up|use)\s+(?:the\s+|my\s+)?)?"
                            r"(?:curtain|privacy(?: mode| screen| curtain)?)(?:\s+on)?\W*$|^hide (?:my )?screen\W*$|"
-                           r"^(?:close|draw|pull) the curtain\W*$", re.I)),
+                           r"^(?:close|draw|pull) the curtain\W*$|^(?:curtain|privacy) down\W*$|^down the curtain\W*$", re.I)),
     ("uncurtain", re.compile(r"^(?:lift|open|raise|remove|drop) the curtain|^show (?:me )?my screen\W*$|"
                              r"^(?:(?:turn off|switch off|disable|stop|end)\s+(?:the\s+|my\s+)?"
                              r"(?:curtain|privacy(?: mode| screen| curtain)?)|(?:curtain|privacy(?: mode)?) off|"
-                             r"i'?m back)\W*$", re.I)),
+                             r"i'?m back|curtain up)\W*$", re.I)),
     # D35: Jimmy's own clutter, gone: every panel, card and the timeline window.
     ("close_ui", re.compile(r"^(?:close|hide|clear|dismiss|remove|minimi[sz]e)\s+(?:all\s+(?:of\s+)?)?"
-                            r"(?:your|the|my|jimmy'?s)?\s*(?:ui|interface|panels?|windows?|cards?|suggestions?|notifications?|popups?|everything|"
+                            r"(?:your|the|my|jimmy'?s)?\s*(?:ui|uae|ua|u\.i\.?|interface|panels?|windows?|cards?|suggestions?|notifications?|popups?|everything|"
                             r"overlay|stuff|screen)\W*$|^(?:hide yourself|go away|clear the screen)\W*$", re.I)),
     # D35: "copy the text on my screen" copies; it doesn't read it out.
     ("copy_screen", re.compile(r"^(?:\w+\s+)?copy\s+(?:all\s+)?(?:of\s+)?(?:the\s+)?(?:text|everything|words|"
@@ -291,7 +296,9 @@ _NAV = [
     (r"(?:previous|previous one|back|go back|before that|the one before)", lambda m: {"action": "step", "by": -1}),
     (r"(?:go to the )?(?:start|beginning|first one|the first one)", lambda m: {"action": "edge", "to": "first"}),
     (r"(?:go to the )?(?:end|latest|the last one|most recent)", lambda m: {"action": "edge", "to": "last"}),
-    (r"(?:close|hide|dismiss)(?:\s+(?:it|that|this|the \w+))?|done|go away", lambda m: {"action": "close"}),
+    # D42: not "the tab/window/app": that's the browser's or the app's, for the agent.
+    (r"(?:close|hide|dismiss)(?:\s+(?:it|that|this|the (?!tabs?\b|windows?\b|apps?\b|browser\b|chrome\b|ua\b|uae\b)\w+))?"
+     r"|done|go away", lambda m: {"action": "close"}),
     (r"(?:zoom in|bigger|make it bigger|enlarge|show it|open it)", lambda m: {"action": "zoom"}),
     (r"(?:zoom out|smaller|make it smaller)", lambda m: {"action": "unzoom"}),
     (r"(?:go to |show )?(?:the )?(next|previous) day|(?:go )?(forward|back) a day",
@@ -457,6 +464,8 @@ def command(text: str) -> tuple[str, object] | None:
             return kind, (n * (60 if m[2][0].lower() == "h" else 1) if n else None)
         if kind == "volume":
             return kind, _volume_word(t)
+        if kind == "click" and re.fullmatch(r"(?:on|the|on the|it|this|that)?", (m[1] or "").strip(), re.I):
+            return kind, None                   # D42: "click on…": on what? (asked back)
         if kind in ("timer", "eyes"):
             return kind, t                      # the whole phrase: _do reads it
         if kind == "forget":
@@ -545,6 +554,16 @@ def route(text: str, last: dict | None = None, now: int | None = None) -> tuple[
     if re.match(r"(?:what|who|how|why|when|where|is|are|can|could|does|do|should|will)\b", t, re.I):
         return "chat", t
     return "recall", t                  # a bare topic ("the McKinsey form") means: find it
+
+
+def to_agent(mode: str, text: str) -> bool:
+    """D42 decision 4: the instant rules keep what they place with certainty (Jimmy's
+    own commands, navigation, usage questions...). The agent takes the rest: open
+    questions, chat, and anything done on the screen, which needs the screen's controls."""
+    if mode in ("chat", "recall"):
+        return True
+    c = command(text) if mode == "command" else None
+    return bool(c and c[0] in ("click", "type") and c[1])      # "click on…" alone is asked back
 
 
 def interpret(reply: str, now: int | None = None) -> str | None:
@@ -800,7 +819,9 @@ class Asker:
                  speak: Callable[[str], None] | None = None, jimmy=None,
                  screen_now: Callable[[], dict | None] | None = None,
                  actions: dict[str, Callable] | None = None):
-        self.store, self.publish, self.speak = store, publish, speak
+        self.store, self._publish_raw, self.speak = store, publish, speak
+        self._trace: dict = {"steps": []}
+        self.agent = None                  # D42: made on first use (ambient/agent.py)
         self.screen_now = screen_now or (lambda: None)
         self.actions = actions or {}      # D31: pause, resume, focus, hush, state (from the bus)
         self._jimmy = jimmy
@@ -818,6 +839,12 @@ class Asker:
         self.followup_until = 0            # D39: after Jimmy answers you aloud, no name needed until then
         self.armed_at = 0                  # ...counted from when its voice stops
         self.others_at = 0                 # D39: last time someone else was heard near the mic
+
+    def publish(self, ev: dict) -> None:
+        """Everything Jimmy shows goes through here; the trace keeps what it said."""
+        if ev.get("type") in ("toast", "answer_end") and ev.get("text"):
+            self._trace["said"] = str(ev["text"])[:300]
+        self._publish_raw(ev)
 
     def make_offer(self, kind: str, data, bare: bool = False, ttl_s: float | None = None) -> None:
         """Something Jimmy proposes and only you can approve: a focus, a calendar
@@ -837,6 +864,7 @@ class Asker:
         # D32: right after Jimmy offered something you asked for, neither does "yes".
         if (now < self.nav_until and nav(bare)) or (
                 self.offer and self.offer["bare"] and now < self.offer["until"] and _YES.match(bare)):
+            self._via = "nav or yes"
             self.ask(bare, "voice")
             return True
         if self.pending and now_ms() < self.listen_until and text.strip():
@@ -846,14 +874,17 @@ class Asker:
             body = reply if reply is not None else text.strip()
             if command(body) or (reply is not None and len(reply.split()) >= 4 and interpret(reply) is None):
                 self.pending = None       # "stop", or "Jimmy, <a new question>": drop the old one
+                self._via = "name"
                 self.ask(body, "voice")
                 return True
+            self._via = "reply"
             self.resolve(body, "voice")
             return True
         q = parse_wake(text)
         if q is None:
             if now_ms() < self.listen_until and (len(text.split()) >= 2 or command(text)):
                 self.listen_until = 0
+                self._via = "reply"
                 self.ask(text.strip(), "voice")
                 return True
             why, skip = self._unnamed(ts_start, ts_end, bare)
@@ -861,6 +892,7 @@ class Asker:
                 print(f"[ask] no name needed ({why}): {bare!r}")
                 # D41: show what was heard, so you know it was taken without the name.
                 self.publish({"type": "heard", "text": bare[:120], "via": why})
+                self._via = why
                 self.ask(bare, "voice")
                 return True
             if skip:
@@ -873,6 +905,7 @@ class Asker:
             self.listen_until = now_ms() + config.LISTEN_WINDOW_S * 1000
             self.publish({"type": "listening"})
             return True
+        self._via = "name"
         self.ask(q, "voice")
         return True
 
@@ -894,6 +927,8 @@ class Asker:
             return None, None
         if spoke is False:
             return None, ("your lips didn't move: someone else?" if looking else None)
+        if looking and (command(text) or ("",))[0] == "notcall":
+            return "eye contact", None             # D42: turning the call rule off can't need the name
         if _CLOSER.match(polite(text)):
             self.followup_until = 0             # "okay, thanks": the conversation's over
             return None, None
@@ -962,6 +997,12 @@ class Asker:
                 self.actions["forget_memory"](m["id"])
             self._changed()
             return "Forgotten. I keep nothing you told me now."
+        if o["kind"] == "agent":                                             # D42: go on with the task
+            q, src, aid = getattr(self, "_agent_ctx", ("", "voice", "agent"))
+            handoff = self._agent_out(self._agent().answer(True), q, src, aid)
+            if handoff is not None:
+                self.ask(handoff[1], src, force=handoff)
+            return ""
         if o["kind"] == "act" and "perform" in self.actions:                  # D41: the virtual cursor
             return self.actions["perform"](o["data"])
         if o["kind"] == "event" and "open_file" in self.actions:
@@ -1030,6 +1071,9 @@ class Asker:
         """Carry out a command the user gave (D31, D32, D34). Returns what to say about it."""
         act = self.actions
         if kind == "hush":
+            if self.agent is not None:
+                self.agent.cancel()                     # D42: "stop" stops a task too
+                self.publish({"type": "cursor", "hide": True})
             self.pending, self.listen_until = None, 0
             act.get("hush", lambda: None)()
             act.get("cancel_enrol", lambda: None)()
@@ -1048,11 +1092,19 @@ class Asker:
             return f"Opening {view}."
         if kind == "yes":
             return self.accept()
+        if kind == "no" and (self.offer or {}).get("kind") == "agent":
+            self.offer = None
+            self.publish({"type": "cursor", "hide": True})
+            out = self._agent().answer(False)
+            return out.say
         if kind == "no":
             if (self.offer or {}).get("kind") == "act":
                 self.publish({"type": "cursor", "hide": True})       # D41: the cursor goes away
             self.offer = None
             return "Okay, skipped."
+        if kind == "click" and not arg:
+            self.listen_until = now_ms() + config.CLARIFY_WAIT_S * 1000
+            return "Click on what?"
         if kind in ("click", "type"):
             if "point" not in act:
                 return "I can't do that from here."
@@ -1134,11 +1186,24 @@ class Asker:
             self.make_offer("forget", (since, until, label), bare=True)
             when = "everything I've captured" if label == "everything" else label
             return f"Delete {what} from {when}, {n['bytes'] / 1e6:,.0f} MB? It can't be undone. Say yes."
+        if kind == "lastdid":
+            # This request's own trace is written when it ends: the newest saved one is the last.
+            past = [t for t in act.get("traces", lambda n: [])(3) if (t.get("heard") or "").strip()][:1]
+            if not past:
+                return "I haven't done anything yet."
+            t = past[0]
+            did = ", then ".join(st["tool"].replace("_", " ") for st in t.get("steps") or []) or t.get("route") or "?"
+            return f"You said \u201c{t['heard']}\u201d. I took it as {did}" + \
+                (f", and said: {t['said']}" if t.get("said") else ".")
         if kind == "calibrate":
             return act["calibrate"]() if "calibrate" in act else "The webcam is switched off in config (PRESENCE)."
         if kind == "notcall":
-            if "not_a_call" not in act:
+            if "not_a_call" not in act and "not_a_call_app" not in act:
                 return "I can't do that from here."
+            named = re.search(r"(?:consider|count|treat)\s+(\w+)\s+as|^(\w+)\s+(?:is not|isn'?t)", question, re.I)
+            app = next((g for g in (named.groups() if named else ()) if g and g.lower() not in ("i", "it", "this")), None)
+            if "not_a_call_app" in act:
+                return act["not_a_call_app"](app)        # D42: remembered, by app name
             apps = act["not_a_call"]()
             return (f"Okay: {', '.join(apps)} using the mic isn't a call. I'll listen without my name."
                     if apps else "Nothing else is using the mic, so I don't think you're on a call.")
@@ -1266,9 +1331,92 @@ class Asker:
         print(f"[ask] tool: {got['tool']} {args}")
         return got["tool"], args
 
+    # --- D42: the agent ---------------------------------------------------------------
+    def _agent_ready(self) -> bool:
+        jim = self._jim()
+        llm = getattr(jim, "llm", None)
+        return bool(llm is not None and getattr(llm, "configured", False) and hasattr(llm, "chat_tools")
+                    and now_ms() >= getattr(self, "_agent_down_until", 0))
+
+    def _agent(self):
+        if self.agent is None:
+            from .agent import Agent
+            act = self.actions
+            nothing = lambda *a: "I can't do that from here."  # noqa: E731
+            self.agent = Agent(self._jim().llm, {
+                "window": act.get("agent_window", lambda: ("", "", None)),
+                "controls": act.get("agent_controls", lambda: []),
+                "status": act.get("status", lambda: ""),
+                "wiki_index": act.get("wiki_index", lambda: "(empty)"),
+                "wiki": act.get("wiki", lambda page: "(no such page)"),
+                "lists": self._state_text, "conversation": self._convo_text,
+                "look": act.get("look", lambda q, targets: "I can't see the screen from here."),
+                "search": self._search_text,
+                "open_app": act.get("open_app", nothing), "close_app": act.get("close_app", nothing),
+                "open_url": act.get("open_url_any", nothing), "perform": act.get("perform_target", nothing),
+                "submit": act.get("submit_target", nothing), "cursor": act.get("show_cursor", lambda t, a: None),
+                "progress": lambda said: self.publish({"type": "toast", "text": said, "icon": "act"})})
+        return self.agent
+
+    def _agent_out(self, out, question: str, source: str, aid: str) -> tuple[str, str] | None:
+        """Carry out what the agent decided. (mode, query) hands a question back to the
+        answer flow; None means it's handled here."""
+        self._agent_ctx = (question, source, aid)
+        self._trace["steps"] = list(getattr(self.agent, "last_steps", []) or [])
+        if out.kind == "answer":
+            q = out.data.get("question") or question
+            return {"history": "recall", "screen": "screen", "time": "stats", "chat": "chat"}.get(
+                out.data.get("kind"), "recall"), q
+        if out.kind == "done" and out.data.get("tool") == "jimmy":
+            a, args = out.data["action"], out.data.get("args") or {}
+            if a == "draft":
+                return "draft", question
+            if a == "not_a_call":
+                said = self.actions.get("not_a_call_app", lambda app: "I can't do that from here.")(args.get("app"))
+            elif self._use_tool({"open_view": "open", "forget_data": "forget"}.get(a, a), args,
+                                question=question, source=source, aid=aid):
+                return None
+            else:
+                said = "I couldn't do that."
+            self._say(said, question, source, aid)
+            return None
+        self._say(out.say or "Okay.", question, source, aid, awaiting=out.kind == "await")
+        if out.kind == "await":
+            if out.data.get("ask"):
+                self.listen_until = now_ms() + config.CLARIFY_WAIT_S * 1000
+                self.publish({"type": "listening", "prompt": "listening… your answer"})
+            else:
+                self.make_offer("agent", None, bare=True, ttl_s=60)
+                self.publish({"type": "listening", "prompt": "say yes or no", "ms": 20_000})
+        return None
+
+    def _say(self, text: str, question: str, source: str, aid: str, awaiting: bool = False) -> None:
+        """A short spoken line in the answer panel (the agent's replies, plans, questions)."""
+        self.publish({"type": "answer_start", "id": aid, "question": question, "source": source,
+                      "mode": "clarify" if awaiting else "chat", "history": []})
+        self.publish({"type": "answer_evidence", "id": aid, "mode": "clarify" if awaiting else "chat",
+                      "evidence": [], "window": None, "terms": [], "days": []})
+        self.publish({"type": "answer_delta", "id": aid, "text": text})
+        self.publish({"type": "answer_end", "id": aid, "text": text, "awaiting": awaiting})
+        self.turns.append({"q": question, "a": text, "mode": "chat", "query": question, "ts": now_ms()})
+        if source == "voice" and self.speak:
+            self.speak(text)
+
+    def _convo_text(self) -> str:
+        now = now_ms()
+        return "\n".join(f"user: {t['q']}\njimmy: {str(t['a'])[:200]}" for t in self.turns[-3:]
+                         if now - t["ts"] < config.CONVO_S * 1000)
+
+    def _search_text(self, query: str) -> str:
+        items, label, _ = gather_evidence(self.store, query)
+        return "\n".join(f"{e['day']} {e['time']} {e.get('app') or ''} {e.get('title') or ''}: {e['excerpt']}"
+                         for e in items[:6]) or "Nothing captured matches."
+
     def _changed(self) -> None:
-        """Reminders, goals or memories changed: the pill's timers and the Memory tab follow."""
+        """Reminders, goals or memories changed: the pill's timers, the Memory tab and the
+        wiki's pages (D42) follow."""
         self._state()
+        self.actions.get("lists_changed", lambda: None)()
         self.publish({"type": "memory_changed"})
 
     def _crud(self, tool: str, args: dict) -> str | None:
@@ -1507,10 +1655,23 @@ class Asker:
             self.publish({"type": "state", **self.actions["state"]()})
 
     def _run(self, question: str, source: str, force: tuple[str, str] | None = None) -> None:
+        # D42: what Jimmy heard, how, what it decided and did: one trace per request.
+        self._trace = {"ts": now_ms(), "heard": question, "via": getattr(self, "_via", "") or source,
+                       "route": "", "steps": [], "said": ""}
+        self._via = ""
+        t0 = time.monotonic()
         try:
             self._answer(question, source, force)
+        except Exception as exc:
+            self._trace["said"] = f"error: {type(exc).__name__}: {exc}"
+            raise
         finally:
             self.busy -= 1
+            self._trace["ms"] = int(1000 * (time.monotonic() - t0))
+            try:
+                self.actions.get("trace", lambda t: None)(self._trace)
+            except Exception:
+                pass
             if source == "voice":
                 self._arm(question)             # D39: a conversation, not one question at a time
 
@@ -1521,6 +1682,7 @@ class Asker:
             now = now_ms()
             last = self._conversation(now)
             mode, query = force or route(question, last, now)
+            self._trace["route"] = mode
             wait = getattr(self, "_remind_wait", None)
             if wait and now < wait[2] and not force and mode not in ("command", "nav"):
                 # D41: "set a reminder for tomorrow" -> "about what?" -> this is the what.
@@ -1551,10 +1713,42 @@ class Asker:
                 jim = self._jim()           # and open the cloud connection meanwhile
                 if hasattr(getattr(jim, "llm", None), "warm"):
                     threading.Thread(target=jim.llm.warm, daemon=True, name="warm").start()
+            ag = self.agent
+            if ag is not None and ag.task is not None and not force:
+                p = ag.task.pending or {}
+                if p.get("kind") == "answer" and mode not in ("command", "nav"):
+                    self._trace["route"] = "agent: your answer"
+                    handoff = self._agent_out(ag.answer(None, question), question, source, aid)
+                    if handoff is None:
+                        return
+                    mode, query, picks = handoff[0], handoff[1], False
+                elif not (mode == "command" and command(question)[0] in ("yes", "no")):
+                    ag.cancel()                  # something new: the waiting task is dropped
+                    self.publish({"type": "cursor", "hide": True})
+                    if (self.offer or {}).get("kind") == "agent":
+                        self.offer = None
+            if not force and (hindi or to_agent(mode, question)) and self._agent_ready():
+                # D42: the agent understands it with the screen, Jimmy's state, the
+                # user's wiki and lists in view, and acts or hands back a question.
+                self._trace["route"] = f"agent (rules said {mode})"
+                try:
+                    out = self._agent().start(question)
+                except Exception as exc:          # the model failed: the rules carry on
+                    print(f"[agent] {type(exc).__name__}: {exc}")
+                    self._agent_down_until = now_ms() + 60_000
+                    out = None
+                if out is not None:
+                    handoff = self._agent_out(out, question, source, aid)
+                    if handoff is None:
+                        return
+                    mode, query = handoff
+                    question = query if mode != "draft" else question
+                picks = False
             if picks:
                 # D35: it sounds like an instruction the rules don't know. Let the model
                 # pick a tool (or ask back) instead of answering "I can't do that".
                 # D36: or it's Hindi: the model's English goes through the same rules.
+                # D42: only when the agent can't run (no tool calling, or it just failed).
                 picked = self._pick_tool(question)
                 if picked and picked[0] != "answer" and self._use_tool(*picked, question=question,
                                                                        source=source, aid=aid):
@@ -1573,9 +1767,10 @@ class Asker:
             if mode == "command":
                 kind, arg = command(question)
                 said = self._do(kind, arg, question)
-                self.publish({"type": "toast", "text": said, "icon": kind})
-                if source == "voice" and self.speak and kind != "hush":
-                    self.speak(said)
+                if said:
+                    self.publish({"type": "toast", "text": said, "icon": kind})
+                    if source == "voice" and self.speak and kind != "hush":
+                        self.speak(said)
                 return
             if mode == "nav":
                 # D33: move around what's on show. Silent and instant; the pill says what happened.

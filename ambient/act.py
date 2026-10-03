@@ -28,7 +28,7 @@ _HINTS = {"button": "ButtonControl", "link": "HyperlinkControl", "box": "EditCon
           "checkbox": "CheckBoxControl", "check": "CheckBoxControl"}
 # Words that mean "can't take it back": the yes is asked with a warning (D41).
 RISKY = re.compile(r"\b(?:send|delete|remove|submit|pay|buy|purchase|order|post|publish|confirm|transfer|"
-                   r"sign out|log ?out|uninstall|discard|erase|reset|format|close account)\b", re.I)
+                   r"sign out|log ?out|uninstall|discard|erase|reset|format|close account|close window)\b", re.I)
 
 
 @dataclass
@@ -38,6 +38,8 @@ class Target:
     rect: tuple[int, int, int, int]  # left, top, right, bottom (physical screen pixels)
     can: frozenset                 # patterns: invoke / toggle / select / expand / value
     password: bool = False
+    uia_name: str = ""             # D42: the control's own name, to find it again ("Close")
+    hwnd: int = 0                  # D42: the window it lives in
 
     @property
     def center(self) -> tuple[int, int]:
@@ -86,6 +88,9 @@ def _patterns(ctrl, auto) -> frozenset:
     return frozenset(out)
 
 
+_CAPTION = {"Close", "Minimize", "Maximize", "Restore"}
+
+
 def controls(hwnd: int, limit: int = 600) -> list[Target]:
     """What in this window can be pressed, ticked, picked, opened or typed into."""
     import uiautomation as auto
@@ -113,13 +118,22 @@ def controls(hwnd: int, limit: int = 600) -> list[Target]:
                 r = c.BoundingRectangle
                 if r.width() <= 2 or r.height() <= 2:
                     continue
-                name = (c.Name or "").strip()
+                own = name = (c.Name or "").strip()
                 if not name and c.ControlTypeName == "EditControl":
                     name = (c.GetPropertyValue(auto.PropertyId.HelpTextProperty) or "").strip() or "text box"
                 if not name:
                     continue
+                if c.ControlTypeName == "ButtonControl" and name in _CAPTION:
+                    # D42: "Close" is the window's or a tab's: say which. "Click X" once
+                    # picked the window's Close (the whole app) for a tab.
+                    parent = c.GetParentControl()
+                    ptype = parent.ControlTypeName if parent else ""
+                    if ptype == "TitleBarControl":
+                        name = f"{name} window"
+                    elif ptype == "TabItemControl" and parent.Name:
+                        name = f"{name} (tab {parent.Name[:60]})"
                 out.append(Target(name[:120], c.ControlTypeName, (r.left, r.top, r.right, r.bottom),
-                                  _patterns(c, auto), bool(c.Element.CurrentIsPassword)))
+                                  _patterns(c, auto), bool(c.Element.CurrentIsPassword), own, hwnd))
             except Exception:
                 continue
     return out
@@ -133,7 +147,8 @@ def perform(hwnd: int, t: Target, text: str | None = None) -> str:
     with auto.UIAutomationInitializerInThread():
         root = auto.ControlFromHandle(hwnd)
         uia = _AutomationClient.instance().IUIAutomation
-        found = root.Element.FindAll(4, uia.CreatePropertyCondition(auto.PropertyId.NameProperty, t.name))
+        found = root.Element.FindAll(4, uia.CreatePropertyCondition(auto.PropertyId.NameProperty,
+                                                                     t.uia_name or t.name))
         best_c, best_d = None, 1e9
         for i in range(found.Length):
             c = auto.Control.CreateControlFromElement(found.GetElement(i))
@@ -165,6 +180,53 @@ def perform(hwnd: int, t: Target, text: str | None = None) -> str:
             (p.Collapse if p.ExpandCollapseState == 1 else p.Expand)()     # 1: expanded
             return f"Opened “{t.name}”."
         return f"I can't press “{t.name}” without your mouse."
+
+
+def submit(hwnd: int, t: Target) -> str:
+    """D42: press Enter in a box (to run what was typed there). The box is focused
+    through UI Automation and Enter is sent only if the focus really landed there,
+    so the key can't go anywhere else."""
+    import uiautomation as auto
+    from uiautomation.uiautomation import _AutomationClient
+    with auto.UIAutomationInitializerInThread():
+        root = auto.ControlFromHandle(hwnd)
+        uia = _AutomationClient.instance().IUIAutomation
+        found = root.Element.FindAll(4, uia.CreatePropertyCondition(auto.PropertyId.NameProperty,
+                                                                     t.uia_name or t.name))
+        box = next((auto.Control.CreateControlFromElement(found.GetElement(i)) for i in range(found.Length)
+                    if auto.Control.CreateControlFromElement(found.GetElement(i)).ControlTypeName == t.kind), None)
+        if box is None:
+            return f"\u201c{t.name}\u201d isn't there any more."
+        box.SetFocus()
+        focused = auto.GetFocusedControl()
+        if not focused or not auto.ControlsAreSame(focused, box):
+            return f"I couldn't put the cursor in \u201c{t.name}\u201d, so I didn't press Enter."
+        auto.SendKeys("{Enter}", waitTime=0.05)
+        return f"Searched in \u201c{t.name}\u201d."
+
+
+def close_app(name: str) -> str:
+    """D42: close an app's windows the way its own X does (WM_CLOSE): it may ask to
+    save. Only after the user's yes (the agent asks)."""
+    import ctypes
+
+    from .screen import _exe_for_pid
+    user32 = ctypes.windll.user32
+    want = re.sub(r"[^a-z0-9]", "", name.lower()).replace("google", "")
+    hits = []
+
+    def cb(hwnd, _):
+        if user32.IsWindowVisible(hwnd) and user32.GetWindowTextLengthW(hwnd):
+            pid = ctypes.c_ulong()
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            exe = re.sub(r"[^a-z0-9]", "", Path(_exe_for_pid(pid.value)).stem.lower())
+            if want and (exe == want or exe.startswith(want) or want.startswith(exe)) and exe != "electron":
+                hits.append(hwnd)
+        return True
+    user32.EnumWindows(ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)(cb), 0)
+    for h in hits:
+        user32.PostMessageW(h, 0x0010, 0, 0)        # WM_CLOSE
+    return f"Closed {name}." if hits else f"I don't see {name} open."
 
 
 # --- opening apps ----------------------------------------------------------------
