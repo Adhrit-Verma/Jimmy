@@ -73,7 +73,7 @@ cd C:\Code\Jimmy
 .\.venv\Scripts\python.exe -m jimmy chat             # talk to Jimmy (/context, /remember)
 .\.venv\Scripts\python.exe -m jimmy ask "what was I reading yesterday?"
 .\.venv\Scripts\python.exe -m jimmy remember "standup is at 10:30"
-.\.venv\Scripts\python.exe tests\test_stage2.py       # 14 checks, mocked network
+.\.venv\Scripts\python.exe tests\test_stage2.py       # 15 checks, mocked network
 
 .\.venv\Scripts\python.exe -m ambient replay --dry    # Tier 1 candidates only, free
 .\.venv\Scripts\python.exe -m ambient replay          # GO/NO-GO: <= 10 cards in any hour
@@ -293,10 +293,13 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   **without a key**, but **listed ≠ usable by this account**: several listed
   models return 404 "not found for account" or never answer. Only a round trip
   proves a model works.
-- **Default model `nvidia/nemotron-3-super-120b-a12b`, thinking off (D17):**
-  **~0.8–1.1 s to first word, ~1.4 s full answer**, clean output. Thinking on:
-  ~2.5 s, same answers. `nemotron-3.5-lightning` (the first pick) took **159 s**
-  and leaked its reasoning as plain text. Don't switch models without measuring.
+- **Models (D43): chat `nvidia/nemotron-3-ultra-550b-a55b`, tool picks `openai/gpt-oss-20b`,**
+  thinking off. D17's `nemotron-3-super-120b-a12b` reached **end of life 2026-10-03
+  (HTTP 410)**. Ultra: first word 1.0–1.4 s, full answer 2.0–2.5 s, clean; but
+  **HTTP 500 on 30 of 130 tool calls**, so it doesn't pick tools. gpt-oss-20b:
+  120/130 real commands, median 1.4 s (terse as a chat voice). `nemotron-3.5-lightning`
+  took 45–66 s and wrote garbage (in D17: 159 s). A 404/410 now moves the client to
+  the next model (`MODEL_FALLBACKS`) and prints it. Don't switch models without measuring.
 - **The hosted model sometimes returns 200 with an empty answer** (1 in 5 in the
   benchmark), and on 2026-09-25 came in runs. `LLM` makes 3 attempts, then raises.
   On 2026-10-03, 6 of 59 eval calls in one run.
@@ -304,9 +307,10 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` (0.7–3.5 s; once 503 "request
   limit") and `meta/llama-3.2-11b-vision-instruct` (1.1–9 s). Gemma 4, Kimi K3,
   GLM-5.3, llama-3.2-90b-vision time out; phi-3-vision, gemma-3, vila, cosmos 404.
-- **Native tool calls (D42):** nemotron-3-super with thinking **off**: 0.5–1.8 s per
-  agent step; with thinking on it returned nothing. gpt-oss-20b 3–5 s, nemotron-ultra
-  1–9 s, glm-5.3-flash 19–36 s, deepseek-v4.1-flash timed out. A live 2-step task on a
+- **Native tool calls (D42, D43):** thinking **off** (on, nemotron-3-super returned
+  nothing). gpt-oss-20b median 1.4 s per step (one 43 s run of empties in 130);
+  nemotron-ultra 500s; glm-5.3-flash 19–36 s, deepseek-v4.1-flash and kimi-k3 time out;
+  nemotron-nano-3, kimi-k2.6, mistral-large-2 404. A live 2-step task on a
   WinForms window: 8.7 s from request to done (plan, yes, type, click).
 - **UI Automation controls (D41):** one `FindAll` on pattern availability: the
   Claude app, 113 actionable controls in 0.43 s. WinForms buttons and boxes take

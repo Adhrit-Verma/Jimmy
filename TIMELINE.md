@@ -213,6 +213,12 @@ call, an unmeasured lip veto, no visible calibration, a flickering eye, a stale
 timeline after a forget, scroll in Claude). Checks: `tests\test_stage9.py` (14),
 matrix (154), eval 41/41.
 
+## Model end of life · **fixed 2026-10-03 (D43)**
+
+`nemotron-3-super` was retired mid-day (HTTP 410 on every answer). Chat moved to
+`nemotron-3-ultra`, tool picks to `gpt-oss-20b` (120/130 real commands), and a
+retired model now falls back instead of failing. Check: `tests\test_stage2.py` (15).
+
 ## Jimmy as an agent · **built 2026-10-03 (D42)**
 
 The agent loop, multi-step tasks (stage (b) of mouse/keyboard control, with the

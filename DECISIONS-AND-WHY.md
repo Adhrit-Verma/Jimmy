@@ -1829,3 +1829,38 @@ wiki only; 4. keep fast rules for common commands.
 
 Checks: `tests\test_stage11.py` (9), `tests\eval_agent.py` (130 real commands,
 live), matrix 169.
+
+---
+
+### D43 — The default model reached end of life; chat and tool picks split, with a fallback
+
+**2026-10-03.** Mid-session the overlay showed `LLM HTTP 410 … nemotron-3-super-120b-a12b
+has reached its end of life`. Every answer and every agent step failed: one model id in
+`jimmy/config.py` was a single point of failure.
+
+**Measured that day** (thinking off, this key):
+
+| model | plain answer | through Jimmy's prompt | agent, 130 real commands |
+|---|---|---|---|
+| nemotron-3-ultra-550b-a55b | 6.4 s cold | first word 1.0–1.4 s, full 2.0–2.5 s, clean | HTTP 500 on 30 calls (alone and in parallel) |
+| gpt-oss-20b | 1.2 s | 1.2–1.7 s, clean but terse ("I don't have that information." to "how are you?") | **120/130**, median 1.4 s |
+| nemotron-3.5-lightning-30b-a3b | 1.4 s | 45–66 s, garbage text | — |
+| nemotron-nano-3, kimi-k2.6, mistral-large-2, nemotron-ultra-253b | 404 | | |
+| glm-5.3-flash, deepseek-v4.1-flash, kimi-k3 | timeout | | |
+
+**Decision:** no single model was good at both jobs, so two settings:
+- `MODEL` = nemotron-3-ultra: chat, recall and screen answers (the best voice).
+- `TOOLS_MODEL` = gpt-oss-20b: `LLM.chat_tools`, i.e. every agent step.
+- `MODEL_FALLBACKS` = (gpt-oss-20b,): a 404/410 moves the client to the next model for
+  the rest of its life and prints one line; a retired tools model falls back to the
+  chat model. Only the default cloud client switches: vision and local clients keep the
+  model they were given, so a vision 404 still falls through D41's own chain.
+
+One client, one connection (invariant 7 unchanged): the tools model is a field of the
+same `LLM`, not a second client. Env overrides: `JIMMY_MODEL`, `JIMMY_TOOLS_MODEL`.
+
+Rejected: retrying 500s on ultra for tool calls (each costs ~0.7 s and they came in
+runs); lightning (D17's verdict stands).
+
+Checks: `tests\test_stage2.py` `test_retired_model_falls_back`; live, `JIMMY_MODEL=` the
+retired id answered through gpt-oss with the notice; `eval_agent.py --model` compares models.
