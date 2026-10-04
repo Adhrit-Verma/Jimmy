@@ -75,7 +75,8 @@ def _doctor() -> int:
     key = api_key()
     row(bool(key), "api key", f"{config.API_KEY_ENV} {'is set' if key else 'is NOT set'}")
     try:
-        r = httpx.get(f"{config.BASE_URL}/models", timeout=10)
+        r = httpx.get(f"{config.BASE_URL}/models", timeout=10,          # OpenAI lists only with a key
+                      headers={"Authorization": f"Bearer {key}"} if key and config.OPENAI else None)
         ids = {m["id"] for m in r.json().get("data", [])}
         # Listed is not the same as usable by this account: the round trip decides.
         row(config.MODEL in ids, "model", f"{config.MODEL} "

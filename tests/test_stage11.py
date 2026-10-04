@@ -172,6 +172,21 @@ def test_agent_failure_falls_back_to_the_rules():
     print("ok  the agent failing never silences Jimmy: the D41 path answers")
 
 
+def test_a_failure_mid_task_ends_it_with_words():
+    """2026-10-03: the model failed while Jimmy waited for the user's reply to its
+    question; the exception killed the ask thread and nothing was said."""
+    class Dies(Script):
+        def chat_tools(self, messages, tools, **kw):
+            if self.steps:
+                return super().chat_tools(messages, tools, **kw)
+            raise KeyError("choices")
+    ag = Agent(Dies(call("ask_user", question="Which tab?")), env([]))
+    assert ag.start("close the tab").kind == "await"
+    out = ag.answer(None, "the second one")
+    assert out.kind == "error" and out.say and ag.task is None
+    print("ok  a failure mid-task ends the task with a spoken line, not a dead thread")
+
+
 def test_calls_by_app_name_survive():
     import ambient.audio as audio
     from ambient.bus import ContextBus

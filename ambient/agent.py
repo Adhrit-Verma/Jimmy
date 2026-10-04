@@ -392,7 +392,17 @@ class Agent:
 
     # --- the user's answer to a pending step -----------------------------------------
     def answer(self, yes: bool | None, text: str = "") -> Outcome:
-        """yes=True/False for an approval; yes=None with text for an ask_user reply."""
+        """yes=True/False for an approval; yes=None with text for an ask_user reply.
+        A failure mid-task (the model, the screen) ends the task with a spoken line:
+        unlike `start`, there's no rule path left to fall back to."""
+        try:
+            return self._answer(yes, text)
+        except Exception as exc:
+            print(f"[agent] {type(exc).__name__}: {exc}")
+            self.task = None
+            return Outcome("error", "I lost the model partway through, so I stopped. Say it again?")
+
+    def _answer(self, yes: bool | None, text: str) -> Outcome:
         t = self.task
         if t is None or t.pending is None:
             return Outcome("error", "Nothing's waiting.")

@@ -5,13 +5,31 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+# D44: KEY=value lines from .env at the repo root (git-ignored) fill in whatever the
+# process environment doesn't already set: the API keys, JIMMY_PROVIDER, JIMMY_MODEL.
+try:
+    for _line in (ROOT / ".env").read_text(encoding="utf-8-sig").splitlines():
+        _k, _eq, _v = _line.strip().partition("=")
+        if _eq and _k and not _k.startswith("#"):
+            os.environ.setdefault(_k.strip(), _v.strip().strip('"').strip("'"))
+except OSError:
+    pass
 DATA_DIR = Path(os.environ.get("JIMMY_DATA") or ROOT / "data")
 MEMORY_DB = DATA_DIR / "jimmy.db"
 AMBIENT_DB = DATA_DIR / "ambient.db"   # read-only from here; the ambient layer writes it
 
 # --- the one LLM client (D14) -------------------------------------------------
-API_KEY_ENV = "NVIDIA_API_KEY"
-BASE_URL = os.environ.get("JIMMY_LLM_BASE_URL") or "https://integrate.api.nvidia.com/v1"
+# D44: which cloud. "nvidia" is free (NIM) and is the default; "openai" is paid
+# (GPT-6 Luna: $0.10 in / $0.50 out per 1M, ~Rs 270-455 a month at our usage).
+PROVIDER = os.environ.get("JIMMY_PROVIDER") or "nvidia"
+OPENAI = PROVIDER == "openai"
+API_KEY_ENV = "OPENAI_API_KEY" if OPENAI else "NVIDIA_API_KEY"
+BASE_URL = os.environ.get("JIMMY_LLM_BASE_URL") or (
+    "https://api.openai.com/v1" if OPENAI else "https://integrate.api.nvidia.com/v1")
+# OpenAI's reasoning, when a call asks for thinking (cards). Tool calls on Chat
+# Completions need "none" (gpt-6-luna's model page), so the agent never reasons.
+REASONING_EFFORT = os.environ.get("JIMMY_REASONING") or "low"
 # D43: nemotron-3-super (D17's pick) reached end of life on 2026-10-03 (HTTP 410).
 # Measured that day, thinking off: nemotron-3-ultra answers through Jimmy's prompt in
 # 1.0-1.4 s to first word, 2.0-2.5 s in full, clean; but it returned HTTP 500 on 30
@@ -19,10 +37,10 @@ BASE_URL = os.environ.get("JIMMY_LLM_BASE_URL") or "https://integrate.api.nvidia
 # 1.4 s, so it drives the agent. nemotron-3.5-lightning took 45-66 s and wrote
 # garbage. The endpoint's public model list is NOT what an account can use: several
 # listed models return 404 or time out. Measure before switching.
-MODEL = os.environ.get("JIMMY_MODEL") or "nvidia/nemotron-3-ultra-550b-a55b"
-TOOLS_MODEL = os.environ.get("JIMMY_TOOLS_MODEL") or "openai/gpt-oss-20b"
+MODEL = os.environ.get("JIMMY_MODEL") or ("gpt-6-luna" if OPENAI else "nvidia/nemotron-3-ultra-550b-a55b")
+TOOLS_MODEL = os.environ.get("JIMMY_TOOLS_MODEL") or (MODEL if OPENAI else "openai/gpt-oss-20b")
 # A retired model (404/410) moves the chat to the next of these instead of failing.
-MODEL_FALLBACKS = ("openai/gpt-oss-20b",)
+MODEL_FALLBACKS = ("gpt-5.4-nano",) if OPENAI else ("openai/gpt-oss-20b",)
 # Thinking off: ~1 s to first word. On: ~2.5 s, same answer quality on recall
 # questions. Turn it on per call for heavy syntheses, not for chat.
 THINKING = False
@@ -33,8 +51,9 @@ THINKING = False
 # Gemma 4, Kimi K3, GLM-5.3 and llama-3.2-90b-vision timed out; others 404.
 # Tried in order, once each; then the answer falls back to the window's text alone.
 VISION_MODELS = tuple(filter(None, (os.environ.get("JIMMY_VISION_MODEL"),
-                                    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
-                                    "meta/llama-3.2-11b-vision-instruct")))
+                                    *((MODEL,) if OPENAI else (
+                                        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+                                        "meta/llama-3.2-11b-vision-instruct")))))
 VISION_READ_TIMEOUT_S = 20.0
 TEMPERATURE = 0.3
 MAX_TOKENS = 600

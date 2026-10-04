@@ -212,16 +212,21 @@ def test_seeing_the_screen():
         body = json.loads(req.content)
         has_image = isinstance(body["messages"][-1]["content"], list)
         calls.append((body["model"], has_image))
-        if body["model"] == jcfg.VISION_MODELS[0]:
+        if body["model"] == "vision/one":
             return httpx.Response(503, json={"error": "Worker local total request limit reached"})
         chunk = {"choices": [{"delta": {"content": f"seen by {body['model'].split('/')[1][:10]}"}}]}
         return httpx.Response(200, text=f"data: {json.dumps(chunk)}\n\ndata: [DONE]\n\n",
                               headers={"content-type": "text/event-stream"})
 
     j = Jimmy(Memory(":memory:"), LLM(key="k", transport=httpx.MockTransport(handler)))
-    out = "".join(j.ask_stream("what's this chart?", session="s", snippets=[Snippet(1, "screen", "Sales by month")],
-                               image="data:image/jpeg;base64,AAAA"))
-    assert calls[:2] == [(jcfg.VISION_MODELS[0], True), (jcfg.VISION_MODELS[1], True)], calls
+    real_vision = jcfg.VISION_MODELS
+    jcfg.VISION_MODELS = ("vision/one", "vision/two")       # the chain, whichever provider is set (D44)
+    try:
+        out = "".join(j.ask_stream("what's this chart?", session="s", snippets=[Snippet(1, "screen", "Sales by month")],
+                                   image="data:image/jpeg;base64,AAAA"))
+    finally:
+        jcfg.VISION_MODELS = real_vision
+    assert calls[:2] == [("vision/one", True), ("vision/two", True)], calls
     assert out.startswith("seen by"), "the first vision model was busy: the second answered, with the picture"
     assert len(calls) == 2, "one attempt each, no retries, when another model can answer"
 

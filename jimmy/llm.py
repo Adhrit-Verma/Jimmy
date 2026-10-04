@@ -93,6 +93,7 @@ class LLM:
         self.attempts = attempts or ATTEMPTS   # D41: a vision model with a fallback tries once
         self.read_timeout_s = read_timeout_s or config.READ_TIMEOUT_S
         self.base_url = base_url.rstrip("/")
+        self.openai = "api.openai.com" in self.base_url
         self._transport = transport
         self._client: httpx.Client | None = None
 
@@ -123,6 +124,12 @@ class LLM:
     def _body(self, messages, stream, max_tokens, temperature, thinking=None) -> dict:
         # Both spellings of the switch: NVIDIA's chat templates differ by model family.
         think = config.THINKING if thinking is None else thinking
+        if self.openai:
+            # D44: OpenAI's reasoning models take an effort, count reasoning inside
+            # max_completion_tokens (so thinking gets headroom), and set temperature themselves.
+            return {"model": self.model, "messages": messages, "stream": stream,
+                    "max_completion_tokens": max_tokens + (2000 if think else 0),
+                    "reasoning_effort": config.REASONING_EFFORT if think else "none"}
         return {"model": self.model, "messages": messages, "stream": stream,
                 "max_tokens": max_tokens, "temperature": temperature,
                 "chat_template_kwargs": {"enable_thinking": think, "thinking": think}}
@@ -133,7 +140,7 @@ class LLM:
             detail = resp.read().decode("utf-8", "replace")[:300]
         except Exception:
             detail = ""
-        hint = {401: " (is NVIDIA_API_KEY correct?)", 403: " (key lacks access to this model?)",
+        hint = {401: f" (is {config.API_KEY_ENV} correct?)", 403: " (key lacks access to this model?)",
                 404: " (model id wrong? JIMMY_MODEL)", 410: " (model retired: set JIMMY_MODEL)", 429: " (rate limited)"}.get(resp.status_code, "")
         return LLMError(f"LLM HTTP {resp.status_code}{hint}: {detail}")
 
@@ -143,17 +150,28 @@ class LLM:
         back to the chat model; the chat model to MODEL_FALLBACKS."""
         if resp.status_code not in (404, 410):
             return False
-        self.fallbacks = [m for m in self.fallbacks if m != body["model"]]
-        if self.tools_model and body["model"] == self.tools_model:
+        gone = body["model"]
+        self.fallbacks = [m for m in self.fallbacks if m != gone]
+        if self.tools_model == gone:
             self.tools_model = None
-        elif self.fallbacks:
+        if self.model == gone and self.fallbacks:   # D44: on OpenAI one model does both jobs
             self.model = self.fallbacks.pop(0)
-        else:
+        if self.model == gone:
             return False
         print(f"[jimmy] model {body['model']} answered HTTP {resp.status_code}; now using {self.model}",
               file=sys.stderr, flush=True)
         body["model"] = self.model
         return True
+
+    def _message(self, resp: httpx.Response) -> dict:
+        """The reply's message. Seen 2026-10-03: a 200 whose body was an error object,
+        no `choices`, which crashed the agent. Treated like an empty answer: retried."""
+        try:
+            return resp.json()["choices"][0]["message"] or {}
+        except (ValueError, KeyError, IndexError, TypeError):
+            print(f"[jimmy] {self.model} answered 200 without a message: {resp.text[:160]}",
+                  file=sys.stderr, flush=True)
+            return {}
 
     def _require_key(self) -> None:
         if not self.configured:
@@ -188,7 +206,7 @@ class LLM:
                 continue
             if resp.status_code != 200:
                 raise self._fail(resp)
-            msg = resp.json()["choices"][0]["message"]
+            msg = self._message(resp)
             f = ThinkFilter()
             msg["content"] = (f.feed(msg.get("content") or "") + f.flush()).strip()
             if msg.get("tool_calls") or msg["content"]:
@@ -218,7 +236,7 @@ class LLM:
                 continue
             if resp.status_code != 200:
                 raise self._fail(resp)
-            msg = resp.json()["choices"][0]["message"]
+            msg = self._message(resp)
             f = ThinkFilter()
             answer = (f.feed(msg.get("content") or "") + f.flush()).strip()
             if answer:

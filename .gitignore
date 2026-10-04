@@ -1,4 +1,6 @@
 # Captured data never leaves this machine.
+# Neither do API keys (D44: .env holds OPENAI_API_KEY / NVIDIA_API_KEY).
+.env
 data/
 *.db
 *.db-wal

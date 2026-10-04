@@ -6,6 +6,7 @@ except the live network round trip is tested without an API key.
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from datetime import datetime
@@ -105,7 +106,8 @@ def test_llm_errors_are_clear():
     try:
         _llm(lambda r: httpx.Response(401, text="bad key")).chat([])
     except LLMError as exc:
-        assert "401" in str(exc) and "NVIDIA_API_KEY" in str(exc)
+        import jimmy.config as jc
+        assert "401" in str(exc) and jc.API_KEY_ENV in str(exc)
     else:
         raise AssertionError("401 must raise")
 
@@ -127,6 +129,49 @@ def test_llm_errors_are_clear():
     print("ok  llm errors + retry")
 
 
+def test_a_200_without_choices_is_retried():
+    """2026-10-03: NVIDIA answered 200 with an error object and no `choices`; the
+    client raised KeyError into the agent. Now it's an empty answer: retried."""
+    replies = iter([httpx.Response(200, json={"error": {"message": "worker problem"}}),
+                    httpx.Response(200, text="not json"),
+                    httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})])
+    assert _llm(lambda r: next(replies)).chat_tools([], [])["content"] == "ok"
+    try:
+        _llm(lambda r: httpx.Response(200, json={"error": "x"})).chat([])
+    except LLMError:
+        pass
+    else:
+        raise AssertionError("three bodies without a message must raise LLMError, not KeyError")
+    print("ok  a 200 without choices is retried, then a clear error")
+
+
+def test_openai_request_shape():
+    """D44: OpenAI's reasoning models reject NVIDIA's template switch and a set
+    temperature, and gpt-6-luna calls tools on Chat Completions only at effort "none"."""
+    seen = []
+
+    def handler(req):
+        seen.append(json.loads(req.content))
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+
+    llm = LLM(key="k", model="gpt-6-luna", base_url="https://api.openai.com/v1",
+              transport=httpx.MockTransport(handler))
+    llm.chat([], max_tokens=100)
+    llm.chat([], max_tokens=100, thinking=True)
+    llm.chat_tools([], [{"type": "function"}])
+    plain, think, tools = seen
+    assert "temperature" not in plain and "chat_template_kwargs" not in plain and "max_tokens" not in plain
+    assert plain["reasoning_effort"] == "none" and plain["max_completion_tokens"] == 100
+    assert think["reasoning_effort"] == "low" and think["max_completion_tokens"] > 100, "reasoning gets headroom"
+    assert tools["reasoning_effort"] == "none" and tools["tools"], "tools only without reasoning"
+    import subprocess
+    out = subprocess.run([sys.executable, "-c", "from jimmy import config as c; print(c.API_KEY_ENV, c.BASE_URL, "
+                          "c.MODEL, c.TOOLS_MODEL, c.VISION_MODELS)"], capture_output=True, text=True,
+                         cwd=str(Path(__file__).resolve().parents[1]), env={**os.environ, "JIMMY_PROVIDER": "openai"})
+    assert out.stdout.split()[:4] == ["OPENAI_API_KEY", "https://api.openai.com/v1", "gpt-6-luna", "gpt-6-luna"], out
+    print("ok  openai request shape (effort, no temperature) and the provider switch")
+
+
 def test_retired_model_falls_back():
     """D43: nemotron-3-super's end of life (HTTP 410) broke every answer. A gone
     model now gives way: the tools model to the chat model, the chat model to
@@ -143,7 +188,8 @@ def test_retired_model_falls_back():
 
     llm = LLM(key="k", transport=httpx.MockTransport(handler))
     assert llm.chat_tools([], [])["content"] == "fine"
-    assert asked == [jc.TOOLS_MODEL, jc.MODEL], asked
+    # NVIDIA: gpt-oss picks tools, ultra answers; OpenAI: Luna does both, so the fallback is next.
+    assert asked == [jc.TOOLS_MODEL, jc.MODEL if jc.TOOLS_MODEL != jc.MODEL else jc.MODEL_FALLBACKS[0]], asked
     gone, asked[:] = {jc.MODEL}, []
     llm = LLM(key="k", transport=httpx.MockTransport(handler))
     assert llm.chat([]) == "fine" and asked == [jc.MODEL, jc.MODEL_FALLBACKS[0]], asked
