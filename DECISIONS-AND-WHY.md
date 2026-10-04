@@ -1864,3 +1864,47 @@ runs); lightning (D17's verdict stands).
 
 Checks: `tests\test_stage2.py` `test_retired_model_falls_back`; live, `JIMMY_MODEL=` the
 retired id answered through gpt-oss with the notice; `eval_agent.py --model` compares models.
+
+**Same evening, the first live run on the new models:** the endpoint answered a tool
+step with **200 and an error object, no `choices`**. The client raised `KeyError`, and
+because it happened while Jimmy waited for the user's reply to its own question
+(`Agent.answer`), nothing caught it: the ask thread died silently. Two fixes, each
+where every caller passes: `LLM._message` treats a 200 without a message as an empty
+answer (retried, its body printed), and `Agent.answer` ends a failed task with a spoken
+line. `Agent.start` keeps raising, since that's where the rules take over.
+Checks: `test_a_200_without_choices_is_retried`, `test_a_failure_mid_task_ends_it_with_words`.
+
+---
+
+### D44 — OpenAI as a second provider (GPT-6 Luna), keys in `.env`
+
+**2026-10-05.** After D43 the human asked what a paid API would cost. Priced at our real
+usage (~70 cloud requests a day, ~850k input / ~80k output tokens with light reasoning;
+₹96.3 per $1): GPT-6 Luna ($0.10 / $0.01 cached / $0.50 per 1M) is **~₹270–455 a month**,
+about the same as Gemini 2.5 Flash-Lite (~₹245) and below DeepSeek Flash (~₹355) and
+gpt-5.4-nano (~₹595). GPT-6.1 Sol would be ~₹5,000–9,000, Astra ~₹27,000–45,000. Batch
+(−50 %) doesn't fit a voice assistant: results come within 24 h.
+
+**Decision:** one switch, `JIMMY_PROVIDER=openai`, not a second client (invariant 7).
+It picks `OPENAI_API_KEY`, `https://api.openai.com/v1` and `gpt-6-luna` for chat, tools
+and vision, with `gpt-5.4-nano` as the retirement fallback. NVIDIA stays the default
+until Luna is measured on the 130 real commands.
+
+OpenAI's request differs, so `_body` branches on the endpoint: `reasoning_effort`
+instead of `chat_template_kwargs`, `max_completion_tokens` (reasoning counts inside it,
+so thinking calls get 2,000 more), and no temperature. Luna's model page: tool calls on
+Chat Completions only with effort **"none"**, so the agent never reasons; thinking calls
+(cloud cards) use `REASONING_EFFORT` = low.
+
+`.env` at the repo root (git-ignored) fills whatever the environment doesn't set, read
+in `jimmy/config.py` with no new dependency. The human asked for it instead of `setx`.
+
+Found while running the tests under both providers: with one model doing chat and tools,
+a retired Luna would have been asked twice before the fallback; `_gone` now drops a gone
+model from every role at once. Tests no longer assume NVIDIA's model lineup.
+
+The free OpenAI tier (3–10 RPM, 50 RPD, no Luna) can't run Jimmy; the first payment
+moves an account to Tier 1 (Luna: 500 RPM, 500k TPM).
+
+Checks: `test_openai_request_shape`; stage 2, 10 and 11 pass with `JIMMY_PROVIDER` set to
+`nvidia` and to `openai`. Open: `eval_agent.py` on Luna once the human adds a key.

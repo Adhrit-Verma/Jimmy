@@ -284,6 +284,16 @@ ollama pull bge-m3
 setx NVIDIA_API_KEY "nvapi-your-key-here"
 ```
 
+Or put `NVIDIA_API_KEY=nvapi-…` in a `.env` file in the repo folder (git ignores it).
+
+To use OpenAI instead (paid; GPT-6 Luna is about ₹300–550 a month for normal use), put these
+two lines in `.env`:
+
+```
+OPENAI_API_KEY=sk-your-key-here
+JIMMY_PROVIDER=openai
+```
+
 Without a key, Jimmy still works offline. Each answer shows what retrieval *found*, which is
 exactly what would have been sent to the model.
 

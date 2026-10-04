@@ -73,7 +73,7 @@ cd C:\Code\Jimmy
 .\.venv\Scripts\python.exe -m jimmy chat             # talk to Jimmy (/context, /remember)
 .\.venv\Scripts\python.exe -m jimmy ask "what was I reading yesterday?"
 .\.venv\Scripts\python.exe -m jimmy remember "standup is at 10:30"
-.\.venv\Scripts\python.exe tests\test_stage2.py       # 15 checks, mocked network
+.\.venv\Scripts\python.exe tests\test_stage2.py       # 17 checks, mocked network
 
 .\.venv\Scripts\python.exe -m ambient replay --dry    # Tier 1 candidates only, free
 .\.venv\Scripts\python.exe -m ambient replay          # GO/NO-GO: <= 10 cards in any hour
@@ -100,7 +100,7 @@ cd overlay; npm install; npm run build   # once, and after any change under over
 .\.venv\Scripts\python.exe tests\test_face.py     # 6 checks: remember-my-face capture, template, tracker
 .\.venv\Scripts\python.exe tests\test_stage9.py   # 14 checks: curtain follows you, presence thread, no-name asks, calls, calibration, forget, timers
 .\.venv\Scripts\python.exe tests\test_stage10.py  # 7 checks: lists by voice, remind asks what, heard feedback, cursor, Memory tab, vision fallback
-.\.venv\Scripts\python.exe tests\test_stage11.py  # 9 checks: the agent loop, plan/risky approval, typing guard, trace, calls, wiki
+.\.venv\Scripts\python.exe tests\test_stage11.py  # 10 checks: the agent loop, plan/risky approval, typing guard, trace, calls, wiki, failure mid-task
 .\.venv\Scripts\python.exe tests\test_commands.py # the command matrix: 169 utterances, talk, a drill
 .\.venv\Scripts\python.exe tests\eval_agent.py    # live: 130 real commands through rules + agent (95 %); --system d41 = 71 %
 .\.venv\Scripts\python.exe -m jimmy trace -n 20   # the decision log: heard, how, route, steps, said
@@ -120,8 +120,14 @@ by serving the API (see `tests/test_stage5.py` for the hooks) and running
 
 Without `NVIDIA_API_KEY`, Jimmy runs **offline**: every answer shows what retrieval
 found instead of a model reply. That is intended, not a bug. The key is read from
-the process environment *or* `HKCU\Environment`, so a fresh `setx` works without
-restarting anything. Never read, print or ask for the key's value.
+the process environment, *or* `HKCU\Environment` (so a fresh `setx` works without
+restarting anything), *or* `.env` at the repo root (D44; git-ignored, loaded by
+`jimmy/config.py`). Never read, print or ask for the key's value, and never `cat` `.env`.
+
+`JIMMY_PROVIDER=openai` (env or `.env`) switches the cloud to OpenAI: `OPENAI_API_KEY`,
+`gpt-6-luna` for chat, tools and vision, `reasoning_effort` instead of NVIDIA's template
+switch (D44). Default is `nvidia`. Tests must pass under both: run stage 2, 10 and 11 with
+`JIMMY_PROVIDER=openai` after touching `jimmy/llm.py` or `jimmy/config.py`.
 
 `cv2` prints `net_impl_backend ... Targets are not supported` on import. It is
 harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
