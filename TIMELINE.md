@@ -17,6 +17,7 @@ result whenever either changes.
  [x] +  English and Hindi only  built 2026-10-02 (D36)
  [x] +  Remember my face        built 2026-10-02: guided capture, DPAPI template, spec amended (D37)
  [x] +  Performance             done 2026-10-02: roundtable + equivalence checks; search 2.8 s -> 0.5 s (D38)
+ [x] +  Live-session fixes      built 2026-10-05: traces, listening windows, slow steps, plans, windows, log (D45)
 ```
 
 ---
@@ -212,6 +213,19 @@ webcam (the follow match, the gaze zone, lips) is open.
 call, an unmeasured lip veto, no visible calibration, a flickering eye, a stale
 timeline after a forget, scroll in Claude). Checks: `tests\test_stage9.py` (14),
 matrix (154), eval 41/41.
+
+## The live session of 2026-10-05 · **fixed (D45)**
+
+From the report on that 28-minute session: per-request traces, listening windows
+counted from when you began, the call rule shown on the pill, "Timmy", slow agent
+steps (fallback model, "the model is slow", "stop" mid-task, "Still working on …"),
+plans that go on past a scroll, lone actions that end, stale control numbers refused,
+"Yes." to Jimmy's own question, focus for text boxes, window tools, tray popups
+skipped, lines cut at "and" joined, the console kept in `data/logs/jimmy.log`, and the
+P2 polish. Checks: `tests\test_stage12.py` (27; 0/27 on D44's code), matrix (177).
+**Open:** live acceptance on Windows (UIA window tools, omnibox focus, the Whisper
+prompt measured on recordings), `eval_agent.py` / `eval_tools.py` re-run with a key,
+and the human's call on keeping the name detector live during a pause.
 
 ## Model end of life · **fixed 2026-10-03 (D43)**
 

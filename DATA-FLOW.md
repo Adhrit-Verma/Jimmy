@@ -10,7 +10,8 @@ step can write it.
 
 ```
  0. paused? locked? curtain?    D32/D34: STOP before anything is read ────┐
- 1. active_window()              Win32: hwnd, exe, title.  Cheap, no COM.
+ 1. active_window()              Win32: hwnd, exe, title, class.  Cheap, no COM.
+    a shell popup (tray overflow, taskbar, Start/Search)? ─► STOP ("shell", D45) ┤
  2. Exclusions.check(app,title) ─── excluded? ─► STOP. Nothing captured. ─┤
     + focus in a password box (D32) counts as excluded                   │
  3. ScreenSource.grab()          DXGI pull. None => desktop unchanged. ───┤
@@ -109,14 +110,17 @@ Segment(ts_start, ts_end, source, pcm)
         │
         ▼  queue(maxsize=64) ─► transcribe thread
         │
-        ▼  Transcriber.transcribe
+        ▼  Transcriber.transcribe   (D45: initial_prompt = "Jimmy" + the open apps, each minute)
              RMS < 120?                    -> ""   (never decoded)
              no_speech_prob > 0.6?         -> drop segment
              avg_logprob < -1.0?           -> drop segment
              text in HALLUCINATIONS?       -> ""
+             only the prompt's words (>=3)? -> ""   (D45: an echo of the prompt)
         │
+        ▼  Joiner (D45): a line ending on "and / the / close / can you…" waits for the
+        │  next one (speech within 1.2 s) and they become one line; else it goes alone
         ▼  non-empty only
-Asker.hear(ts_end, source, text, ts_start)           (D25, D39)
+Asker.hear(ts_end, source, text, ts_start)           (D25, D39; D45: windows by ts_start)
    "…Jimmy…" (up to 3 words before it)  ─┐
    follow-up window after a spoken answer ├─► for Jimmy: source = 'command'
    eye contact + lips + a request          ┘
@@ -277,7 +281,9 @@ memories(id INT PK, ts INT, source TEXT, text TEXT)   -- + memories_fts (externa
                                                       -- D41: + an UPDATE trigger, so edits re-index
 turns(id INT PK, ts INT, session TEXT, role TEXT /* 'user' | 'assistant' */, text TEXT)
 goals(id INT PK, created INT, text TEXT, state TEXT /* active|done|deleted */, done_ts INT)  -- D41
-traces(id INT PK, ts INT, heard TEXT, via TEXT, route TEXT, steps TEXT /* JSON */, said TEXT, ms INT)  -- D42
+traces(id INT PK, ts INT, heard TEXT, via TEXT, route TEXT, steps TEXT /* JSON */, said TEXT, ms INT,
+       wait_ms INT)  -- D42; D45: wait_ms (behind another request) apart from ms (working), and
+                     -- steps carry ms (model) + tool_ms; pause/resume rows name their source in via
 ```
 
 D42: each agent step sends the model `<status>` (Jimmy's live state), `<you>` (the

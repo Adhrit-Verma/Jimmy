@@ -180,6 +180,11 @@ enough and the pill says so; *"Jimmy, I'm not on a call"* if you aren't.
   <td>Does it and confirms in the pill.</td>
 </tr>
 <tr>
+  <td><b>Your windows</b></td>
+  <td><i>"what's open on my PC?"</i> · <i>"switch to Chrome"</i> · <i>"minimize VS Code"</i> · <i>"maximize the window"</i></td>
+  <td>Lists, switches, minimizes or maximizes apps after your <i>"yes"</i>. Minimizing never closes anything.</td>
+</tr>
+<tr>
   <td><b>Voice & face</b></td>
   <td><i>"speak softer"</i> · <i>"mute your voice"</i> · <i>"remember my face"</i> · <i>"forget my face"</i></td>
   <td>Your settings are remembered. Face enrolment is guided on screen and takes about 20 seconds.</td>
@@ -192,9 +197,10 @@ enough and the pill says so; *"Jimmy, I'm not on a call"* if you aren't.
 </table>
 
 It understands times like *today*, *yesterday afternoon*, *on Tuesday*, *between 2 and 3*,
-*the last 20 minutes*, *an hour ago* and *last Friday*. Say just **"Jimmy"** and pause if you want to
-think first. To type instead, press **Ctrl + Alt + Space**. If a request doesn't match any rule, the
-cloud model picks one of Jimmy's own tools, asks you a short question back, or says plainly that it can't.
+*the last 20 minutes*, *an hour ago* and *last Friday*. Say just **"Jimmy"** if you want to think
+first: it answers *"Yes?"* and listens. To type instead, press **Ctrl + Alt + Space**. If a request
+doesn't match any rule, the cloud model picks one of Jimmy's own tools, asks you a short question back,
+or says plainly that it can't. Say *"stop"* to end a task that's running; if the model is slow, Jimmy says so.
 
 ---
 
@@ -516,6 +522,8 @@ template is yours, created only on request, and *"forget my face"* deletes it.
 - **OCR is optional.** Without the Tesseract binary, canvas-rendered apps and video contribute no
   text. Normal apps are unaffected.
 - **Every tunable** lives in [`ambient/config.py`](ambient/config.py), with its reasoning next to it.
+- **The console is kept** in `data\logs\jimmy.log` (five 2 MB files, rotating) for diagnosing a
+  session: what was heard and what was on screen appear only as lengths, never as text.
 
 </details>
 

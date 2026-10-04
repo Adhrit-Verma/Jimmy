@@ -103,7 +103,8 @@ every screen reader charges.
 | `insights.py` | where the day went (D31) | estimated from frame times, gap-capped; no model, no new capture |
 | `proactive.py` | cards Jimmy writes itself (D32) | resume, focus offer, reminders, deadlines, recap; acts only on Jimmy |
 | `agent.py` | the agent (D42) | one loop with native tool calls: sees Jimmy's status, the user wiki's index, their lists and the window's numbered controls; acts, looks again; plan once + risky steps; code guards on ids, typed text and names |
-| `act.py` | the virtual cursor's hands (D41) | UI Automation controls of the window in front, matched by name, driven by their own patterns after a yes; no mouse or key events; apps opened by Start-menu shortcut |
+| `act.py` | the virtual cursor's hands (D41) | UI Automation controls of the window in front, matched by name, driven by their own patterns after a yes; no mouse or key events; apps opened by Start-menu shortcut; D45: other top-level windows (list, switch, minimize/maximize/restore through `WindowPattern`), shell popups never count as a window |
+| `logs.py` | the console, kept (D45) | `ambient run` tees stdout/stderr to `data/logs/jimmy.log` (rotating); quoted text, card lines and gate reasons are cut to their length, keys scrubbed |
 | `presence.py` | webcam presence for the curtain (D34, D37, D39) | finds your face once, then follows where you sit (template match when the face is lost); identity per track; resting looks while you're away; for your face only, "looking at the screen" and "lips moving" as yes/no history |
 | `__main__.py` | `run` / `search` / `stats` / `doctor` | `doctor` reports what actually works on this machine |
 
@@ -123,7 +124,12 @@ audio-mic    ──► WASAPI read ──► to_mono16k ──► VadChunker ─
                                                              ├─► queue(64)
 audio-loopback (disabled by default) ────────────────────────┘        │
                                                                       ▼
-transcribe   ──► Whisper ──► filter ──► SQLite write (same lock)
+transcribe   ──► Whisper ──► filter ──► Joiner (D45) ──► SQLite write (same lock)
+
+ask (one thread per request) ──► Asker._answer ──► the lock (one answer at a time)
+                                   └─ trace: per thread (D45), wait_ms apart from ms
+agent-step (one per model call, D45) ──► chat_tools; the ask thread waits with a
+                                   wall-clock limit, asks the fallback, honours "stop"
 
 presence     ──► webcam 4 fps (resting: 1 look/s) ──► observe ──► bus._on_presence
                    └─ yes/no history (RAM) ◄── Asker._unnamed asks "was it you, looking?"
@@ -287,6 +293,13 @@ strip thumbnails (`/thumb?w=`), and deep links: `open_view` events and
    screen actions wait for a plan's yes, Jimmy's features and questions end the request)
    → Asker._agent_out runs it through _use_tool / the answer flow. Each request → a trace
    (jimmy.db). jimmy/wiki.py (OKF) keeps the user wiki; its index is in every step.
+ D45: each step runs on an "agent-step" thread; past STEP_TIMEOUT_S the fallback model
+   (LLM.tool_fallback) is asked too, past both the user hears "the model is slow", and
+   "stop" (Asker._still_working → Agent.cancel) ends it between steps or mid-wait. Inside
+   an approved plan Jimmy's features run via Asker._feature and the loop goes on; a lone
+   action ends the task. Windows: list_windows / focus_window / window_state → bus.
+   window_action → act (UIA). A shell popup in front → bus.agent_aw → the last app window.
+   While the agent waits for an ask_user answer (60 s), lines go to it unless new_request().
  D41: route() places the clear phrases; everything else in chat/recall → the tool pick
    with <state> (reminders, goals, memories with ids + the last turn), while recall
    evidence is fetched in parallel; "answer" → on as before. Lists by voice →

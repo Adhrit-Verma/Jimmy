@@ -1908,3 +1908,144 @@ moves an account to Tier 1 (Luna: 500 RPM, 500k TPM).
 
 Checks: `test_openai_request_shape`; stage 2, 10 and 11 pass with `JIMMY_PROVIDER` set to
 `nvidia` and to `openai`. Open: `eval_agent.py` on Luna once the human adds a key.
+
+### D45 — What the live session of 2026-10-05 got wrong
+
+**2026-10-05.** A 28-minute session (02:03–02:31), read from `traces`, `audio_segments`
+and `frames` by another instance and handed over as a report. 105 lines taken as
+commands (20 a bare "Jimmy?"), at least 15 meant for Jimmy stored as ambient speech,
+84 traces of which 3 duplicated, 3 missing and 3 with the wrong "heard", and requests
+of 47, 36 and 35 s. Discord held the mic all session. The human's experience: "Jimmy
+isn't listening / doesn't do what I said". Every fix below has a check in
+`tests/test_stage12.py` that fails on D44's code (0/27) and passes now (27/27).
+
+**P0 — the trace, the listening windows, slow steps.**
+- *Concurrent requests shared one trace.* `Asker._trace` was an attribute set in `_run`
+  before `_answer` took the lock; each utterance runs on its own thread, so a second
+  request replaced it and the first's route, steps and "said" landed in the second's.
+  Now the trace is per thread (`threading.local`, behind the same `_trace` name), and
+  `via` is captured in `ask()`, not read later. Traces record `wait_ms` (behind the
+  lock) apart from `ms` (working); the `traces` table gains a `wait_ms` column, added in
+  place to existing databases.
+- *Windows were checked against when Whisper finished.* After a bare "Jimmy", a long
+  request begun 4 s later ended outside the 8 s window. Every window (listen, follow-up,
+  navigation, a bare yes to an offer) is now checked against the line's `ts_start`, with
+  `WINDOW_GRACE_S` = 1 s. A line with no timing (`ts_end` 0, as typed tools and tests
+  pass) counts as now.
+- *The call rule was invisible.* On a call (D40), a no-name request is refused, and only
+  the console said so. The pill now says it, with the way out ("say Jimmy first, or
+  I'm not on a call"), at most once a minute (`CALL_HINT_EVERY_S`).
+- *"Timmy" and "Jimmy's"* wake Jimmy. Timmy is a real name, so after it only something
+  shaped like a request counts: "Timmy said he'd come later" stays talk (a new TALK row).
+- *Slow model steps, silent.* Steps took 10–30 s (healthy 1–2.5 s). Each agent step now
+  runs on a worker thread with a wall-clock limit (`STEP_TIMEOUT_S` = 8 s; httpx's read
+  timeout is per chunk, so it can't be the limit). Past it the fallback model is asked
+  too (`LLM.tool_fallback()`: the next fallback, else the chat model; `chat_tools(model=)`)
+  and whichever answers first is used; past both, the pill and voice say "The model is
+  slow right now, still trying", and at `SLOW_GIVE_UP_S` = 45 s the step fails into D43's
+  spoken error. Each step shows "thinking", and an approved plan's "Step k of n: …".
+  Steps record model and tool time apart (`ms`, `tool_ms`, plus `model` and `slow`).
+- *Talking over a running request.* "Stop" now reaches it at once: `Agent.cancel()` sets
+  a flag the loop checks between steps and while the model thinks (the stopped task
+  says nothing; the stop's own "Okay." does). Anything else said while a request has run
+  for 1.5 s shows "Still working on: <request>"; a repeat of it, or a "go ahead" while its
+  approved plan runs, is dropped with "Still working on that."
+
+**P1 — wrong actions and broken flows.**
+- *A scroll inside an approved plan ended it* ("click Images" never ran). Jimmy's own
+  features inside an approved plan now run through the same code a spoken command uses
+  (`Asker._feature`, capturing what it said) and the loop goes on with "Screen now". A
+  plan that ends early (an error, too many steps) says which steps didn't run.
+- *`find_controls` used 0.2*, so spelling alone matched ("Images" found "Guest",
+  "address" found "Add"). Now act.best's 0.45; nothing found lists the 10 controls near
+  the last one used. It reads the window again first, and after Enter or a link Jimmy
+  waits up to ~2.5 s for the controls to stop changing (the results page's "Images" tab
+  didn't exist yet when the screen was read).
+- *After one approved action the model got another turn* and proposed "Press New Tab?"
+  (the ids had shifted after a maximize). A lone action now ends with what it did; and
+  click / type / submit carry the control's name with its number: a number that now
+  names another control is refused ("Control 4 is now “New Tab”"). `test_stage11`'s
+  lone-action check now expects the task to end there.
+- *"Yes." to Jimmy's own question said "Nothing to confirm."* Yes/no route as commands,
+  so they went to `accept()`. While the agent waits for an answer (`ask_user`, now for
+  60 s: `ASK_TTL_S`), every line is that answer, except stop, "close your UI" and a clear
+  new request (`new_request`, P2-4). `SYSTEM` also says never to ask "do you want me to
+  <action>?": proposing the action already asks.
+- *Chrome's address bar has Value, not Invoke*, so "click" failed. `act.press`: a control
+  with only Value is "clicked" by UI Automation `SetFocus` ("Focused …"), no mouse.
+- *No window management.* "Minimize VS Code" became an offer to close it. New tools:
+  `list_windows` (read), `focus_window`, `window_state` (minimize / maximize / restore),
+  by app name (`act.pick_window`: exe, title, then closest spelling, so "Rome" finds
+  Chrome among the open windows), through UI Automation (`WindowPattern`, `SetFocus`:
+  invariant 12). Not risky, so one yes; close stays risky. Excluded windows and Jimmy's
+  own are never listed or touched. `SYSTEM`: minimize is never close.
+- *After closing Spotify the tray overflow popup was "the window"* and three requests ran
+  against it; capture stored it 16 times in 40 s. Shell classes (`act.SHELL_CLASSES`:
+  the tray overflow, taskbar, Start/Search core windows, desktop) are not windows: the
+  agent, the cursor and "what's on my screen" use the last real app window
+  (`ContextBus.agent_aw`), and the tick returns "shell" before capturing. Why the change
+  gate let the popup through: the gate compares the whole screen, so anything moving
+  behind a small popup (a video) counts as a change. Likely, not proven from the data.
+- *Lines cut at a pause, and the halves acted on.* "Can you close" (35 s before "cloud
+  code") closed Jimmy's panel; "scroll down and maximize" dropped the maximize. The
+  audio worker now holds a line ending on a dangling word (and, or, then, from, to,
+  the, a, an, on, in, of, close, open, click, search, "can you") and joins the next one
+  if speech began within `JOIN_GAP_MS` (1.2 s past VAD's own silence, about 2 s of real
+  pause); otherwise it goes alone once nothing more can belong to it (`audio.Joiner`).
+  `nav()`: "scroll down and/then <verb>" goes to the agent unless the verb is
+  show/see/find/look (D35's case); "can you close/hide/open" alone isn't navigation.
+- *The console wasn't saved.* `ambient run` tees stdout and stderr to
+  `data/logs/jimmy.log` (5 × 2 MB, rotating, timestamped; `ambient/logs.py`). Not a copy
+  of the captures: quoted text (what was heard, control names, model replies), card
+  lines and the gate's reasons are cut to their length, and key-shaped strings are
+  scrubbed. "Forget a span" doesn't need to touch it.
+
+**P2 — understanding and polish.**
+- *Pause and resume say who did it* (`[bus] resumed by pill|hotkey|command`), in the
+  console and as a trace row. Only `resume()` clears `paused_until`; the API passes its
+  source to hooks that accept one. The 98-second pause stays unexplained until the next
+  log; the pill's play button and Ctrl+Alt+J were the only other paths.
+  **Open, for the human:** while paused, Jimmy can't hear "Jimmy, resume" (the mic is
+  off). Should the name detector stay on during a pause, storing nothing?
+- *Misheard app names.* Whisper gets an initial prompt of "Jimmy" plus the open apps'
+  names (and a browser title's site), refreshed each minute (`audio.app_prompt`,
+  `WHISPER_PROMPT`). A transcript made only of the prompt's words, three or more, is
+  dropped as an echo. **Not measured on recordings** (no mic here): compare misheard
+  names before and after, and turn it off if silence starts coming back as app names.
+  `SYSTEM` maps room/Roam/Rome to Chrome and cloud/clod/Plot to Claude, and the agent
+  sees the open apps in `<open>`.
+- *`ask_user` looped* (four rounds of "which tab?"). One per request; after that the
+  model acts on its best guess, still confirmed. `SYSTEM`: the current tab is the
+  selected tab's own "Close (tab …)".
+- *A new request swallowed as an answer* ("can you listen" answered "click the address
+  bar?"). `new_request()`: a Jimmy command, a chat line, or (to a yes/no question) an
+  instruction with an object starts afresh. Answers to "which…?" keep their verbs.
+- *Rejected controls came back* ("You", three times). A no remembers the control for two
+  minutes: `<rejected>` in the context, and a proposal of it is refused. `SYSTEM`:
+  position words use the `@x,y` each control already has.
+- *"Why did you suggest that?"* routes to chat with Jimmy's last answer as `<context>`
+  (`WHY_STYLE`), not to the agent. It's data inside the context, like any evidence
+  (invariant 8).
+- *Answers started with "\n".* `Asker.publish`, which every answer goes through, trims
+  the first piece of each answer and every final text.
+- *Policy.* The agent never presses a CAPTCHA or bot check (`agent.CAPTCHA` on the
+  target's name: "Please tick that one yourself"), and never says who someone is from a
+  picture: a look whose request or question asks who people are is refused without
+  sending the picture (`agent.IDENTIFY`; non-negotiables 2 and 3). Both are also in
+  `SYSTEM`.
+- *Leaked chat tokens in a tool name* (`submit...??<|end|>…`): cut at `<|`, letters and
+  underscores kept, and a known tool used if the result is exactly one.
+- *A bare "Jimmy?" was silent.* Now a spoken "Yes?", at most every 30 s
+  (`YES_EVERY_S`), or "Still working on that." if a request is running; nothing when the
+  voice is off. Trade-off to watch: the mic pauses while Jimmy says it, so words begun
+  in that half second are lost; the mic is back 0.25 s after (D38).
+
+**How it was checked.** All suites pass under `JIMMY_PROVIDER=nvidia` and `openai` on a
+Linux container with the Windows calls stubbed out. Five checks need Windows itself and
+fail there exactly as they do on D44's code: DPAPI (2 in `test_face`), the single-instance
+mutex (`test_stage8`), and two `test_stage1` checks that need Windows paths
+(`C:\Program Files\1Password\1Password.exe` isn't split on Linux). The UI Automation paths
+(SetFocus on the omnibox, `WindowPattern`, `EnumWindows`, shell classes) are tested
+against fakes only: run them live on Windows. The overlay change (the call hint) needs
+`npm run build`. Not done: re-running `eval_agent.py` / `eval_tools.py` (no key here) after
+the `SYSTEM` and tool changes. Do that first on the Windows machine.

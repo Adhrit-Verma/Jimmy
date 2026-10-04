@@ -26,7 +26,10 @@ Memory tab, "listening…/heard" feedback, seeing the screen (vision model), and
 cursor that presses or types after a yes. **D42: Jimmy is an agent** (`ambient/agent.py`):
 one loop that sees its own state, the user's wiki (OKF), their lists and the window's
 controls, picks native tools, runs multi-step screen tasks on one yes for a plan, and logs
-every decision (`python -m jimmy trace`). 95 % on the 130 real commands (was 71 %).** "Jimmy, …" → an
+every decision (`python -m jimmy trace`). 95 % on the 130 real commands (was 71 %).** D43/D44: model
+fallbacks, OpenAI as a second provider. **D45: the fixes from the live session of 2026-10-05**
+(per-request traces, windows from speech start, slow-step fallback and "stop", plans that go on,
+window tools, the console kept in `data/logs/jimmy.log`). "Jimmy, …" → an
 evidence panel and a spoken answer, with no typing needed. Stage 3 (trigger gate) passed its 5-check
 list, blind-judged (D19–D22). Stage 4 is the Electron overlay (D23). Stage 5 is hybrid
 keyword + meaning recall and a timeline window (D24). Remaining work lives in
@@ -101,7 +104,8 @@ cd overlay; npm install; npm run build   # once, and after any change under over
 .\.venv\Scripts\python.exe tests\test_stage9.py   # 14 checks: curtain follows you, presence thread, no-name asks, calls, calibration, forget, timers
 .\.venv\Scripts\python.exe tests\test_stage10.py  # 7 checks: lists by voice, remind asks what, heard feedback, cursor, Memory tab, vision fallback
 .\.venv\Scripts\python.exe tests\test_stage11.py  # 10 checks: the agent loop, plan/risky approval, typing guard, trace, calls, wiki, failure mid-task
-.\.venv\Scripts\python.exe tests\test_commands.py # the command matrix: 169 utterances, talk, a drill
+.\.venv\Scripts\python.exe tests\test_stage12.py  # 27 checks: the 2026-10-05 session's misses (D45), one per report item
+.\.venv\Scripts\python.exe tests\test_commands.py # the command matrix: 177 utterances, talk, a drill
 .\.venv\Scripts\python.exe tests\eval_agent.py    # live: 130 real commands through rules + agent (95 %); --system d41 = 71 %
 .\.venv\Scripts\python.exe -m jimmy trace -n 20   # the decision log: heard, how, route, steps, said
 .\.venv\Scripts\python.exe -m jimmy wiki --build  # the user wiki (OKF) in data/okf; without --build prints its index
@@ -112,6 +116,8 @@ cd overlay; npm install; npm run build   # once, and after any change under over
 ```
 
 Only one `ambient run` at a time (D35): a second one exits with a message.
+`ambient run` keeps its console in `data/logs/jimmy.log` (D45: 5 × 2 MB, rotating), with quoted
+text, card lines and the gate's reasons cut to their length and key-shaped strings scrubbed.
 
 Timeline window: pill → **Timeline**, or **Ctrl+Alt+T**; its Insights tab: **Ctrl+Alt+I**
 (`electron . --timeline --insights --snapshot shot.png` renders it). Snapshot it on real data
@@ -166,18 +172,20 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `tests/test_stage8.py` | D35 check: the human's real misses from 2026-10-02, tool picking, ask-back. |
 | `tests/test_face.py` | D37: guidance, capture steps, DPAPI template, tracker with your face. No webcam. |
 | `tests/test_stage9.py` | D39: follow on drawn scenes, identity per track, the presence thread on a fake camera, eyes/lips, follow-up and eye-contact asks, timers, forget + compact, date spans, resting. |
-| `ambient/act.py` | D41: the virtual cursor's hands: UI Automation controls of the window in front, name matching, `perform` (Invoke/Toggle/Select/Expand/SetValue) after a yes; opening apps by Start-menu shortcut. |
+| `ambient/act.py` | D41: the virtual cursor's hands: UI Automation controls of the window in front, name matching, `perform` / `press` (Invoke/Toggle/Select/Expand/SetValue; D45 SetFocus for a box with only Value) after a yes; opening apps by Start-menu shortcut; D45 `top_windows`, `pick_window`, `focus_window`, `window_state`, `SHELL_CLASSES`. |
 | `overlay/src/Memory.jsx` | D41: the Memory tab: reminders, goals, memories; edit, done, delete, select. |
 | `tests/test_stage10.py` | D41 check: lists by voice through the tool pick, reminder ask-back, heard feedback, cursor offer/yes, Memory API, vision fallback. |
-| `ambient/agent.py` | D42: the agent. Context (`<status>`, `<you>`, `<lists>`, `<screen>`), 50 native tools, the loop, plan/risky approval, code guards (`name_check`, `said_by_user`), `first_decision` for the eval. |
+| `ambient/agent.py` | D42: the agent. Context (`<status>`, `<you>`, `<lists>`, `<screen>`; D45 `<open>`, `<rejected>`), 53 native tools, the loop, plan/risky approval, code guards (`name_check`, `said_by_user`; D45 `name_fits`, CAPTCHA, identify-people, `clean_tool_name`), the timed step with a fallback model (D45), `first_decision` for the eval. |
+| `ambient/logs.py` | D45: tees `ambient run`'s console into `data/logs/jimmy.log`, rotating, with captured text cut to lengths (`redact`). |
 | `jimmy/wiki.py` | D42: the user wiki in Open Knowledge Format: code pages (goals, memories, reminders, habits), model pages (projects, people, interests), index, verify. `data/okf/`. |
 | `tests/test_stage11.py` | D42 check: the agent with a scripted model, through the Asker, traces, calls by name, the wiki. |
+| `tests/test_stage12.py` | D45 check: each miss from the 2026-10-05 session (P0-1 … P2-10 in the report), scripted models, faked UIA and windows. |
 | `tests/eval/` | D42: frozen real commands (`real_commands.json`) and invented screens (`screens.json`). Don't edit labels; add new files. |
 | `tests/eval_agent.py` | D42: live, the first decision on the frozen set: `--system agent` (rules + agent) or `d41` (the baseline). |
 | `tests/equiv_db.py` | D38: before/after equivalence of 43 read paths on a frozen copy of the real DB. Use it for any change to db/recall/insights/gate. |
 | `overlay/src/main.jsx` | picks the page by hash: the overlay, or `#timeline` / `#insights`; reduced motion respected. |
 | `overlay/src/index.css` | the transparent sheet, and the transform-only keyframes (equalizer, shimmer, progress). |
-| `tests/test_commands.py` | D37: the command matrix (131 utterances, 16 talk negatives, a 25-command drill). Add rows for real misses. |
+| `tests/test_commands.py` | D37: the command matrix (177 utterances, 18 talk negatives, a 25-command drill). Add rows for real misses. |
 | `tests/eval_tools.py` | live: the cloud model's tool pick on 34 English/Hindi requests. Needs the key. |
 | `overlay/src/Answer.jsx` | the answer view: evidence left (best match focused), streamed answer right. |
 | `ambient/recall.py` | Stage 5: chunk + index (bge-m3), meaning search, hybrid (RRF) with furniture filter, timeline API reads. |
@@ -242,7 +250,9 @@ setting that defaults to off.
    plan's steps, anything risky asks again on its own, a lone action asks each time.
    No mouse events; the one key is Enter (`submit`), sent only after UI Automation
    focused that box and the focus was checked. Never in excluded windows, never into
-   a password box, never text the user didn't say.
+   a password box, never text the user didn't say. D45: "click" on a box with only
+   Value is UIA `SetFocus`; switching / minimizing / maximizing a window is UIA
+   `SetFocus` / `WindowPattern` (one yes, never a close). Never a CAPTCHA.
 
 ---
 
@@ -433,7 +443,22 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   `uiautomation.uiautomation._AutomationClient`; `TreeScope_Descendants` is 4.
 - **Read the decision log first** (D42): `python -m jimmy trace` shows what Jimmy
   heard, how, which tools it called with what, and what it said. Then add the miss
-  to a new eval file, not to the frozen one.
+  to a new eval file, not to the frozen one. D45: then `data/logs/jimmy.log` for what
+  only the console said (errors, "not without the name", who resumed a pause).
+- **Print captured text quoted (`!r`)** (D45). The console goes to `data/logs/jimmy.log`,
+  and `logs.redact` cuts quoted strings to their length; captured text printed bare
+  would be kept on disk outside the captures, where "forget a span" can't reach it.
+- **The trace is per request thread** (D45). `Asker._trace` is a property over a
+  `threading.local`; a second request used to replace a shared one mid-flight. Write to
+  it only from the request's own thread (`publish` does).
+- **Listening windows compare when a line *began*** (`ts_start`, D45), not when Whisper
+  finished. `hear(0, …)` in a test means "now".
+- **Agent control numbers shift after every action** (D45): click / type / submit carry
+  the name too, and a number whose control has a different name is refused. Scripted
+  tests must give the id in reading order *and* the matching name.
+- **httpx's read timeout is per chunk**, so it isn't a step limit: agent steps run on a
+  worker thread with `STEP_TIMEOUT_S` wall-clock, then the fallback model (D45). Scripted
+  models without `tool_fallback` skip the fallback.
 - **Agent tool ids are in reading order** (top to bottom, then left to right), so a
   window's caption buttons come first. Tests that script ids must count them.
 - **Ambient code never builds a model client, even in eval helpers** (invariant 7):
