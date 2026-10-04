@@ -183,14 +183,21 @@ class LLM:
         self._require_key()
         return self._once(self._body(messages, False, max_tokens, temperature, thinking))
 
+    def tool_fallback(self) -> str | None:
+        """D45: the second model an agent step asks when the first is too slow: the
+        next fallback, else the chat model; None if there's no other."""
+        first = self.tools_model or self.model
+        return next((m for m in (*self.fallbacks, self.model) if m and m != first), None)
+
     def chat_tools(self, messages: list[dict], tools: list[dict], *, max_tokens: int = 500,
-                   temperature: float = 0.0) -> dict:
+                   temperature: float = 0.0, model: str | None = None) -> dict:
         """D42: one step of the agent. The model's message, with `tool_calls` (OpenAI
         format) or `content`. Thinking off: measured on nemotron-3-super with it on,
-        tool calls came back empty; off, 0.5-1.8 s and a sensible first step."""
+        tool calls came back empty; off, 0.5-1.8 s and a sensible first step.
+        `model` (D45): this step on another model (tool_fallback), when the first is slow."""
         self._require_key()
         body = {**self._body(messages, False, max_tokens, temperature, False), "tools": tools, "tool_choice": "auto",
-                "model": self.tools_model or self.model}
+                "model": model or self.tools_model or self.model}
         for attempt in range(self.attempts):
             try:
                 resp = self._http().post("/chat/completions", json=body)

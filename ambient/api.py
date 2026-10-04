@@ -24,6 +24,16 @@ from typing import Callable
 from urllib.parse import parse_qs, urlsplit
 
 
+def _by(fn, *args, by: str):
+    """D45: tell a pause/resume hook where it came from (pill, hotkey), if it asks."""
+    import inspect
+    try:
+        takes = "by" in inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        takes = False
+    return fn(*args, by=by) if takes else fn(*args)
+
+
 class OverlayAPI:
     def __init__(self, hooks: dict[str, Callable], host: str = "127.0.0.1", port: int = 0):
         self.hooks = hooks                 # dismiss(id), pause(minutes), resume(), state() -> dict
@@ -98,12 +108,12 @@ class OverlayAPI:
                 if route == "dismiss":
                     api.hooks["dismiss"](int(body.get("id", 0)))
                 elif route == "pause":
-                    api.hooks["pause"](float(body.get("minutes", 120)))
+                    _by(api.hooks["pause"], float(body.get("minutes", 120)), by="pill")
                 elif route == "resume":
-                    api.hooks["resume"]()
-                elif route == "toggle-pause":
+                    _by(api.hooks["resume"], by="pill")
+                elif route == "toggle-pause":       # only the Ctrl+Alt+J hotkey sends this
                     st = api.hooks["state"]()
-                    api.hooks["resume"]() if st.get("paused") else api.hooks["pause"](120)
+                    _by(api.hooks["resume"], by="hotkey") if st.get("paused") else _by(api.hooks["pause"], 120, by="hotkey")
                 elif api.hooks.get(f"post_{route}"):      # D25: ask, quit, stop-voice
                     api.hooks[f"post_{route}"](body)
                 else:

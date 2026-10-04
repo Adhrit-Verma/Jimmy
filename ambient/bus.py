@@ -16,7 +16,7 @@ import numpy as np
 
 from . import config, screen
 from .db import Store, now_ms
-from .redact import Exclusions, FaceStage
+from .redact import Exclusions, FaceStage, is_own_window
 
 
 def memory_lists(mem) -> dict:
@@ -69,6 +69,7 @@ class Counters:
     switch_frames: int = 0
     skipped_excluded: int = 0
     skipped_no_frame: int = 0
+    skipped_shell: int = 0         # D45: the tray overflow, Start or Search in front
     text_blocks: int = 0
     ocr_blocks: int = 0
     audio_segments: int = 0
@@ -149,6 +150,7 @@ class ContextBus:
     # --- one tick --------------------------------------------------------
     def tick(self) -> str:
         """Returns a short status word, for the console and for tests."""
+        self._refresh_prompt()
         if now_ms() < self.paused_until:
             # User pause: nothing is captured at all, screen or audio.
             if self._audio and not self._audio.paused.is_set():
@@ -206,7 +208,14 @@ class ContextBus:
         ts = now_ms()
 
         aw = screen.active_window()
+        if screen.is_shell(aw):
+            # D45: a shell popup is not a window: it was stored 16 times in 40 s (the gate
+            # measures the whole screen, so whatever moved behind the popup let it through).
+            c.skipped_shell += 1
+            return "shell"
         reason = self.exclusions.check(app=aw.app, title=aw.title)
+        if not reason and not is_own_window(aw.app, aw.title):
+            self._last_app = aw                  # D45: where the agent acts when a popup is in front
         if not reason and screen.focused_is_password():
             reason = "password field"            # D32: typing a password: like a bank page
         # A page excluded by URL stays excluded while it's the same window and
@@ -565,12 +574,23 @@ class ContextBus:
             self._focus_memory = mem = Memory(jcfg.MEMORY_DB)
         return mem
 
+    def agent_aw(self):
+        """The window the agent means by "in front" (D45): the foreground one, unless it's
+        a shell popup (tray overflow, Start, Search) or Jimmy itself; then the last app
+        window that was in front, if it still exists."""
+        aw = screen.active_window()
+        if screen.is_shell(aw) or is_own_window(aw.app, aw.title):
+            last = getattr(self, "_last_app", None)
+            if last is not None and screen.user32.IsWindow(last.hwnd):
+                return last
+        return aw
+
     def agent_window(self) -> tuple[str, str, tuple | None]:
         """(app, title, bounds) of the window in front; nothing for one Jimmy never reads."""
         from ctypes import byref, wintypes
 
         from .insights import app_name
-        aw = screen.active_window()
+        aw = self.agent_aw()
         if not aw.hwnd or self.exclusions.check(app=aw.app, title=aw.title):
             return app_name(aw.app) if aw.app else "", "(a window Jimmy doesn't read)", None
         r = wintypes.RECT()
@@ -579,7 +599,7 @@ class ContextBus:
 
     def agent_controls(self) -> list:
         from . import act
-        aw = screen.active_window()
+        aw = self.agent_aw()
         if not aw.hwnd or self.exclusions.check(app=aw.app, title=aw.title):
             return []
         try:
@@ -587,6 +607,58 @@ class ContextBus:
         except Exception as exc:
             print(f"[agent] controls: {type(exc).__name__}: {exc}")
             return []
+
+    # --- D45: other windows ------------------------------------------------------
+    def _windows(self) -> list[tuple[int, str, str, str]]:
+        """Top-level windows Jimmy may name or act on: never excluded ones, never its own."""
+        from . import act
+        try:
+            wins = act.top_windows()
+        except Exception as exc:
+            print(f"[agent] windows: {type(exc).__name__}: {exc}")
+            return []
+        return [w for w in wins if not self.exclusions.check(app=w[1], title=w[2]) and not is_own_window(w[1], w[2])]
+
+    def windows_text(self) -> list[tuple[str, str]]:
+        from .insights import app_name
+        return [(app_name(exe), title) for _, exe, title, _ in self._windows()]
+
+    def open_apps(self) -> list[str]:
+        from .insights import app_name
+        return list(dict.fromkeys(app_name(exe) for _, exe, _, _ in self._windows()))
+
+    def window_action(self, name: str, state: str | None = None) -> str:
+        """Switch to an app (state None), or minimize / maximize / restore it, through UI
+        Automation, after the user's yes (the agent asks). Never closes anything."""
+        from . import act
+        from .insights import app_name
+        w = act.pick_window(name, self._windows())
+        if w is None:
+            return f"I don't see {name} open."
+        label = app_name(w[1])
+        try:
+            ok = act.focus_window(w[0]) if state is None else act.window_state(w[0], state)
+        except Exception as exc:
+            print(f"[act] window: {type(exc).__name__}: {exc}")
+            ok = False
+        self._last_act_ms = now_ms()
+        if not ok:
+            return f"{label} won't let me do that."
+        return {None: f"Switched to {label}.", "minimize": f"Minimized {label}.", "maximize": f"Maximized {label}.",
+                "restore": f"Restored {label}."}[state]
+
+    def _refresh_prompt(self) -> None:
+        """D45: once a minute, tell Whisper the names of the open apps ("Chrome, Claude"),
+        so "room" and "cloud code" come out right. Local only: the prompt never leaves."""
+        tr = getattr(getattr(self, "_audio", None), "transcriber", None)
+        if tr is None or not config.WHISPER_PROMPT or now_ms() - getattr(self, "_prompt_at", 0) < 60_000:
+            return
+        self._prompt_at = now_ms()
+        from .audio import app_prompt
+        try:
+            tr.prompt = app_prompt(self.open_apps(), [t for _, t in self.windows_text()])
+        except Exception as exc:
+            print(f"[audio] prompt: {type(exc).__name__}: {exc}")
 
     def show_cursor(self, target, action: str) -> None:
         if self._api:
@@ -672,7 +744,7 @@ class ContextBus:
         """Find the control you named in the window in front, put Jimmy's cursor on
         it, and ask. Nothing happens until you say yes (perform)."""
         from . import act
-        aw = screen.active_window()
+        aw = self.agent_aw()
         if not aw.hwnd or self.exclusions.check(app=aw.app, title=aw.title):
             return "Not in this window: it's one I never touch."
         try:
@@ -752,13 +824,27 @@ class ContextBus:
             mem.set_intent(text)
             print(f"[bus] focus: {text or '(cleared)'}")
 
-    def pause(self, minutes: float) -> None:
+    def pause(self, minutes: float, by: str = "api") -> None:
         self.paused_until = now_ms() + int(minutes * 60_000)
-        print(f"[bus] paused for {minutes:.0f} min")
+        print(f"[bus] paused for {minutes:.0f} min by {by}")
+        self._log_state("pause", by, f"{minutes:.0f} min")
 
-    def resume(self) -> None:
+    def resume(self, by: str = "api") -> None:
+        """D45: says who resumed. On 2026-10-05 a 10-minute pause ended after 98 s and
+        nothing recorded why."""
+        was = self.paused_until
         self.paused_until = 0
-        print("[bus] resumed")
+        print(f"[bus] resumed by {by}" + (f" ({(was - now_ms()) / 60_000:.0f} min early)" if was > now_ms() else ""))
+        self._log_state("resume", by, "")
+
+    def _log_state(self, what: str, by: str, said: str) -> None:
+        """A pause or resume in the decision log (jimmy trace), with its source."""
+        mem = self._intent_memory()
+        if mem is not None and hasattr(mem, "add_trace"):
+            try:
+                mem.add_trace({"ts": now_ms(), "heard": "", "via": by, "route": what, "steps": [], "said": said})
+            except Exception:
+                pass
 
     def dismiss(self, card_id: int) -> None:
         """A card waved away in the overlay: record it, and quiet the gate for a while."""
@@ -800,7 +886,7 @@ class ContextBus:
             self._voice.volume = int(mem.setting("voice_volume", config.VOICE_VOLUME))
             self._voice.muted = mem.setting("voice_muted") == "1"
         self._api = OverlayAPI({"state": self.overlay_state, "pause": self.pause,
-                                "resume": self.resume, "dismiss": self.dismiss,
+                                "resume": self.resume, "dismiss": self.dismiss,   # (minutes|by): api.py names the source
                                 "post_ask": lambda b: self._asker.ask(str(b.get("q", "")).strip(), "typed")
                                 if str(b.get("q", "")).strip() else None,
                                 "post_stop-voice": lambda b: self._voice and self._voice.stop(),
@@ -819,7 +905,8 @@ class ContextBus:
         self._asker = Asker(self.store, self._api.publish,
                             speak=self._voice.say if self._voice else None,
                             screen_now=self.screen_now,
-                            actions={"pause": self.pause, "resume": self.resume, "focus": self.set_focus,
+                            actions={"pause": lambda m: self.pause(m, "command"), "resume": lambda: self.resume("command"),
+                                     "focus": self.set_focus,
                                      "hush": self._voice.stop if self._voice else (lambda: None),
                                      "state": self.overlay_state, "curtain": self.set_curtain,
                                      "remind": lambda what, due, app: mem.add_reminder(what, due, app),
@@ -847,6 +934,10 @@ class ContextBus:
                                      # D42: the agent's eyes and hands, Jimmy's state, the log
                                      "not_a_call_app": lambda app=None: self.not_a_call_app(mem, app),
                                      "agent_window": self.agent_window, "agent_controls": self.agent_controls,
+                                     # D45: other windows, by app name; their names help Whisper too
+                                     "windows": self.windows_text, "open_apps": self.open_apps,
+                                     "focus_window": lambda name: self.window_action(name),
+                                     "window_state": lambda name, state: self.window_action(name, state),
                                      "status": lambda: self.status_text(mem), "look": self.look,
                                      "open_url_any": self.open_url, "close_app": close_app,
                                      "perform_target": lambda t, text: act_perform(t.hwnd, t, text),
@@ -911,7 +1002,7 @@ class ContextBus:
     def screen_now(self) -> dict | None:
         """The window the user is on right now: its latest frame and everything it
         has shown, for "what's on my screen?" (D27). None for excluded or unseen."""
-        aw = screen.active_window()
+        aw = self.agent_aw()
         if self.exclusions.check(app=aw.app, title=aw.title):
             return None                   # banking, password managers, Jimmy itself
         w = self._open.get(aw.app)

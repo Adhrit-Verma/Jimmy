@@ -39,8 +39,10 @@ from .redact import is_own_window
 # jimmy what's on my screen", "One second, Jimmy turn on …", "Can you, Jimmy can you …"
 # and heard "Chime, can you …". Up to three words may come before the name: any
 # filler, or anything when what follows is a request.
+# D45: Whisper also wrote it "Timmy" and "Jimmy's" (2026-10-05). Timmy is a real name,
+# so after "Timmy" only something shaped like a request counts (parse_wake).
 _WAKE = re.compile(r"^\W*((?:\S+\s+){0,3}?)"
-                   r"(?:(?:jimmy|jimmie|jimi|jimmi|jimy|jimmys|gimmy|jemmy|chime)\b|जिमी|जिम्मी|जीमी|جمی|جیمی|جمّی)"
+                   r"((?:jimmy'?s|jimmy|jimmie|jimi|jimmi|jimy|gimmy|jemmy|chime|timmy)\b|जिमी|जिम्मी|जीमी|جمی|جیمی|جمّی)"
                    r"\W*(.*)$", re.I | re.S)
 _FILLER = {"hey", "hi", "hello", "ok", "okay", "yo", "so", "um", "uh", "oh", "and", "wait", "listen",
            "one", "second", "sec", "हे", "ہے"}
@@ -311,11 +313,23 @@ _UNFILTER = re.compile(r"^(?:(?:show )?all (?:the )?apps|show everything|show al
 _SEARCH = re.compile(r"^(?:search|look) for\s+(.+?)\W*$", re.I)
 
 
+# D45: "can you close" (cut off before "cloud code") closed Jimmy's panel. A bare verb
+# asked as a question is half a request, not navigation.
+_ASKED_BARE = re.compile(r"^(?:can|could|would|will) you\s+(?:close|hide|dismiss|open)\W*$", re.I)
+# D45: "scroll down and maximize the window" scrolled and dropped the maximize. After
+# "scroll down and/then", only looking-around verbs keep it a scroll (D35's case).
+_AND_MORE = re.compile(r"^\s*(?:,\s*)?(?:and|then|and then)\s+(?!(?:show|see|find|look|let me see)\b)\w", re.I)
+
+
 def nav(text: str) -> dict | None:
     """The overlay/timeline event a navigation phrase means, or None (D33)."""
+    if _ASKED_BARE.match(normalize(text).strip().strip(".!?,")):
+        return None
     t = polite(normalize(text)).strip(".!?,")
     # "scroll down and show me older things": the scroll is the instruction (D35).
-    if m := re.match(r"^(?:scroll|page)\s+(down|up)\b", t, re.I):
+    if m := re.match(r"^(?:scroll|page)\s+(down|up)\b(.*)$", t, re.I):
+        if _AND_MORE.match(m[2]):
+            return None                         # a second instruction: the agent plans both
         return {"type": "ui", "action": "scroll", "dir": m[1].lower()}
     for rx, fn in _NAV:
         if m := rx.match(t):
@@ -336,6 +350,8 @@ _DRAFT = re.compile(r"^(?:please\s+)?(?:draft|write|compose)(?: me)?(?: a| an| t
                     r"(?:reply|response|email|message|answer|note)\b", re.I)
 _EVENT = re.compile(r"\b(?:add|put|save) (?:this|it|that)(?: event| meeting| deadline)? (?:to|in|on|into) "
                     r"(?:my |the )?calendar\b|^(?:make|create) (?:a |an )?(?:calendar )?event\b", re.I)
+# D45: "go ahead with the plan", said again while the approved plan was already running.
+_GO_ON = re.compile(r"^(?:yes|yeah|yep|sure|okay|ok|go ahead|do it|proceed|continue|carry on|start)\b", re.I)
 _YES = re.compile(r"^(?:yes|yeah|yep|sure|do it|go ahead|add it|okay|ok)\W*$|^(?:no|nope|not now|skip)\W*$", re.I)
 
 ANSWER_STYLE = """The user asked this out loud; the <context> items are shown beside your reply.
@@ -352,6 +368,16 @@ never reuse an earlier answer. If the text is thin, name the app and window and 
 can't read its main content. This is read aloud: never say email addresses, phone
 numbers, passwords or codes (say "an email address"). A sign-in form means they are
 not signed in yet."""
+
+# D45: "why did you suggest that?" is about Jimmy's own last answer, which is in the
+# <context> as the previous turn. (2026-10-05: "I don't have it.")
+WHY_STYLE = """The user is asking about your own previous answer, which is in the <context>.
+Explain in one or two short sentences, plain text, what in that answer or its request
+led to it. If the context doesn't show a reason, say so plainly; never invent one."""
+_WHY_YOU = re.compile(r"^(?:but\s+|and\s+|so\s+|okay\s+)?why (?:did|do|would|have) you (?:suggest(?:ed)?|recommend(?:ed)?|"
+                      r"pick(?:ed)?|choose|chose|say|said|think|thought|open(?:ed)?|show(?:ed)?|propose[d]?|want(?:ed)?|"
+                      r"tell|told)\b|^why (?:that|this) one\b|^why (?:that|this)\W*$|^how did you (?:know|decide|pick|choose)\b",
+                      re.I)
 
 CHAT_STYLE = """This is conversation, not a search. Reply in one short sentence, plain text,
 easy to read aloud. If the request is unclear, ask one short question back instead.
@@ -490,9 +516,13 @@ def parse_wake(text: str) -> str | None:
     m = _WAKE.match(text.strip())
     if not m:
         return None
-    before, rest = m[1].split(), m[2].strip(" .,!?")
+    before, rest = m[1].split(), m[3].strip(" .,!?")
     if rest.split()[:1] and rest.split()[0].strip(",.") in _ABOUT:
         return None
+    if m[2].lower() == "timmy" and rest and not (_ASKS.match(rest) or _ACTIONISH.match(rest) or command(rest)
+                                                 or nav(rest) or m[3].rstrip().endswith("?")
+                                                 or re.match(r"(?:remove|undo|cancel|forget|let|please)\b", rest, re.I)):
+        return None                             # "Timmy said he'd come later": about Timmy
     if all(w.strip(",.!?").lower() in _FILLER for w in before):
         return rest
     return rest if rest and (_ASKS.match(rest) or command(rest) or nav(rest)) else None
@@ -524,6 +554,8 @@ def route(text: str, last: dict | None = None, now: int | None = None) -> tuple[
             and len(t.split()) <= 8 and (_STATS_FOLLOW.match(t) or (fresh_time and not _PAST.search(t)))):
         q = t if insights.terms(t) else f"{t} {last.get('term', '')}"
         return "stats", (q if fresh_time else f"{q} {last.get('when', '')}").strip()
+    if last and _WHY_YOU.search(t):
+        return "why", t                           # D45: about Jimmy's own last answer
     if _PRESENCE.search(t):
         return "presence", t
     if _CHAT.search(t) and not _PAST.search(t):
@@ -564,6 +596,23 @@ def to_agent(mode: str, text: str) -> bool:
         return True
     c = command(text) if mode == "command" else None
     return bool(c and c[0] in ("click", "type") and c[1])      # "click on…" alone is asked back
+
+
+def new_request(text: str, question: str = "") -> bool:
+    """D45: Jimmy asked something (ask_user) and this came back. Is it a new request
+    rather than the answer? "can you listen" answered "click the address bar?", and
+    "minimize chrome, minimize vs code" answered "close VS Code?" (2026-10-05)."""
+    c = command(text)
+    if c and c[0] in ("yes", "no"):
+        return False
+    if c and c[0] not in ("click", "type"):
+        return True                             # a Jimmy command: pause, open the timeline…
+    raw = normalize(text).strip()
+    if _CHAT.search(raw) and not c:
+        return True                             # "can you hear me", "thanks"
+    yesno = re.match(r"^(?:do|does|did|should|shall|can|could|would|will|is|are|want)\b", question.strip(), re.I)
+    t = polite(raw).strip(" .!?")
+    return bool(yesno and (_ACTIONISH.match(t) or c) and len(t.split()) >= 2)
 
 
 def interpret(reply: str, now: int | None = None) -> str | None:
@@ -820,7 +869,13 @@ class Asker:
                  screen_now: Callable[[], dict | None] | None = None,
                  actions: dict[str, Callable] | None = None):
         self.store, self._publish_raw, self.speak = store, publish, speak
-        self._trace: dict = {"steps": []}
+        # D45: one trace per request, kept per thread. As one attribute, a second request
+        # replaced it while the first still ran, and their routes, steps and "said" mixed.
+        self._tl = threading.local()
+        self._loose_trace: dict = {"steps": []}   # events from outside a request (an API thread)
+        self._running: tuple[str, float] | None = None   # (request, since): what holds the lock
+        self._yes_at = 0                   # D45: last spoken "Yes?" to a bare "Jimmy"
+        self._call_hint_at = 0             # D45: last "on a call: say Jimmy first" on the pill
         self.agent = None                  # D42: made on first use (ambient/agent.py)
         self.screen_now = screen_now or (lambda: None)
         self.actions = actions or {}      # D31: pause, resume, focus, hush, state (from the bus)
@@ -840,10 +895,34 @@ class Asker:
         self.armed_at = 0                  # ...counted from when its voice stops
         self.others_at = 0                 # D39: last time someone else was heard near the mic
 
+    @property
+    def _trace(self) -> dict:
+        t = getattr(self._tl, "trace", None)
+        return t if t is not None else self._loose_trace
+
+    @_trace.setter
+    def _trace(self, value: dict) -> None:
+        self._tl.trace = value
+
     def publish(self, ev: dict) -> None:
-        """Everything Jimmy shows goes through here; the trace keeps what it said."""
-        if ev.get("type") in ("toast", "answer_end") and ev.get("text"):
+        """Everything Jimmy shows goes through here; the trace keeps what it said.
+        D45: every answer's text is trimmed here, once (screen answers began with "\\n")."""
+        kind = ev.get("type")
+        if kind == "answer_delta":
+            started = self._tl.__dict__.setdefault("started", set())
+            if ev.get("id") not in started:
+                text = str(ev.get("text") or "").lstrip()
+                if not text:
+                    return                        # leading blank pieces: nothing to show yet
+                started.add(ev.get("id"))
+                ev = {**ev, "text": text}
+        elif kind in ("toast", "answer_end") and isinstance(ev.get("text"), str):
+            ev = {**ev, "text": ev["text"].strip()}
+        if kind in ("toast", "answer_end") and ev.get("text"):
             self._trace["said"] = str(ev["text"])[:300]
+        capture = getattr(self._tl, "capture", None)
+        if capture is not None and kind in ("toast", "answer_end") and ev.get("text"):
+            capture.append(ev["text"])
         self._publish_raw(ev)
 
     def make_offer(self, kind: str, data, bare: bool = False, ttl_s: float | None = None) -> None:
@@ -852,22 +931,29 @@ class Asker:
         self.offer = {"kind": kind, "data": data, "bare": bare,
                       "until": now_ms() + int((ttl_s or (config.OFFER_WAIT_S if bare else 600)) * 1000)}
 
+    @staticmethod
+    def _open(until: int, ts_start: int) -> bool:
+        """D45: a listening window is open for a line you *started* inside it (plus a
+        little grace). Checked against when Whisper finished, a long request begun in
+        time arrived after its window had closed and was dropped as ambient speech."""
+        return until > 0 and ts_start <= until + int(config.WINDOW_GRACE_S * 1000)
+
     def hear(self, ts_end: int, source: str, text: str, ts_start: int | None = None) -> bool:
         """Called for every transcribed segment. True if it was meant for Jimmy."""
         if source != "mic":
             return False
+        ts_end = ts_end if ts_end > 0 else now_ms()     # 0: no timing given (typed tools, tests)
         ts_start = ts_start or ts_end - 2000
         text = normalize(text)                 # D35: "جمی سکرول اپ" -> "جمی scroll up"
-        now = now_ms()
         bare = " ".join(text.strip().split())
         # D33: right after Jimmy showed you something, navigation needs no wake word;
         # D32: right after Jimmy offered something you asked for, neither does "yes".
-        if (now < self.nav_until and nav(bare)) or (
-                self.offer and self.offer["bare"] and now < self.offer["until"] and _YES.match(bare)):
+        if (self._open(self.nav_until, ts_start) and nav(bare)) or (
+                self.offer and self.offer["bare"] and self._open(self.offer["until"], ts_start) and _YES.match(bare)):
             self._via = "nav or yes"
             self.ask(bare, "voice")
             return True
-        if self.pending and now_ms() < self.listen_until and text.strip():
+        if self.pending and self._open(self.listen_until, ts_start) and text.strip():
             # The reply to Jimmy's question: no wake word needed.
             self.listen_until = 0
             reply = parse_wake(text)
@@ -882,7 +968,7 @@ class Asker:
             return True
         q = parse_wake(text)
         if q is None:
-            if now_ms() < self.listen_until and (len(text.split()) >= 2 or command(text)):
+            if self._open(self.listen_until, ts_start) and (len(text.split()) >= 2 or command(text)):
                 self.listen_until = 0
                 self._via = "reply"
                 self.ask(text.strip(), "voice")
@@ -896,18 +982,42 @@ class Asker:
                 self.ask(bare, "voice")
                 return True
             if skip:
-                # ...and when you were looking but it wasn't taken, why not.
-                self.publish({"type": "heard", "text": bare[:120], "skip": skip})
+                ev = {"type": "heard", "text": bare[:120], "skip": skip}
+                if skip.startswith("on a call"):
+                    # D45: the call rule (D40) was invisible: say it once a minute, with the way out.
+                    if now_ms() - self._call_hint_at < config.CALL_HINT_EVERY_S * 1000:
+                        ev = None
+                    else:
+                        self._call_hint_at = now_ms()
+                        ev["hint"] = "say \u201cJimmy\u201d first, or \u201cI'm not on a call\u201d"
+                if ev:
+                    self.publish(ev)       # ...and when you were looking but it wasn't taken, why not
             if self.actions.get("spoke", lambda a, b: None)(ts_start, ts_end) is False:
                 self.others_at = now_ms()       # speech, and the camera saw your lips still: someone else
             return False
         if len(q.split()) < 2 and not command(q) and not nav(q):   # just "Jimmy": listen for the question
             self.listen_until = now_ms() + config.LISTEN_WINDOW_S * 1000
             self.publish({"type": "listening"})
+            self._acknowledge()
             return True
         self._via = "name"
         self.ask(q, "voice")
         return True
+
+    def _acknowledge(self) -> None:
+        """D45: a bare "Jimmy?" was silent, so it was said 20 times in one session. Now a
+        spoken "Yes?" (at most every YES_EVERY_S), or what's still running."""
+        what = self._busy_with()
+        if what:
+            self.publish({"type": "toast", "text": f"Still working on: {what}", "icon": "thinking"})
+            line = "Still working on that."
+        elif now_ms() - self._yes_at >= config.YES_EVERY_S * 1000:
+            line = "Yes?"
+        else:
+            return
+        self._yes_at = now_ms()
+        if self.speak and self.actions.get("voice_on", lambda: True)():
+            self.speak(line)
 
     def _unnamed(self, t0: int, t1: int, text: str) -> tuple[str | None, str | None]:
         """(why a line without the name is for Jimmy, or None; why not, when you were
@@ -933,7 +1043,7 @@ class Asker:
             self.followup_until = 0             # "okay, thanks": the conversation's over
             return None, None
         # D40: a follow-up works on a call too: you were just talking to Jimmy.
-        if (now_ms() < self.followup_until and (len(words) >= 2 or command(text) or nav(text))
+        if (self._open(self.followup_until, t0) and (len(words) >= 2 or command(text) or nav(text))
                 and act.get("facing", lambda a, b: None)(t0, t1) is not False):
             return "follow-up", None
         if not looking or not act.get("eyes_on", lambda: config.EYE_CONTACT_ASKS)():
@@ -1012,8 +1122,48 @@ class Asker:
         return "I can't do that from here."
 
     def ask(self, question: str, source: str = "typed", force: tuple[str, str] | None = None) -> None:
+        via, self._via = getattr(self, "_via", "") or source, ""    # D45: this request's own, not a later one's
+        if not force and self._still_working(question, source):
+            return
         self.busy += 1
-        threading.Thread(target=self._run, args=(question, source, force), daemon=True, name="ask").start()
+        threading.Thread(target=self._run, args=(question, source, force, via), daemon=True, name="ask").start()
+
+    def _busy_with(self) -> str | None:
+        """What's running, for "Still working on: …": the agent's task, not the "Yes."
+        that approved its plan."""
+        running = self._running
+        if not running or time.monotonic() - running[1] < 1.5:
+            return None
+        task = getattr(self.agent, "task", None)
+        what = task.question if task is not None and command(running[0]) else running[0]
+        return what if len(what) <= 60 else what[:57] + "…"
+
+    def _still_working(self, question: str, source: str) -> bool:
+        """D45: you spoke while a request was still running. "Stop" stops it now (the
+        agent's loop checks between steps and while the model thinks); anything else
+        hears what Jimmy is busy with instead of queueing in silence. A repeat of the
+        running request, or a "go ahead" for it, is dropped. True = dropped."""
+        c = command(question)
+        if c and c[0] == "hush" and self._running:
+            if self.agent is not None:
+                self.agent.cancel()
+            self.actions.get("hush", lambda: None)()
+            return False                        # ...and the stop itself still runs: "Okay."
+        what = self._busy_with()
+        if what is None:
+            return False
+        running = self._running or ("", 0.0)
+        offer_waits = (self.offer or {}).get("kind") == "agent" and now_ms() < (self.offer or {}).get("until", 0)
+        import difflib
+        same = any(difflib.SequenceMatcher(None, polite(question).lower(), polite(x).lower()).ratio() >= 0.8
+                   for x in (running[0], what))
+        go_on = bool(_GO_ON.match(polite(question))) and getattr(getattr(self.agent, "task", None), "approved", False)
+        drop = same or go_on or (c is not None and c[0] == "yes" and not offer_waits)
+        self.publish({"type": "toast", "text": f"Still working on: {what}" + ("" if drop else " (then this)"),
+                      "icon": "thinking"})
+        if drop and source == "voice" and self.speak:
+            self.speak("Still working on that.")
+        return drop
 
     def resolve(self, reply: str, source: str = "voice") -> None:
         """Answer to "now, or earlier?" (D28). Unclear twice → assume earlier."""
@@ -1355,14 +1505,49 @@ class Asker:
                 "open_app": act.get("open_app", nothing), "close_app": act.get("close_app", nothing),
                 "open_url": act.get("open_url_any", nothing), "perform": act.get("perform_target", nothing),
                 "submit": act.get("submit_target", nothing), "cursor": act.get("show_cursor", lambda t, a: None),
-                "progress": lambda said: self.publish({"type": "toast", "text": said, "icon": "act"})})
+                "progress": lambda said: self.publish({"type": "toast", "text": said, "icon": "act"}),
+                # D45: other windows; what the model is doing while it thinks; a slow model;
+                # Jimmy's own features run inside an approved plan, which then goes on.
+                "windows": act.get("windows", lambda: []), "open_apps": act.get("open_apps", lambda: []),
+                "focus_window": act.get("focus_window", nothing), "window_state": act.get("window_state", nothing),
+                "step": self._agent_step, "slow": self._agent_slow, "feature": self._feature})
         return self.agent
+
+    def _agent_step(self, text: str | None) -> None:
+        """D45: each agent step shows itself: "thinking", and an approved plan's step."""
+        self.publish({"type": "thinking"})
+        if text:
+            self.publish({"type": "toast", "text": text, "icon": "act"})
+
+    def _agent_slow(self) -> None:
+        line = "The model is slow right now. Still trying…"
+        print(f"[agent] {line}")
+        self.publish({"type": "toast", "text": line, "icon": "thinking"})
+        if self._trace.get("via") not in ("", "typed") and self.speak:
+            self.speak("The model is slow right now, still trying.")
+
+    def _feature(self, action: str, args: dict) -> str | None:
+        """D45: one of Jimmy's own features, run now for the agent inside a plan; returns
+        what it said ("Scrolling down"), or None if it can't run that way."""
+        if action in ("draft", "goto", "forget_data"):
+            return None                         # these need the answer flow or their own yes
+        self._tl.capture = said = []
+        try:
+            if action == "not_a_call":
+                return self.actions.get("not_a_call_app", lambda app: "I can't do that from here.")(args.get("app"))
+            ok = self._use_tool({"open_view": "open"}.get(action, action), args, question=action, source="typed",
+                                aid=f"feature-{action}")
+        finally:
+            self._tl.capture = None
+        return (said[-1] if said else "Done.") if ok else None
 
     def _agent_out(self, out, question: str, source: str, aid: str) -> tuple[str, str] | None:
         """Carry out what the agent decided. (mode, query) hands a question back to the
         answer flow; None means it's handled here."""
         self._agent_ctx = (question, source, aid)
         self._trace["steps"] = list(getattr(self.agent, "last_steps", []) or [])
+        if out.data.get("silent"):
+            return None                         # D45: stopped; the "stop" says "Okay." itself
         if out.kind == "answer":
             q = out.data.get("question") or question
             return {"history": "recall", "screen": "screen", "time": "stats", "chat": "chat"}.get(
@@ -1654,242 +1839,265 @@ class Asker:
         if "state" in self.actions:
             self.publish({"type": "state", **self.actions["state"]()})
 
-    def _run(self, question: str, source: str, force: tuple[str, str] | None = None) -> None:
+    def _run(self, question: str, source: str, force: tuple[str, str] | None = None, via: str = "") -> None:
         # D42: what Jimmy heard, how, what it decided and did: one trace per request.
-        self._trace = {"ts": now_ms(), "heard": question, "via": getattr(self, "_via", "") or source,
-                       "route": "", "steps": [], "said": ""}
-        self._via = ""
+        # D45: this thread's own (see _trace), and the time spent waiting apart from working.
+        self._trace = trace = {"ts": now_ms(), "heard": question, "via": via or source,
+                               "route": "", "steps": [], "said": ""}
         t0 = time.monotonic()
         try:
             self._answer(question, source, force)
         except Exception as exc:
-            self._trace["said"] = f"error: {type(exc).__name__}: {exc}"
+            trace["said"] = f"error: {type(exc).__name__}: {exc}"
             raise
         finally:
             self.busy -= 1
-            self._trace["ms"] = int(1000 * (time.monotonic() - t0))
+            work_at = trace.pop("_work_at", None) or t0
+            trace["wait_ms"] = int(1000 * (work_at - t0))
+            trace["ms"] = int(1000 * (time.monotonic() - work_at))
             try:
-                self.actions.get("trace", lambda t: None)(self._trace)
+                self.actions.get("trace", lambda t: None)(trace)
             except Exception:
                 pass
+            self._tl.trace = None
             if source == "voice":
                 self._arm(question)             # D39: a conversation, not one question at a time
 
     def _answer(self, question: str, source: str, force: tuple[str, str] | None) -> None:
         with self._lock:                                # one answer at a time
-            self._n += 1
-            aid = f"{int(time.time())}-{self._n}"
-            now = now_ms()
-            last = self._conversation(now)
-            mode, query = force or route(question, last, now)
-            self._trace["route"] = mode
-            wait = getattr(self, "_remind_wait", None)
-            if wait and now < wait[2] and not force and mode not in ("command", "nav"):
-                # D41: "set a reminder for tomorrow" -> "about what?" -> this is the what.
-                self._remind_wait = None
-                what = re.sub(r"^(?:to|about|that)\s+", "", polite(question).strip(" .?!"), flags=re.I)
-                self.actions["remind"](what, wait[0], wait[1])
-                self._state()
-                said = f"Okay: {what}, {_when_due({'due_ts': wait[0], 'app': wait[1]})}."
-                self.publish({"type": "toast", "text": said, "icon": "remind"})
-                if source == "voice" and self.speak:
-                    self.speak(said)
-                return
-            hindi = not force and bool(_HINDI.search(question)) and mode not in ("command", "nav")
-            # D41: everything the rules don't place goes to the model, which sees Jimmy's
-            # own lists. Before, only instruction-shaped lines did, and "show me the
-            # reminders" / "navigate to timeline" were answered from old screens.
-            picks = not force and (hindi or mode in ("chat", "recall"))
-            pre: dict = {}
-            if picks and mode == "recall" and not hindi:
-                # ...while the search a question would need runs at the same time.
-                pre["q"] = query
-                pre["t"] = threading.Thread(target=lambda: pre.setdefault("ev", gather_evidence(self.store, query)),
-                                            daemon=True, name="prefetch")
-                pre["t"].start()
-            if picks or mode in ("chat", "recall", "screen", "draft", "event"):
-                # D38: react now, before any model call; instant modes need no "thinking".
-                self.publish({"type": "thinking"})
-                jim = self._jim()           # and open the cloud connection meanwhile
-                if hasattr(getattr(jim, "llm", None), "warm"):
-                    threading.Thread(target=jim.llm.warm, daemon=True, name="warm").start()
-            ag = self.agent
-            if ag is not None and ag.task is not None and not force:
-                p = ag.task.pending or {}
-                if p.get("kind") == "answer" and mode not in ("command", "nav"):
-                    self._trace["route"] = "agent: your answer"
-                    handoff = self._agent_out(ag.answer(None, question), question, source, aid)
-                    if handoff is None:
-                        return
-                    mode, query, picks = handoff[0], handoff[1], False
-                elif not (mode == "command" and command(question)[0] in ("yes", "no")):
-                    ag.cancel()                  # something new: the waiting task is dropped
-                    self.publish({"type": "cursor", "hide": True})
-                    if (self.offer or {}).get("kind") == "agent":
-                        self.offer = None
-            if not force and (hindi or to_agent(mode, question)) and self._agent_ready():
-                # D42: the agent understands it with the screen, Jimmy's state, the
-                # user's wiki and lists in view, and acts or hands back a question.
-                self._trace["route"] = f"agent (rules said {mode})"
-                try:
-                    out = self._agent().start(question)
-                except Exception as exc:          # the model failed: the rules carry on
-                    print(f"[agent] {type(exc).__name__}: {exc}")
-                    self._agent_down_until = now_ms() + 60_000
-                    out = None
-                if out is not None:
-                    handoff = self._agent_out(out, question, source, aid)
-                    if handoff is None:
-                        return
-                    mode, query = handoff
-                    question = query if mode != "draft" else question
-                picks = False
-            if picks:
-                # D35: it sounds like an instruction the rules don't know. Let the model
-                # pick a tool (or ask back) instead of answering "I can't do that".
-                # D36: or it's Hindi: the model's English goes through the same rules.
-                # D42: only when the agent can't run (no tool calling, or it just failed).
-                picked = self._pick_tool(question)
-                if picked and picked[0] != "answer" and self._use_tool(*picked, question=question,
-                                                                       source=source, aid=aid):
-                    return
-                english = str((picked or ("", {}))[1].get("english") or "").strip()
-                if hindi and english:
-                    print(f"[ask] hindi -> {english!r}")
-                    question = english          # ...and on through the same dispatch below
-                    mode, query = route(question, last, now)
-            if mode == "presence":
-                said = self._presence_line()
-                self.publish({"type": "toast", "text": said, "icon": "presence"})
-                if source == "voice" and self.speak:
-                    self.speak(said)
-                return
-            if mode == "command":
-                kind, arg = command(question)
-                said = self._do(kind, arg, question)
-                if said:
-                    self.publish({"type": "toast", "text": said, "icon": kind})
-                    if source == "voice" and self.speak and kind != "hush":
-                        self.speak(said)
-                return
-            if mode == "nav":
-                # D33: move around what's on show. Silent and instant; the pill says what happened.
-                ev = nav(question)
-                if ev.get("action") == "step" and self.last_evidence:
-                    self.shown = max(0, min(len(self.last_evidence) - 1, self.shown + ev["by"]))
-                self.publish(ev)
-                self.publish({"type": "toast", "text": _nav_said(ev), "icon": "nav"})
-                self.nav_until = now_ms() + config.NAV_WINDOW_S * 1000
-                return
-            if mode == "goto":
-                # D33: "show me yesterday at 3" -> the timeline, there.
-                from .plugin import time_window
-                since, until, label = time_window(question, now)
-                ev = {"type": "open_view", "view": "timeline"}
-                if until - since > 12 * 3600_000:
-                    ev["day"] = time.strftime("%Y-%m-%d", time.localtime(since / 1000))
-                else:
-                    ev["ts"] = (since + until) // 2
-                self.publish(ev)
-                said = f"Here's {label}."
-                self.publish({"type": "toast", "text": said, "icon": "open"})
-                self.nav_until = now_ms() + config.NAV_WINDOW_S * 1000
-                if source == "voice" and self.speak:
-                    self.speak(said)
-                return
-            if mode == "show":
-                # "Show me the best match": open evidence already on screen, no new search.
-                words = question.lower().replace("?", "").split()
-                idx = next((_ORDINAL[w] for w in words if w in _ORDINAL), 0)
-                idx = len(self.last_evidence) - 1 if idx < 0 else idx
-                if 0 <= idx < len(self.last_evidence):
-                    self.publish({"type": "open_evidence", "index": idx})
-                    self.shown, self.nav_until = idx, now_ms() + config.NAV_WINDOW_S * 1000
-                    said = "Here it is."
-                else:
-                    said = "There's no such match."
-                    self.publish({"type": "toast", "text": said, "icon": "show"})
-                if source == "voice" and self.speak:
-                    self.speak(said)
-                return
-            # A new question drops a question Jimmy asked back; only a re-ask keeps its count.
-            asked = (self.pending or {}).get("asked", 0) if force and force[0] == "clarify" else 0
-            self.pending = None
-            history = [{"q": t["q"], "a": t["a"]} for t in self.turns[-2:]]
-            self.publish({"type": "answer_start", "id": aid, "question": question, "source": source,
-                          "mode": mode, "history": history})
-            if mode == "clarify":
-                # D28: can't tell the screen now from a screen captured earlier: ask.
-                self.pending = {"q": question, "asked": asked + 1, "ts": now}
-                self.listen_until = now_ms() + config.CLARIFY_WAIT_S * 1000
-                self.publish({"type": "answer_evidence", "id": aid, "mode": "clarify", "evidence": [],
-                              "window": None, "terms": [], "days": []})
-                self.publish({"type": "answer_delta", "id": aid, "text": CLARIFY_Q})
-                self.publish({"type": "answer_end", "id": aid, "text": CLARIFY_Q, "awaiting": True})
-                self.publish({"type": "listening", "prompt": "listening… now, or earlier?"})
-                if source == "voice" and self.speak:
-                    self.speak(CLARIFY_Q)
-                return
+            self._trace["_work_at"] = time.monotonic()
+            self._running = (question, time.monotonic())
             try:
-                if mode == "stats":
-                    return self._stats(aid, question, query, source)
-                if mode in ("draft", "event"):
-                    return self._write(aid, mode, question, source)
-                if mode == "chat":
-                    items, label, terms = [], None, []
-                elif mode == "screen":
-                    items, label, terms = self._screen_evidence(), "now", []
-                else:
-                    if pre.get("q") == query:
-                        pre["t"].join()
-                    items, label, terms = pre.get("ev") if pre.get("q") == query and pre.get("ev") \
-                        else gather_evidence(self.store, query)
-                self.last_evidence, self.shown = items, 0
-                days = sorted({e["day"] for e in items})
-                self.publish({"type": "answer_evidence", "id": aid, "mode": mode, "evidence": items,
-                              "window": label, "terms": terms, "days": days})
-                jim = self._jim()
-                style = {"chat": CHAT_STYLE, "screen": SCREEN_STYLE}.get(mode, ANSWER_STYLE)
-                streamed = False
-                if mode != "chat" and not items:
-                    text = ("I can't see a window I'm allowed to read." if mode == "screen" else
-                            "Nothing I captured matches that.")
-                    self.publish({"type": "answer_delta", "id": aid, "text": text})
-                elif not jim.llm.configured:
-                    text = "Here's what I found; there's no model key to summarise it."
-                    self.publish({"type": "answer_delta", "id": aid, "text": text})
-                else:
-                    text = ""
-                    # The screen changes: a screen answer gets no history, and joins none,
-                    # or the last screen's answer gets repeated for this one (D29).
-                    session = f"screen-{aid}" if mode == "screen" else self.session
-                    voice = (SpeakAsItStreams(self.speak) if source == "voice" and self.speak
-                             and config.VOICE_ANSWERS else None)
-                    # D41: a screen answer also looks at the screen, not only its text.
-                    image = screen_image(items[0]) if mode == "screen" and items else None
-                    for piece in jim.ask_stream(question, session=session, snippets=to_snippets(items),
-                                                instructions=style, **({"image": image} if image else {})):
-                        text += piece
-                        self.publish({"type": "answer_delta", "id": aid, "text": piece})
-                        if voice:
-                            voice.feed(piece)
+                self._answer_locked(question, source, force)
+            finally:
+                self._running = None
+
+    def _answer_locked(self, question: str, source: str, force: tuple[str, str] | None) -> None:
+        self._n += 1
+        aid = f"{int(time.time())}-{self._n}"
+        now = now_ms()
+        last = self._conversation(now)
+        mode, query = force or route(question, last, now)
+        self._trace["route"] = mode
+        why_last = None
+        if mode == "why":                       # D45: answered in chat, the last turn as context
+            why_last, mode = last, "chat"
+        wait = getattr(self, "_remind_wait", None)
+        if wait and now < wait[2] and not force and mode not in ("command", "nav"):
+            # D41: "set a reminder for tomorrow" -> "about what?" -> this is the what.
+            self._remind_wait = None
+            what = re.sub(r"^(?:to|about|that)\s+", "", polite(question).strip(" .?!"), flags=re.I)
+            self.actions["remind"](what, wait[0], wait[1])
+            self._state()
+            said = f"Okay: {what}, {_when_due({'due_ts': wait[0], 'app': wait[1]})}."
+            self.publish({"type": "toast", "text": said, "icon": "remind"})
+            if source == "voice" and self.speak:
+                self.speak(said)
+            return
+        hindi = not force and bool(_HINDI.search(question)) and mode not in ("command", "nav")
+        # D41: everything the rules don't place goes to the model, which sees Jimmy's
+        # own lists. Before, only instruction-shaped lines did, and "show me the
+        # reminders" / "navigate to timeline" were answered from old screens.
+        picks = not force and not why_last and (hindi or mode in ("chat", "recall"))
+        pre: dict = {}
+        if picks and mode == "recall" and not hindi:
+            # ...while the search a question would need runs at the same time.
+            pre["q"] = query
+            pre["t"] = threading.Thread(target=lambda: pre.setdefault("ev", gather_evidence(self.store, query)),
+                                        daemon=True, name="prefetch")
+            pre["t"].start()
+        if picks or mode in ("chat", "recall", "screen", "draft", "event"):
+            # D38: react now, before any model call; instant modes need no "thinking".
+            self.publish({"type": "thinking"})
+            jim = self._jim()           # and open the cloud connection meanwhile
+            if hasattr(getattr(jim, "llm", None), "warm"):
+                threading.Thread(target=jim.llm.warm, daemon=True, name="warm").start()
+        ag = self.agent
+        if ag is not None and ag.task is not None and not force:
+            p = ag.task.pending or {}
+            c = command(question) if mode == "command" else None
+            if (p.get("kind") == "answer" and ag.waiting_for_answer() and not (c and c[0] in ("hush", "close_ui"))
+                    and not new_request(question, ag.pending_question())):
+                # D45: Jimmy asked; this is the answer, even a plain "Yes." or "the first one"
+                # (they route as commands/navigation, and "Yes." got "Nothing to confirm.").
+                self._trace["route"] = "agent: your answer"
+                handoff = self._agent_out(ag.answer(None, question), question, source, aid)
+                if handoff is None:
+                    return
+                mode, query, picks = handoff[0], handoff[1], False
+            elif not (c and c[0] in ("yes", "no") and p.get("kind") != "answer"):
+                ag.cancel()                  # something new: the waiting task is dropped
+                self.publish({"type": "cursor", "hide": True})
+                if (self.offer or {}).get("kind") == "agent":
+                    self.offer = None
+        if not force and not why_last and (hindi or to_agent(mode, question)) and self._agent_ready():
+            # D42: the agent understands it with the screen, Jimmy's state, the
+            # user's wiki and lists in view, and acts or hands back a question.
+            self._trace["route"] = f"agent (rules said {mode})"
+            try:
+                out = self._agent().start(question)
+            except Exception as exc:          # the model failed: the rules carry on
+                print(f"[agent] {type(exc).__name__}: {exc}")
+                self._agent_down_until = now_ms() + 60_000
+                out = None
+            if out is not None:
+                handoff = self._agent_out(out, question, source, aid)
+                if handoff is None:
+                    return
+                mode, query = handoff
+                question = query if mode != "draft" else question
+            picks = False
+        if picks:
+            # D35: it sounds like an instruction the rules don't know. Let the model
+            # pick a tool (or ask back) instead of answering "I can't do that".
+            # D36: or it's Hindi: the model's English goes through the same rules.
+            # D42: only when the agent can't run (no tool calling, or it just failed).
+            picked = self._pick_tool(question)
+            if picked and picked[0] != "answer" and self._use_tool(*picked, question=question,
+                                                                   source=source, aid=aid):
+                return
+            english = str((picked or ("", {}))[1].get("english") or "").strip()
+            if hindi and english:
+                print(f"[ask] hindi -> {english!r}")
+                question = english          # ...and on through the same dispatch below
+                mode, query = route(question, last, now)
+        if mode == "presence":
+            said = self._presence_line()
+            self.publish({"type": "toast", "text": said, "icon": "presence"})
+            if source == "voice" and self.speak:
+                self.speak(said)
+            return
+        if mode == "command":
+            kind, arg = command(question)
+            said = self._do(kind, arg, question)
+            if said:
+                self.publish({"type": "toast", "text": said, "icon": kind})
+                if source == "voice" and self.speak and kind != "hush":
+                    self.speak(said)
+            return
+        if mode == "nav":
+            # D33: move around what's on show. Silent and instant; the pill says what happened.
+            ev = nav(question)
+            if ev.get("action") == "step" and self.last_evidence:
+                self.shown = max(0, min(len(self.last_evidence) - 1, self.shown + ev["by"]))
+            self.publish(ev)
+            self.publish({"type": "toast", "text": _nav_said(ev), "icon": "nav"})
+            self.nav_until = now_ms() + config.NAV_WINDOW_S * 1000
+            return
+        if mode == "goto":
+            # D33: "show me yesterday at 3" -> the timeline, there.
+            from .plugin import time_window
+            since, until, label = time_window(question, now)
+            ev = {"type": "open_view", "view": "timeline"}
+            if until - since > 12 * 3600_000:
+                ev["day"] = time.strftime("%Y-%m-%d", time.localtime(since / 1000))
+            else:
+                ev["ts"] = (since + until) // 2
+            self.publish(ev)
+            said = f"Here's {label}."
+            self.publish({"type": "toast", "text": said, "icon": "open"})
+            self.nav_until = now_ms() + config.NAV_WINDOW_S * 1000
+            if source == "voice" and self.speak:
+                self.speak(said)
+            return
+        if mode == "show":
+            # "Show me the best match": open evidence already on screen, no new search.
+            words = question.lower().replace("?", "").split()
+            idx = next((_ORDINAL[w] for w in words if w in _ORDINAL), 0)
+            idx = len(self.last_evidence) - 1 if idx < 0 else idx
+            if 0 <= idx < len(self.last_evidence):
+                self.publish({"type": "open_evidence", "index": idx})
+                self.shown, self.nav_until = idx, now_ms() + config.NAV_WINDOW_S * 1000
+                said = "Here it is."
+            else:
+                said = "There's no such match."
+                self.publish({"type": "toast", "text": said, "icon": "show"})
+            if source == "voice" and self.speak:
+                self.speak(said)
+            return
+        # A new question drops a question Jimmy asked back; only a re-ask keeps its count.
+        asked = (self.pending or {}).get("asked", 0) if force and force[0] == "clarify" else 0
+        self.pending = None
+        history = [{"q": t["q"], "a": t["a"]} for t in self.turns[-2:]]
+        self.publish({"type": "answer_start", "id": aid, "question": question, "source": source,
+                      "mode": mode, "history": history})
+        if mode == "clarify":
+            # D28: can't tell the screen now from a screen captured earlier: ask.
+            self.pending = {"q": question, "asked": asked + 1, "ts": now}
+            self.listen_until = now_ms() + config.CLARIFY_WAIT_S * 1000
+            self.publish({"type": "answer_evidence", "id": aid, "mode": "clarify", "evidence": [],
+                          "window": None, "terms": [], "days": []})
+            self.publish({"type": "answer_delta", "id": aid, "text": CLARIFY_Q})
+            self.publish({"type": "answer_end", "id": aid, "text": CLARIFY_Q, "awaiting": True})
+            self.publish({"type": "listening", "prompt": "listening… now, or earlier?"})
+            if source == "voice" and self.speak:
+                self.speak(CLARIFY_Q)
+            return
+        try:
+            if mode == "stats":
+                return self._stats(aid, question, query, source)
+            if mode in ("draft", "event"):
+                return self._write(aid, mode, question, source)
+            if mode == "chat":
+                items, label, terms = [], None, []
+            elif mode == "screen":
+                items, label, terms = self._screen_evidence(), "now", []
+            else:
+                if pre.get("q") == query:
+                    pre["t"].join()
+                items, label, terms = pre.get("ev") if pre.get("q") == query and pre.get("ev") \
+                    else gather_evidence(self.store, query)
+            self.last_evidence, self.shown = items, 0
+            days = sorted({e["day"] for e in items})
+            self.publish({"type": "answer_evidence", "id": aid, "mode": mode, "evidence": items,
+                          "window": label, "terms": terms, "days": days})
+            jim = self._jim()
+            style = {"chat": CHAT_STYLE, "screen": SCREEN_STYLE}.get(mode, ANSWER_STYLE)
+            snippets = to_snippets(items)
+            if why_last:
+                style = WHY_STYLE
+                snippets = [Snippet(why_last["ts"], "your previous answer (Jimmy)",
+                                    f"user: {why_last['q']}\njimmy: {why_last['a']}")]
+            streamed = False
+            if mode != "chat" and not items:
+                text = ("I can't see a window I'm allowed to read." if mode == "screen" else
+                        "Nothing I captured matches that.")
+                self.publish({"type": "answer_delta", "id": aid, "text": text})
+            elif not jim.llm.configured:
+                text = "Here's what I found; there's no model key to summarise it."
+                self.publish({"type": "answer_delta", "id": aid, "text": text})
+            else:
+                text = ""
+                # The screen changes: a screen answer gets no history, and joins none,
+                # or the last screen's answer gets repeated for this one (D29).
+                session = f"screen-{aid}" if mode == "screen" else self.session
+                voice = (SpeakAsItStreams(self.speak) if source == "voice" and self.speak
+                         and config.VOICE_ANSWERS else None)
+                # D41: a screen answer also looks at the screen, not only its text.
+                image = screen_image(items[0]) if mode == "screen" and items else None
+                for piece in jim.ask_stream(question, session=session, snippets=snippets,
+                                            instructions=style, **({"image": image} if image else {})):
+                    text += piece
+                    self.publish({"type": "answer_delta", "id": aid, "text": piece})
                     if voice:
-                        voice.end()
-                        streamed = True
-                asks = text.rstrip().endswith("?")
-                self.publish({"type": "answer_end", "id": aid, "text": text, "awaiting": asks})
-                self.nav_until = now_ms() + config.NAV_WINDOW_S * 1000
-                if asks:
-                    # D35: Jimmy asked back ("the form on Friday, or the one on Tuesday?").
-                    # The reply needs no wake word, and continues this conversation.
-                    self.listen_until = now_ms() + config.CLARIFY_WAIT_S * 1000
-                    self.publish({"type": "listening", "prompt": "listening… your answer"})
-                if mode == "recall" and items and _SHOWME.match(question):
-                    self.publish({"type": "open_evidence", "index": 0})    # "show me the form": up it comes
-                self.turns.append({"q": question, "a": text, "mode": mode, "query": query, "ts": now_ms()})
-                if source == "voice" and self.speak and config.VOICE_ANSWERS and not streamed:
-                    self.speak(speakable(text))         # fixed replies; model answers spoke as they streamed
-            except LLMError as exc:
-                self.publish({"type": "answer_error", "id": aid, "error": str(exc)[:200]})
-            except Exception as exc:                    # an answer failing must never stop capture
-                self.publish({"type": "answer_error", "id": aid, "error": f"{type(exc).__name__}: {exc}"[:200]})
+                        voice.feed(piece)
+                if voice:
+                    voice.end()
+                    streamed = True
+            asks = text.rstrip().endswith("?")
+            self.publish({"type": "answer_end", "id": aid, "text": text, "awaiting": asks})
+            self.nav_until = now_ms() + config.NAV_WINDOW_S * 1000
+            if asks:
+                # D35: Jimmy asked back ("the form on Friday, or the one on Tuesday?").
+                # The reply needs no wake word, and continues this conversation.
+                self.listen_until = now_ms() + config.CLARIFY_WAIT_S * 1000
+                self.publish({"type": "listening", "prompt": "listening… your answer"})
+            if mode == "recall" and items and _SHOWME.match(question):
+                self.publish({"type": "open_evidence", "index": 0})    # "show me the form": up it comes
+            self.turns.append({"q": question, "a": text, "mode": mode, "query": query, "ts": now_ms()})
+            if source == "voice" and self.speak and config.VOICE_ANSWERS and not streamed:
+                self.speak(speakable(text))         # fixed replies; model answers spoke as they streamed
+        except LLMError as exc:
+            self.publish({"type": "answer_error", "id": aid, "error": str(exc)[:200]})
+        except Exception as exc:                    # an answer failing must never stop capture
+            self.publish({"type": "answer_error", "id": aid, "error": f"{type(exc).__name__}: {exc}"[:200]})

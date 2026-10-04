@@ -49,6 +49,7 @@ class ActiveWindow(NamedTuple):
     hwnd: int
     app: str
     title: str
+    cls: str = ""                  # D45: the window class, to tell a shell popup from an app
 
 
 def active_window() -> ActiveWindow:
@@ -60,7 +61,18 @@ def active_window() -> ActiveWindow:
     user32.GetWindowTextW(hwnd, buf, n + 1)
     pid = wintypes.DWORD()
     user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-    return ActiveWindow(hwnd, _exe_for_pid(pid.value), buf.value)
+    cls = ctypes.create_unicode_buffer(256)
+    user32.GetClassNameW(hwnd, cls, 256)
+    return ActiveWindow(hwnd, _exe_for_pid(pid.value), buf.value, cls.value)
+
+
+def is_shell(aw: ActiveWindow) -> bool:
+    """D45: the tray overflow, taskbar, Start or Search in front: not a window to read or
+    act on. (After closing Spotify, the tray popup was captured 16 times and three
+    requests ran against it.)"""
+    from .act import SHELL_CLASSES
+    return getattr(aw, "cls", "") in SHELL_CLASSES or (
+        (aw.app or "").lower() == "explorer.exe" and (aw.title or "").rstrip(".") == "System tray overflow window")
 
 
 def is_locked() -> bool:

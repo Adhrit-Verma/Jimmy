@@ -99,6 +99,12 @@ WHISPER_LANGUAGES: tuple[str, ...] = ("en", "hi")
 WHISPER_DEVICE = "cuda"
 WHISPER_COMPUTE = "int8"
 WHISPER_FALLBACK_MODEL = "small"   # multilingual too
+# D45: tell Whisper the names of the open apps (an initial prompt, refreshed each minute):
+# 2026-10-05 heard Chrome as "room"/"Roam"/"Rome" and Claude as "cloud code"/"Plot".
+# A transcript made only of the prompt's own words is dropped (a prompt can be echoed
+# from noise). NOT yet measured on recordings: compare misheard names before and after,
+# and set this False if silence starts coming back as app names.
+WHISPER_PROMPT = True
 
 # Whisper invents text when handed non-speech: measured here, silence decoded as
 # "you" and white noise as "Thanks." VAD lets some of that through, so the
@@ -236,3 +242,13 @@ VOICE_RATE = 1               # SAPI speaking rate, -10..10
 VOICE_VOLUME = 55            # 0..100; D35: 100 was too loud. "Jimmy, speak softer/louder" changes it
 CONVO_S = 180                # questions this close together are one conversation (D27)
 CLARIFY_WAIT_S = 20          # after Jimmy asks "now, or earlier?", wait this long for the reply (D28)
+# D45: a listening window is checked against when you *started* speaking, not when
+# Whisper finished: a long request begun 4 s after "Jimmy" ended outside the 8 s and
+# was stored as ambient speech (2026-10-05). This much grace past the window's end.
+WINDOW_GRACE_S = 1.0
+YES_EVERY_S = 30             # D45: a bare "Jimmy?" gets a spoken "Yes?" at most this often
+CALL_HINT_EVERY_S = 60       # D45: "on a call: say Jimmy first" on the pill at most this often
+# D45: a segment ending on a dangling word ("maximize the window and", "can you close")
+# waits for the next one if you go on within this gap (VAD's own 0.7 s silence and the
+# pre-roll aren't counted: about 2 s of real pause), and they're heard as one line.
+JOIN_GAP_MS = 1200

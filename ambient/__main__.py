@@ -239,6 +239,8 @@ def main(argv: list[str] | None = None) -> int:
         if ctypes.get_last_error() == 183:                                    # ERROR_ALREADY_EXISTS
             print("Jimmy is already running (another `ambient run`). Quit that one first.")
             return 1
+        from . import logs
+        print(f"[bus] console kept in {logs.install()} (no captured text)")    # D45
         from .bus import ContextBus
         bus = ContextBus(db_path=db, monitor=a.monitor,
                          audio=not a.no_audio, thumbs=not a.no_thumbs, cards=not a.no_cards,

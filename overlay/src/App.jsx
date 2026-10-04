@@ -624,7 +624,8 @@ export default function App() {
         if (ev.via) say(`\u201c${ev.text}\u201d`, "heard");
         else {
           setMood((m) => (m === "listening" ? null : m));
-          say(`Not taken: ${ev.skip}. Say \u201cJimmy\u201d first`, "skip");
+          // D45: on a call the way out is named too ("I'm not on a call").
+          say(`Not taken: ${ev.skip}. ${ev.hint ? ev.hint[0].toUpperCase() + ev.hint.slice(1) : "Say \u201cJimmy\u201d first"}`, "skip");
         }
       }
       if (ev.type === "thinking") { setMood("thinking"); setPrompt(null); }   // D38: react at once

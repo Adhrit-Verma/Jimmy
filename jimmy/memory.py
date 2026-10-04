@@ -79,7 +79,7 @@ END;
 -- D42: what Jimmy heard, how, what it decided and did, and what it said. One row a request.
 CREATE TABLE IF NOT EXISTS traces (
     id INTEGER PRIMARY KEY, ts INT NOT NULL, heard TEXT, via TEXT, route TEXT,
-    steps TEXT, said TEXT, ms INT
+    steps TEXT, said TEXT, ms INT, wait_ms INT
 );
 CREATE TABLE IF NOT EXISTS goals (
     id INTEGER PRIMARY KEY, created INT NOT NULL, text TEXT NOT NULL,
@@ -99,6 +99,9 @@ class Memory:
         self.conn.execute("PRAGMA journal_mode=WAL")
         with self._lock:
             self.conn.executescript(SCHEMA)
+            # D45: time a request waited behind another, apart from its own work.
+            if "wait_ms" not in {r[1] for r in self.conn.execute("PRAGMA table_info(traces)")}:
+                self.conn.execute("ALTER TABLE traces ADD COLUMN wait_ms INT")
             self.conn.commit()
 
     def _write(self, sql: str, args: tuple) -> int:
@@ -268,10 +271,10 @@ class Memory:
 
     def add_trace(self, t: dict) -> None:
         import json
-        self._write("INSERT INTO traces(ts, heard, via, route, steps, said, ms) VALUES (?,?,?,?,?,?,?)",
+        self._write("INSERT INTO traces(ts, heard, via, route, steps, said, ms, wait_ms) VALUES (?,?,?,?,?,?,?,?)",
                     (int(t.get("ts") or time.time() * 1000), str(t.get("heard") or "")[:500], t.get("via") or "",
                      t.get("route") or "", json.dumps(t.get("steps") or [], ensure_ascii=False)[:8000],
-                     str(t.get("said") or "")[:500], int(t.get("ms") or 0)))
+                     str(t.get("said") or "")[:500], int(t.get("ms") or 0), int(t.get("wait_ms") or 0)))
 
     def traces(self, n: int = 20) -> list[dict]:
         import json

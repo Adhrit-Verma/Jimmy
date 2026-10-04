@@ -160,26 +160,35 @@ def perform(hwnd: int, t: Target, text: str | None = None) -> str:
                 best_c, best_d = c, d
         if best_c is None:
             return f"“{t.name}” isn't there any more."
-        c = best_c
-        if text is not None:
-            if c.Element.CurrentIsPassword:
-                return "I never type into password boxes."
-            vp = c.GetPattern(auto.PatternId.ValuePattern)
-            if not vp or vp.IsReadOnly:
-                return f"I can't type into “{t.name}”."
-            vp.SetValue(text)
-            return f"Typed into “{t.name}”."
-        for pid, verb in ((auto.PatternId.InvokePattern, "Invoke"), (auto.PatternId.TogglePattern, "Toggle"),
-                          (auto.PatternId.SelectionItemPattern, "Select")):
-            p = c.GetPattern(pid)
-            if p:
-                getattr(p, verb)()
-                return f"Done: “{t.name}”."
-        p = c.GetPattern(auto.PatternId.ExpandCollapsePattern)
+        return press(best_c, t.name, text, auto)
+
+
+def press(c, name: str, text: str | None, auto) -> str:
+    """What "click" or "type" means for this control, through its own patterns.
+    D45: a text box (Chrome's address bar has Value, not Invoke) is "clicked" by
+    putting the cursor in it, through UI Automation: no mouse event."""
+    if text is not None:
+        if c.Element.CurrentIsPassword:
+            return "I never type into password boxes."
+        vp = c.GetPattern(auto.PatternId.ValuePattern)
+        if not vp or vp.IsReadOnly:
+            return f"I can't type into “{name}”."
+        vp.SetValue(text)
+        return f"Typed into “{name}”."
+    for pid, verb in ((auto.PatternId.InvokePattern, "Invoke"), (auto.PatternId.TogglePattern, "Toggle"),
+                      (auto.PatternId.SelectionItemPattern, "Select")):
+        p = c.GetPattern(pid)
         if p:
-            (p.Collapse if p.ExpandCollapseState == 1 else p.Expand)()     # 1: expanded
-            return f"Opened “{t.name}”."
-        return f"I can't press “{t.name}” without your mouse."
+            getattr(p, verb)()
+            return f"Done: “{name}”."
+    p = c.GetPattern(auto.PatternId.ExpandCollapsePattern)
+    if p:
+        (p.Collapse if p.ExpandCollapseState == 1 else p.Expand)()     # 1: expanded
+        return f"Opened “{name}”."
+    if c.GetPattern(auto.PatternId.ValuePattern):
+        c.SetFocus()
+        return f"Focused “{name}”."
+    return f"I can't press “{name}” without your mouse."
 
 
 def submit(hwnd: int, t: Target) -> str:
@@ -227,6 +236,78 @@ def close_app(name: str) -> str:
     for h in hits:
         user32.PostMessageW(h, 0x0010, 0, 0)        # WM_CLOSE
     return f"Closed {name}." if hits else f"I don't see {name} open."
+
+
+# --- D45: other windows: list, switch to, minimize / maximize / restore ---------------
+# Shell surfaces, not windows to act on: the tray overflow, the taskbar, Start and Search.
+# After closing Spotify the tray popup was in front, and three requests ran against it.
+SHELL_CLASSES = {"NotifyIconOverflowWindow", "Shell_TrayWnd", "Shell_SecondaryTrayWnd", "Windows.UI.Core.CoreWindow",
+                 "TopLevelWindowForOverflowXamlIsland", "Progman", "WorkerW", "XamlExplorerHostIslandWindow"}
+
+
+def top_windows() -> list[tuple[int, str, str, str]]:
+    """(hwnd, exe, title, class) of the visible, titled top-level windows, front first."""
+    import ctypes
+
+    from .screen import _exe_for_pid
+    user32 = ctypes.windll.user32
+    out: list[tuple[int, str, str, str]] = []
+
+    def cb(hwnd, _):
+        n = user32.GetWindowTextLengthW(hwnd)
+        if not user32.IsWindowVisible(hwnd) or not n or user32.GetWindow(hwnd, 4):     # 4: GW_OWNER
+            return True
+        title = ctypes.create_unicode_buffer(n + 1)
+        user32.GetWindowTextW(hwnd, title, n + 1)
+        cls = ctypes.create_unicode_buffer(256)
+        user32.GetClassNameW(hwnd, cls, 256)
+        if cls.value in SHELL_CLASSES:
+            return True
+        pid = ctypes.c_ulong()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        out.append((int(hwnd), _exe_for_pid(pid.value), title.value, cls.value))
+        return True
+    user32.EnumWindows(ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)(cb), 0)
+    return out
+
+
+def pick_window(name: str, windows: list[tuple[int, str, str, str]]) -> tuple[int, str, str, str] | None:
+    """The window an app name means: its exe, then its title, then the closest spelling."""
+    from .insights import app_name
+    want = re.sub(r"[^a-z0-9]", "", (name or "").lower()).replace("google", "")
+    if not want:
+        return None
+    labels = [(w, re.sub(r"[^a-z0-9]", "", app_name(w[1]).lower()).replace("google", "")) for w in windows]
+    for test in (lambda lab, w: lab == want, lambda lab, w: lab.startswith(want) or want.startswith(lab),
+                 lambda lab, w: want in re.sub(r"[^a-z0-9]", "", w[2].lower())):
+        hit = next((w for w, lab in labels if lab and test(lab, w)), None)
+        if hit:
+            return hit
+    close = difflib.get_close_matches(want, [lab for _, lab in labels if lab], n=1, cutoff=0.6)
+    return next((w for w, lab in labels if close and lab == close[0]), None)
+
+
+def window_state(hwnd: int, state: str) -> bool:
+    """Minimize / maximize / restore through UI Automation's WindowPattern (invariant 12)."""
+    import uiautomation as auto
+    with auto.UIAutomationInitializerInThread():
+        wp = auto.ControlFromHandle(hwnd).GetPattern(auto.PatternId.WindowPattern)
+        if not wp:
+            return False
+        wp.SetWindowVisualState({"restore": 0, "maximize": 1, "minimize": 2}[state])
+        return True
+
+
+def focus_window(hwnd: int) -> bool:
+    """Bring a window to the front through UI Automation: restore it if minimized, then SetFocus."""
+    import uiautomation as auto
+    with auto.UIAutomationInitializerInThread():
+        c = auto.ControlFromHandle(hwnd)
+        wp = c.GetPattern(auto.PatternId.WindowPattern)
+        if wp and wp.WindowVisualState == 2:            # minimized
+            wp.SetWindowVisualState(0)
+        c.SetFocus()
+        return True
 
 
 # --- opening apps ----------------------------------------------------------------

@@ -71,11 +71,14 @@ def test_plan_once_then_steps():
 
 def test_single_actions_ask_each_time_and_risky_always():
     did = []
-    ag = Agent(Script(call("click", id=3), call("done", summary="Pressed.")), env(did))
+    llm = Script(call("click", id=3), call("done", summary="Pressed."))
+    ag = Agent(llm, env(did))
     out = ag.start("press search")
     assert out.kind == "await" and out.say == "Press “Search”? Say yes." and ("cursor", "click", "Search") in did
     assert not [d for d in did if d[0] == "perform"], "nothing pressed before the yes"
-    assert ag.answer(True).say == "Pressed."
+    out = ag.answer(True)
+    # D45: a lone action ends with what it did; the model gets no further turn
+    assert out.kind == "done" and out.say == "ok" and ag.task is None and len(llm.seen) == 1
     did.clear()
     ag = Agent(Script(call("plan", steps=["delete the account"]), call("click", id=4)), env(did))
     ag.start("delete my account")

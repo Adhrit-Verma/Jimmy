@@ -179,11 +179,12 @@ def test_asker_answers_voice_questions_and_speaks_only_those():
     ev = next(e for e in events if e["type"] == "answer_evidence")
     assert ev["evidence"][0]["app"] == "Chrome" and "McKinsey" in ev["evidence"][0]["title"]
     assert next(e for e in events if e["type"] == "answer_end")["text"] == "The McKinsey form, Friday 14:09."
-    assert spoken == ["The McKinsey form, Friday 14:09."], "spoken questions are answered aloud"
+    # D45: a bare "Jimmy." is answered "Yes?" (it was silent, and said 20 times in a session)
+    assert spoken == ["Yes?", "The McKinsey form, Friday 14:09."], "spoken questions are answered aloud"
 
     events.clear()
     a._run("mckinsey application", "typed")
-    assert len(spoken) == 1, "typed questions are answered silently"
+    assert len(spoken) == 2, "typed questions are answered silently"
     assert a.hear(0, "loopback", "Jimmy, what was that") is False, "only the user's mic can ask"
     assert a.followup_until > 0, "D39: right after a spoken answer, you can go on without the name"
     a.followup_until = 0                                 # ...for FOLLOWUP_S; after that:

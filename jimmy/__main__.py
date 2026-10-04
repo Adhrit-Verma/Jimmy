@@ -136,11 +136,14 @@ def _trace(n: int) -> int:
     mem = Memory(config.MEMORY_DB)
     for r in reversed(mem.traces(n)):
         when = _t.strftime("%m-%d %H:%M:%S", _t.localtime(r["ts"] / 1000))
-        print(f"{when}  [{r['via'] or '?'}] {r['heard']!r}  -> {r['route']}  ({r['ms']} ms)")
+        waited = f", waited {r['wait_ms']} ms" if r.get("wait_ms") else ""          # D45
+        print(f"{when}  [{r['via'] or '?'}] {r['heard']!r}  -> {r['route']}  ({r['ms']} ms{waited})")
         for st in r["steps"]:
             res = f"  => {st['result']!r}" if st.get("result") else ""
+            extra = (f" +{st['tool_ms']}ms tool" if st.get("tool_ms") else "") + \
+                    (f" via {st['model']}" if st.get("model") else "") + (" SLOW" if st.get("slow") else "")
             print(f"      {st['tool']}({json.dumps(st.get('args') or {}, ensure_ascii=False)[:100]}) "
-                  f"{st.get('ms', '')}ms{res[:120]}")
+                  f"{st.get('ms', '')}ms model{extra}{res[:120]}")
         if r["said"]:
             print(f"      said: {r['said'][:160]!r}")
     mem.close()

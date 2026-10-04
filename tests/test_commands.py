@@ -156,6 +156,15 @@ MATRIX = [
     ("One second, Jimmy turn on privacy curtain.", "command", "curtain", None),
     ("take it jimmy what's on my screen", "screen", None, None),
     ("Chime, can you tell me last time I used Discord?", "stats", None, None),
+    # D45: the live session of 2026-10-05. Whisper wrote the name "Timmy" and "Jimmy's".
+    ("Timmy, close the UI", "command", "close_ui", None), ("Timmy, pause for 10 minutes", "command", "pause", 10.0),
+    ("Jimmy's, open the timeline", "command", "open", "timeline"),
+    # ...a second instruction after a scroll goes to the agent (it plans both); D35's stays a scroll
+    ("Jimmy scroll down and maximize the window", "recall", None, None),
+    ("Jimmy scroll up then open the first link", "recall", None, None),
+    ("Jimmy scroll down and show me older things", "nav", "scroll", None),
+    # ...and "can you close", cut off before what, is half a request, not "close"
+    ("Jimmy can you close", "chat", None, None), ("Jimmy, close", "nav", "close", None),
 ]
 
 # Unknown instructions: these go to the model's tool pick (they start like an instruction).
@@ -166,7 +175,8 @@ TO_TOOLS = ["Jimmy turn this off", "Jimmy make it darker",          # D41: "clic
 TALK = ["I need to stop by the shop", "remember when we went to Goa", "close the deal by Friday",
         "next week we ship", "go back home", "back then it was different", "close enough", "copy that",
         "open the box", "just talking about lunch", "what's next on my list", "the curtain looks nice",
-        "pause the video", "I told Jimmy about it", "scroll through instagram later", "done with dinner"]
+        "pause the video", "I told Jimmy about it", "scroll through instagram later", "done with dinner",
+        "talk to Timmy about it", "Timmy said he'd come later"]                     # D45: Timmy, not to Jimmy
 
 
 def heard(text: str) -> str:

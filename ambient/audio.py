@@ -134,6 +134,91 @@ def is_hallucination(text: str) -> bool:
     return stripped.rstrip(".!?,") in {h.rstrip(".!?,") for h in HALLUCINATIONS}
 
 
+def app_prompt(apps: list[str], titles: list[str] = ()) -> str:
+    """D45: Whisper's initial prompt: Jimmy's name and the open apps (and the site at
+    the end of a browser title, "… - YouTube - Google Chrome"), so app names are
+    spelled right. Names only: never a page title's words."""
+    names = ["Jimmy", *apps]
+    for t in titles:
+        parts = [x.strip() for x in t.split(" - ") if x.strip()]
+        if len(parts) >= 3 and len(parts[-2]) <= 20:
+            names.append(parts[-2])
+    seen = list(dict.fromkeys(n for n in names if n and len(n) <= 30))
+    return ", ".join(seen[:16]) + "." if len(seen) > 1 else ""
+
+
+def echoes_prompt(text: str, prompt: str) -> bool:
+    """A transcript made only of the prompt's words, three or more (an echo of the
+    list, from noise). "Jimmy" or "Jimmy, Chrome" alone are real lines, kept."""
+    if not prompt:
+        return False
+    import re as _re
+    words = _re.findall(r"[\w']+", text.lower())
+    have = set(_re.findall(r"[\w']+", prompt.lower()))
+    return len(words) >= 3 and all(w in have for w in words)
+
+
+# D45: a line that ends on one of these was cut at a pause ("maximize the window and",
+# "Suggest me a video from", "Can you close"): the next segment is the rest of it.
+DANGLING = {"and", "or", "then", "from", "to", "the", "a", "an", "on", "in", "of", "close", "open", "click", "search"}
+
+
+def dangles(text: str) -> bool:
+    import re as _re
+    words = _re.findall(r"[\w']+", text.lower())
+    if len(words) < 2 or text.rstrip().endswith("?"):
+        return False
+    return words[-1] in DANGLING or words[-2:] in (["can", "you"], ["could", "you"])
+
+
+class Joiner:
+    """D45: hold a transcript that ends on a dangling word, and join it to the next one
+    from the same source if that began within JOIN_GAP_MS; otherwise let it go once
+    no more speech can belong to it. Times are the segments' own (wall-clock ms)."""
+
+    def __init__(self, gap_ms: int = config.JOIN_GAP_MS, wait_ms: int = config.SEG_MAX_MS + 3000,
+                 quiet_ms: int = 6000):
+        self.gap_ms, self.wait_ms, self.quiet_ms = gap_ms, wait_ms, quiet_ms
+        self.held: dict[str, tuple[int, int, str]] = {}      # source -> (ts_start, ts_end, text)
+        self.spoke_at: dict[str, int] = {}                    # source -> when speech last began
+
+    def started(self, source: str, ts_ms: int) -> None:
+        self.spoke_at[source] = ts_ms
+
+    def feed(self, ts_start: int, ts_end: int, source: str, text: str) -> list[tuple[int, int, str, str]]:
+        out = []
+        h = self.held.pop(source, None)
+        if h is not None:
+            if ts_start - h[1] <= self.gap_ms:
+                ts_start, text = h[0], f"{h[2]} {text}"
+            else:
+                out.append((h[0], h[1], source, h[2]))
+        if dangles(text):
+            self.held[source] = (ts_start, ts_end, text)
+        else:
+            out.append((ts_start, ts_end, source, text))
+        return out
+
+    def nothing(self, source: str) -> list[tuple[int, int, str, str]]:
+        """The segment after a held line came back empty (noise): the line goes alone."""
+        h = self.held.pop(source, None)
+        return [(h[0], h[1], source, h[2])] if h else []
+
+    def due(self, now_ms: int, busy: bool = False) -> list[tuple[int, int, str, str]]:
+        """Held lines nobody went on with: no speech began within the gap; or speech
+        began but nothing is coming (no segment queued `quiet_ms` after it began: a
+        cough too short to keep); or it waited `wait_ms` in all."""
+        out = []
+        for source, (a, b, text) in list(self.held.items()):
+            began = self.spoke_at.get(source, 0)
+            went_on = b - 200 < began <= b + self.gap_ms
+            if ((now_ms - b > self.gap_ms and not went_on) or (went_on and not busy and now_ms - began > self.quiet_ms)
+                    or now_ms - b > self.wait_ms):
+                del self.held[source]
+                out.append((a, b, source, text))
+        return out
+
+
 def to_mono16k(raw: bytes, in_rate: int, channels: int) -> np.ndarray:
     """Interleaved int16 at the device rate -> mono int16 at 16 kHz."""
     a = np.frombuffer(raw, dtype=np.int16)
@@ -264,6 +349,8 @@ class Transcriber:
                 last = exc
         raise RuntimeError(f"no Whisper model would load: {last}")
 
+    prompt = ""                     # D45: set by the bus each minute (app_prompt)
+
     def transcribe(self, pcm: np.ndarray) -> str:
         """Decode, then throw away what the model clearly invented.
 
@@ -280,6 +367,9 @@ class Transcriber:
 
         audio = pcm.astype(np.float32) / 32768.0
         opts = dict(beam_size=1, vad_filter=False, condition_on_previous_text=False)
+        prompt = self.prompt if config.WHISPER_PROMPT else ""
+        if prompt:
+            opts["initial_prompt"] = prompt
         segs, info = self.model.transcribe(audio, language=config.WHISPER_LANGUAGE, **opts)
         allowed = config.WHISPER_LANGUAGES
         if not config.WHISPER_LANGUAGE and allowed and info.language not in allowed:
@@ -293,7 +383,7 @@ class Transcriber:
                 if getattr(s, "no_speech_prob", 0.0) <= config.NO_SPEECH_MAX
                 and getattr(s, "avg_logprob", 0.0) >= config.AVG_LOGPROB_MIN]
         text = " ".join(t for t in kept if t).strip()
-        if is_hallucination(text):
+        if is_hallucination(text) or echoes_prompt(text, prompt):
             return ""
         return text
 
@@ -408,7 +498,9 @@ class AudioPipeline:
                  mic: bool = config.CAPTURE_MIC,
                  loopback: bool = config.CAPTURE_LOOPBACK,
                  on_start: Callable[[str], None] | None = None):
-        self.on_segment, self.on_start = on_segment, on_start
+        self.on_segment, self.on_start = on_segment, self._started
+        self._on_start = on_start
+        self.joiner = Joiner()             # D45: a line cut at "and" waits for the rest
         self.want_mic, self.want_loopback = mic, loopback
         self._q: queue.Queue = queue.Queue(maxsize=64)
         self._stop = threading.Event()
@@ -441,6 +533,11 @@ class AudioPipeline:
                 self.errors.append(f"loopback: {exc}")
         return out
 
+    def _started(self, source: str) -> None:
+        self.joiner.started(source, int(time.time() * 1000))
+        if self._on_start:
+            self._on_start(source)
+
     def start(self) -> None:
         import pyaudiowpatch as pa
         self._pa = pa.PyAudio()
@@ -457,13 +554,25 @@ class AudioPipeline:
             try:
                 seg = self._q.get(timeout=0.3)
             except queue.Empty:
+                self._deliver(self.joiner.due(int(time.time() * 1000)))
                 continue
             try:
                 text = self.transcriber.transcribe(seg.pcm)
                 if text:
-                    self.on_segment(seg.ts_start, seg.ts_end, seg.source, text)
+                    self._deliver(self.joiner.feed(seg.ts_start, seg.ts_end, seg.source, text))
+                else:
+                    self._deliver(self.joiner.nothing(seg.source))
             except Exception as exc:
                 self.errors.append(f"transcribe: {type(exc).__name__}: {exc}")
+            self._deliver(self.joiner.due(int(time.time() * 1000), busy=not self._q.empty()))
+        self._deliver(self.joiner.due(1 << 62))          # stopping: whatever is held goes now
+
+    def _deliver(self, lines: list[tuple[int, int, str, str]]) -> None:
+        for ts_start, ts_end, source, text in lines:
+            try:
+                self.on_segment(ts_start, ts_end, source, text)
+            except Exception as exc:
+                self.errors.append(f"segment: {type(exc).__name__}: {exc}")
 
     def stop(self) -> None:
         self._stop.set()
