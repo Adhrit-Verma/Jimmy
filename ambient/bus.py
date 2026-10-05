@@ -152,8 +152,11 @@ class ContextBus:
         """Returns a short status word, for the console and for tests."""
         self._refresh_prompt()
         if now_ms() < self.paused_until:
-            # User pause: nothing is captured at all, screen or audio.
-            if self._audio and not self._audio.paused.is_set():
+            # User pause: nothing is captured at all, screen or audio. D46: the mic stays
+            # on only to hear the name ("Jimmy, resume"); _on_audio stores nothing meanwhile.
+            if config.LISTEN_WHILE_PAUSED and not screen.is_locked():
+                self._apply_audio_policy(sensitive=False, why="paused")
+            elif self._audio and not self._audio.paused.is_set():
                 self._audio.paused.set()
             return "paused"
         if screen.is_locked():
@@ -383,6 +386,11 @@ class ContextBus:
     def _on_audio(self, ts_start: int, ts_end: int, source: str, text: str) -> None:
         # "Jimmy, …" is a question for Jimmy: stored as a command, never evidence
         # (D27: "can you listen to me" once answered with itself), and not for the gate.
+        if now_ms() < self.paused_until:
+            # D46: paused: only the name is listened for, and nothing at all is stored.
+            if config.LISTEN_WHILE_PAUSED and self._asker:
+                self._asker.hear(ts_end, source, text, ts_start, name_only=True)
+            return
         command = bool(self._asker and self._asker.hear(ts_end, source, text, ts_start))
         self.store.add_audio(ts_start, ts_end, "command" if command else source, text,
                              window_id=self.window_id)
@@ -1028,8 +1036,8 @@ class ContextBus:
     def _resume_after_voice(self) -> None:
         if getattr(self, "_speaking", False) or not self._audio:
             return
-        if now_ms() < self.paused_until or screen.is_locked():
-            return                         # paused or locked: the tick keeps the mic off
+        if screen.is_locked() or (now_ms() < self.paused_until and not config.LISTEN_WHILE_PAUSED):
+            return                         # locked (or paused, mic off): the tick keeps the mic off
         self._apply_audio_policy(sensitive=getattr(self, "_sensitive", False))
 
     def stop_running(self) -> None:

@@ -938,8 +938,11 @@ class Asker:
         time arrived after its window had closed and was dropped as ambient speech."""
         return until > 0 and ts_start <= until + int(config.WINDOW_GRACE_S * 1000)
 
-    def hear(self, ts_end: int, source: str, text: str, ts_start: int | None = None) -> bool:
-        """Called for every transcribed segment. True if it was meant for Jimmy."""
+    def hear(self, ts_end: int, source: str, text: str, ts_start: int | None = None,
+             name_only: bool = False) -> bool:
+        """Called for every transcribed segment. True if it was meant for Jimmy.
+        `name_only` (D46, while paused): only a line with the name, or the reply right
+        after a bare "Jimmy" or to Jimmy's question; nothing else, not even a "heard" note."""
         if source != "mic":
             return False
         ts_end = ts_end if ts_end > 0 else now_ms()     # 0: no timing given (typed tools, tests)
@@ -948,7 +951,7 @@ class Asker:
         bare = " ".join(text.strip().split())
         # D33: right after Jimmy showed you something, navigation needs no wake word;
         # D32: right after Jimmy offered something you asked for, neither does "yes".
-        if (self._open(self.nav_until, ts_start) and nav(bare)) or (
+        if (not name_only and self._open(self.nav_until, ts_start) and nav(bare)) or (
                 self.offer and self.offer["bare"] and self._open(self.offer["until"], ts_start) and _YES.match(bare)):
             self._via = "nav or yes"
             self.ask(bare, "voice")
@@ -973,6 +976,8 @@ class Asker:
                 self._via = "reply"
                 self.ask(text.strip(), "voice")
                 return True
+            if name_only:
+                return False                    # D46: paused: no follow-ups, no eye contact
             why, skip = self._unnamed(ts_start, ts_end, bare)
             if why:
                 print(f"[ask] no name needed ({why}): {bare!r}")

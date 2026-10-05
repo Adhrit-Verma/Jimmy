@@ -246,6 +246,11 @@ CLARIFY_WAIT_S = 20          # after Jimmy asks "now, or earlier?", wait this lo
 # Whisper finished: a long request begun 4 s after "Jimmy" ended outside the 8 s and
 # was stored as ambient speech (2026-10-05). This much grace past the window's end.
 WINDOW_GRACE_S = 1.0
+# D46 (the human, 2026-10-05): a pause stores nothing, but Jimmy still hears its name,
+# so "Jimmy, resume" works by voice. While paused only lines with the name (or the reply
+# right after a bare "Jimmy") reach the Asker; nothing is written to audio_segments, the
+# gate never sees speech, and no line is taken without the name. False: the mic is off.
+LISTEN_WHILE_PAUSED = True
 YES_EVERY_S = 30             # D45: a bare "Jimmy?" gets a spoken "Yes?" at most this often
 CALL_HINT_EVERY_S = 60       # D45: "on a call: say Jimmy first" on the pill at most this often
 # D45: a segment ending on a dangling word ("maximize the window and", "can you close")

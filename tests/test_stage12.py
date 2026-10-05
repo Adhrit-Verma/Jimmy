@@ -602,6 +602,42 @@ def test_p2_10_a_bare_jimmy_is_answered():
     print("ok  P2-10: a bare 'Jimmy?' gets a spoken 'Yes?' (at most every 30 s, voice permitting)")
 
 
+def test_d46_paused_hears_the_name_and_stores_nothing():
+    """The human's answer to D45's open question: a pause stores nothing, but "Jimmy,
+    resume" works by voice."""
+    from ambient.bus import ContextBus, Counters
+    did = []
+    a, say, events, spoken, traces = asker(resume=lambda: did.append("resume"), eye_contact=lambda x, y: True)
+    a.followup_until = NOW + 60_000
+    assert not a.hear(NOW, "mic", "what's on my screen", NOW - 1500, name_only=True)
+    assert not a.hear(NOW, "mic", "and what about that", NOW - 1500, name_only=True)
+    assert not events and a.busy == 0, "no follow-up, no eye contact, not even a 'heard' note"
+    assert a.hear(NOW, "mic", "Jimmy, resume", NOW - 1500, name_only=True)
+    assert a.wait_idle(10) and did == ["resume"] and spoken[-1] == "Listening again."
+    assert a.hear(NOW, "mic", "Jimmy?", NOW - 1500, name_only=True)
+    assert a.hear(NOW + 3000, "mic", "start listening again", NOW + 1000, name_only=True), "the reply after a bare name"
+    assert a.wait_idle(10) and did == ["resume", "resume"]
+
+    class Heard:
+        def __init__(self):
+            self.calls = []
+
+        def hear(self, *args, **kw):
+            self.calls.append((args, kw))
+            return True
+    b = ContextBus.__new__(ContextBus)
+    b.store, b.counters, b.window_id, b.gate = Store(":memory:"), Counters(), None, None
+    b._asker = Heard()
+    ask_mod.now_ms = real_now
+    b.paused_until = real_now() + 60_000
+    b._on_audio(1000, 2000, "mic", "Jimmy, resume")
+    b._on_audio(3000, 4000, "mic", "my bank code is 1234")
+    assert [kw for _, kw in b._asker.calls] == [{"name_only": True}] * 2
+    assert b.store.conn.execute("SELECT COUNT(*) FROM audio_segments").fetchone()[0] == 0, "nothing stored"
+    assert b.counters.audio_segments == 0
+    print("ok  D46: while paused Jimmy hears only its name, and nothing is stored")
+
+
 def test_the_llm_client_names_a_fallback_and_takes_a_model():
     import httpx
 
