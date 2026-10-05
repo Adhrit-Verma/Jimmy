@@ -2049,3 +2049,22 @@ mutex (`test_stage8`), and two `test_stage1` checks that need Windows paths
 against fakes only: run them live on Windows. The overlay change (the call hint) needs
 `npm run build`. Not done: re-running `eval_agent.py` / `eval_tools.py` (no key here) after
 the `SYSTEM` and tool changes. Do that first on the Windows machine.
+
+### D46 — While paused, Jimmy still hears its name, and stores nothing
+
+**2026-10-05.** D45's open question, answered by the human: "pause should not store
+anything but should be able to listen to me". Before, a pause switched the mic off,
+so "Jimmy, resume" couldn't work; only the pill, Ctrl+Alt+J or typing could.
+
+Now (`LISTEN_WHILE_PAUSED`, default on) the tick keeps the mic on while paused (still
+off while locked or while Jimmy speaks), and `bus._on_audio` returns before any write:
+no `audio_segments` row, no gate, nothing indexed. Lines go to `Asker.hear(...,
+name_only=True)`, which takes only a line with the name, or the reply right after a
+bare "Jimmy" or to Jimmy's own question; no follow-ups, no eye contact, not even a
+"heard" note for the rest. Screen capture stays off for the whole pause.
+
+What a request said while paused does leave: like any request to Jimmy, it gets a
+trace row in `jimmy.db` (the decision log) and is sent to the model if it needs one.
+Speech nobody addressed to Jimmy is transcribed in RAM and dropped.
+
+Check: `test_d46_paused_hears_the_name_and_stores_nothing` (`tests/test_stage12.py`).

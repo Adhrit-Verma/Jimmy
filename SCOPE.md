@@ -195,7 +195,7 @@ window, small lazy strip thumbnails, and the overlay feedback pass.
 | A topic map (clusters of what you worked on) | Possible with bge-m3 vectors already stored; needs a design for naming clusters without a model writing them. |
 | Earcons (a chime on "Jimmy") | The mic would hear them; Whisper invents text from tones. |
 | Persisting typed questions for suggestions | They're personal; kept in memory for the session only. |
-| Voice resume while paused | Pausing stops the mic by design; resume from the pill, Ctrl+Alt+J, or typing. |
+| ~~Voice resume while paused~~ | Built in D46: while paused the mic hears only the name ("Jimmy, resume"), and nothing is stored. |
 
 ---
 

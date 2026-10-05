@@ -104,7 +104,7 @@ cd overlay; npm install; npm run build   # once, and after any change under over
 .\.venv\Scripts\python.exe tests\test_stage9.py   # 14 checks: curtain follows you, presence thread, no-name asks, calls, calibration, forget, timers
 .\.venv\Scripts\python.exe tests\test_stage10.py  # 7 checks: lists by voice, remind asks what, heard feedback, cursor, Memory tab, vision fallback
 .\.venv\Scripts\python.exe tests\test_stage11.py  # 10 checks: the agent loop, plan/risky approval, typing guard, trace, calls, wiki, failure mid-task
-.\.venv\Scripts\python.exe tests\test_stage12.py  # 27 checks: the 2026-10-05 session's misses (D45), one per report item
+.\.venv\Scripts\python.exe tests\test_stage12.py  # 28 checks: the 2026-10-05 session's misses (D45), one per report item; D46 pause
 .\.venv\Scripts\python.exe tests\test_commands.py # the command matrix: 177 utterances, talk, a drill
 .\.venv\Scripts\python.exe tests\eval_agent.py    # live: 130 real commands through rules + agent (95 %); --system d41 = 71 %
 .\.venv\Scripts\python.exe -m jimmy trace -n 20   # the decision log: heard, how, route, steps, said
@@ -453,6 +453,9 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   it only from the request's own thread (`publish` does).
 - **Listening windows compare when a line *began*** (`ts_start`, D45), not when Whisper
   finished. `hear(0, …)` in a test means "now".
+- **Paused means the mic hears only the name** (D46): `bus._on_audio` returns before any
+  write and calls `hear(..., name_only=True)`. Anything new that reads the mic while
+  paused must store nothing either.
 - **Agent control numbers shift after every action** (D45): click / type / submit carry
   the name too, and a number whose control has a different name is refused. Scripted
   tests must give the id in reading order *and* the matching name.

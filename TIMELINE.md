@@ -225,7 +225,8 @@ skipped, lines cut at "and" joined, the console kept in `data/logs/jimmy.log`, a
 P2 polish. Checks: `tests\test_stage12.py` (27; 0/27 on D44's code), matrix (177).
 **Open:** live acceptance on Windows (UIA window tools, omnibox focus, the Whisper
 prompt measured on recordings), `eval_agent.py` / `eval_tools.py` re-run with a key,
-and the human's call on keeping the name detector live during a pause.
+and ~~the human's call on keeping the name detector live during a pause~~ (decided:
+yes, storing nothing; built in D46).
 
 ## Model end of life · **fixed 2026-10-03 (D43)**
 

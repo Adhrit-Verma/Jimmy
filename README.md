@@ -325,7 +325,7 @@ says so and exits.
 | Ask | Say *"Jimmy, …"*, or **Ctrl + Alt + Space** to type |
 | Ask without the name | Look at the screen and ask. *"Jimmy, eye calibration"* tunes it to you (~20 s); *"only answer to your name"* turns it off, *"listen without your name"* back on |
 | Scroll the window you're on | *"Jimmy, scroll down"* (then just *"scroll up"*, *"scroll down"*): the page or chat in front moves, wherever your pointer is |
-| Pause capture (and resume) | **Ctrl + Alt + J**, or hover the pill → **Pause 2h** |
+| Pause capture (and resume) | **Ctrl + Alt + J**, or hover the pill → **Pause 2h**. While paused nothing is stored, but *"Jimmy, resume"* still works |
 | Open the timeline | **Ctrl + Alt + T**, or hover the pill → **Timeline** |
 | See where the day went | **Ctrl + Alt + I**, or hover the pill → **Insights** |
 | Privacy curtain | Draws itself when you walk away. By hand: **Ctrl + Alt + L** |

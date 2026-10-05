@@ -10,6 +10,7 @@ step can write it.
 
 ```
  0. paused? locked? curtain?    D32/D34: STOP before anything is read ────┐
+    (D46: paused keeps the mic on for the name only; _on_audio stores nothing)
  1. active_window()              Win32: hwnd, exe, title, class.  Cheap, no COM.
     a shell popup (tray overflow, taskbar, Start/Search)? ─► STOP ("shell", D45) ┤
  2. Exclusions.check(app,title) ─── excluded? ─► STOP. Nothing captured. ─┤
