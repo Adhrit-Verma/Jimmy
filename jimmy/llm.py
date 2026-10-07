@@ -173,6 +173,17 @@ class LLM:
                   file=sys.stderr, flush=True)
             return {}
 
+    @staticmethod
+    def _usage(resp: httpx.Response) -> dict:
+        """Prompt tokens and how many came from the provider's prompt cache (D47)."""
+        try:
+            u = resp.json().get("usage") or {}
+        except Exception:
+            return {}
+        cached = (u.get("prompt_tokens_details") or {}).get("cached_tokens")
+        return {k: v for k, v in (("prompt", u.get("prompt_tokens")), ("cached", cached),
+                                  ("out", u.get("completion_tokens"))) if v is not None}
+
     def _require_key(self) -> None:
         if not self.configured:
             raise LLMError(f"no API key: set {config.API_KEY_ENV}")
@@ -217,6 +228,7 @@ class LLM:
             f = ThinkFilter()
             msg["content"] = (f.feed(msg.get("content") or "") + f.flush()).strip()
             if msg.get("tool_calls") or msg["content"]:
+                msg["_usage"] = self._usage(resp)       # D47: tokens and cache hits, for the trace
                 return msg
         raise LLMError(EMPTY)
 

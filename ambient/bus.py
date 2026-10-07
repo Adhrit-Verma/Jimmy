@@ -14,7 +14,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import config, screen
+from . import config, power, screen
 from .db import Store, now_ms
 from .redact import Exclusions, FaceStage, is_own_window
 
@@ -219,6 +219,16 @@ class ContextBus:
         reason = self.exclusions.check(app=aw.app, title=aw.title)
         if not reason and not is_own_window(aw.app, aw.title):
             self._last_app = aw                  # D45: where the agent acts when a popup is in front
+        pre = None
+        if (config.SKIP_UNCHANGED_CHECKS and not reason and getattr(self, "_sensitive_key", None) != (aw.hwnd, aw.title)
+                and (aw.hwnd, aw.title) == getattr(self, "_tick_key", None)):
+            # D47: same window as last tick: if the desktop presented nothing new, stop
+            # here, before the password check (a cross-process UI Automation call).
+            pre = self.source.grab()
+            if pre is None:
+                c.skipped_no_frame += 1
+                return "no-frame"
+        self._tick_key = None
         if not reason and screen.focused_is_password():
             reason = "password field"            # D32: typing a password: like a bank page
         # A page excluded by URL stays excluded while it's the same window and
@@ -232,7 +242,8 @@ class ContextBus:
             self._last_seen = None         # coming back is a switch, even to an unchanged screen
             return "excluded"
 
-        frame = self.source.grab()
+        frame = pre if pre is not None else self.source.grab()
+        self._tick_key = (aw.hwnd, aw.title)
         if frame is not None:
             self._screen_w = frame.shape[1]      # D42: to put control boxes on the thumbnail
         if frame is None:
@@ -356,6 +367,7 @@ class ContextBus:
         from jimmy import wiki
 
         def go():
+            power.background()                  # D47: efficiency mode; nobody waits on this
             try:
                 wiki.code_pages(mem, self.store)
             except Exception as exc:
@@ -367,6 +379,7 @@ class ContextBus:
         since = getattr(self, "_dormant_since", None)
         mem = self._intent_memory()
         if (not since or not mem or getattr(self, "_wiki_busy", False) or not self._asker
+                or power.constrained()
                 or time.monotonic() - since < config.COMPACT_AFTER_AWAY_S
                 or now_ms() - int(float(mem.setting("last_wiki", 0))) < config.WIKI_EVERY_H * 3600_000):
             return
@@ -374,6 +387,7 @@ class ContextBus:
 
         def go():
             from jimmy import wiki
+            power.background()
             try:
                 print(f"[wiki] {wiki.build(mem, self.store, self._asker._jim().llm)}")
                 mem.set_setting("last_wiki", now_ms())
@@ -789,13 +803,14 @@ class ContextBus:
         """D39: tidy the database while you're away, at most once a day."""
         since = getattr(self, "_dormant_since", None)
         mem = self._intent_memory()
-        if (not since or not mem or getattr(self, "_compacting", False)
+        if (not since or not mem or getattr(self, "_compacting", False) or power.constrained()
                 or time.monotonic() - since < config.COMPACT_AFTER_AWAY_S
                 or now_ms() - int(float(mem.setting("last_compact", 0))) < config.COMPACT_EVERY_H * 3600_000):
             return
         self._compacting = True
 
         def go():
+            power.background()
             try:
                 before, after = self.store.compact()
                 mem.set_setting("last_compact", now_ms())
@@ -1063,6 +1078,7 @@ class ContextBus:
         """Embed new captures for meaning search once a minute (Stage 5, D24).
         If the embedding model is unavailable, keyword search still works; retry later."""
         from jimmy.core import LLMError
+        power.background()                   # D47: efficiency mode for the indexer
 
         from .recall import index
         # D38: load the embedding model and open the cloud connection now, not on the
@@ -1082,8 +1098,8 @@ class ContextBus:
                 if not self._running:
                     return
                 time.sleep(1)
-            if self.dormant():
-                continue                     # D39: resting while you're away; nothing new anyway
+            if self.dormant() or power.constrained():
+                continue                     # D39: resting; D47: on battery or the PC is busy
             try:
                 index(self.store, limit=200)
             except LLMError:
@@ -1154,10 +1170,19 @@ class ContextBus:
                     print(f"[{time.strftime('%H:%M:%S')}] {status:10s} "
                           f"frames={c.frames} text={c.text_blocks} audio={c.audio_segments} "
                           f"skip(unchanged/excluded)={c.skipped_unchanged}/{c.skipped_excluded}")
-                time.sleep(max(0.0, config.FRAME_INTERVAL_S - (time.monotonic() - t0)))
+                time.sleep(max(0.0, self._interval(status) - (time.monotonic() - t0)))
         finally:
             self.close(verbose=verbose)
         return self.counters
+
+    def _interval(self, status: str) -> float:
+        """D47: 2 s while you work; IDLE_FRAME_INTERVAL_S once nothing has changed and
+        no key or mouse has moved for IDLE_TICK_AFTER_S. Any change: back to 2 s."""
+        if status not in ("no-frame", "unchanged", "paused", "curtained", "locked", "shell"):
+            return config.FRAME_INTERVAL_S
+        if power.user_idle_s() >= config.IDLE_TICK_AFTER_S:
+            return max(config.FRAME_INTERVAL_S, config.IDLE_FRAME_INTERVAL_S)
+        return config.FRAME_INTERVAL_S
 
     def close(self, verbose: bool = False) -> None:
         self._running = False

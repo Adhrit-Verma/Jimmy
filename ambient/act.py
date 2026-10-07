@@ -91,8 +91,85 @@ def _patterns(ctrl, auto) -> frozenset:
 _CAPTION = {"Close", "Minimize", "Maximize", "Restore"}
 
 
+_PATTERN_PROPS = (("invoke", "IsInvokePatternAvailableProperty"), ("toggle", "IsTogglePatternAvailableProperty"),
+                  ("select", "IsSelectionItemPatternAvailableProperty"),
+                  ("expand", "IsExpandCollapsePatternAvailableProperty"),
+                  ("value", "IsValuePatternAvailableProperty"))
+
+
+def _caption_name(c, name: str) -> str:
+    """D42: "Close" is the window's or a tab's: say which."""
+    parent = c.GetParentControl()
+    ptype = parent.ControlTypeName if parent else ""
+    if ptype == "TitleBarControl":
+        return f"{name} window"
+    if ptype == "TabItemControl" and parent.Name:
+        return f"{name} (tab {parent.Name[:60]})"
+    return name
+
+
 def controls(hwnd: int, limit: int = 600) -> list[Target]:
-    """What in this window can be pressed, ticked, picked, opened or typed into."""
+    """What in this window can be pressed, ticked, picked, opened or typed into.
+    D47: one cached UI Automation query (UIA_CACHE); the old walk if that fails."""
+    from . import config
+    if config.UIA_CACHE:
+        try:
+            return _controls_cached(hwnd, limit)
+        except Exception as exc:
+            print(f"[act] cached controls failed ({type(exc).__name__}); the old walk")
+    return _controls_walk(hwnd, limit)
+
+
+def _controls_cached(hwnd: int, limit: int = 600) -> list[Target]:
+    """The same as _controls_walk, with every property each control needs fetched in the
+    one FindAllBuildCache call (a cache request) instead of ~10 cross-process reads per
+    control. UI Automation's own advice for bulk reads."""
+    import uiautomation as auto
+    from uiautomation.uiautomation import _AutomationClient
+
+    from .screen import wake_accessibility
+    out: list[Target] = []
+    P = auto.PropertyId
+    with auto.UIAutomationInitializerInThread():
+        wake_accessibility(hwnd)
+        root = auto.ControlFromHandle(hwnd)
+        uia = _AutomationClient.instance().IUIAutomation
+        conds = [uia.CreatePropertyCondition(getattr(P, prop), True) for _, prop in _PATTERN_PROPS]
+        cond = conds[0]
+        for c in conds[1:]:
+            cond = uia.CreateOrCondition(cond, c)
+        cr = uia.CreateCacheRequest()
+        for pid in (P.NameProperty, P.ControlTypeProperty, P.BoundingRectangleProperty, P.IsOffscreenProperty,
+                    P.IsPasswordProperty, P.HelpTextProperty, *[getattr(P, prop) for _, prop in _PATTERN_PROPS]):
+            cr.AddProperty(pid)
+        found = root.Element.FindAllBuildCache(4, cond, cr)             # 4: all descendants
+        names = getattr(auto, "ControlTypeNames", {})
+        for i in range(min(found.Length, limit)):
+            try:
+                el = found.GetElement(i)
+                if el.CachedIsOffscreen:
+                    continue
+                r = el.CachedBoundingRectangle
+                if r.right - r.left <= 2 or r.bottom - r.top <= 2:
+                    continue
+                kind = names.get(el.CachedControlType, "Control")
+                own = name = (el.CachedName or "").strip()
+                if not name and kind == "EditControl":
+                    name = (el.CachedHelpText or "").strip() or "text box"
+                if not name:
+                    continue
+                if kind == "ButtonControl" and name in _CAPTION:
+                    name = _caption_name(auto.Control.CreateControlFromElement(el), name)
+                can = frozenset(k for k, prop in _PATTERN_PROPS if el.GetCachedPropertyValue(getattr(P, prop)))
+                out.append(Target(name[:120], kind, (r.left, r.top, r.right, r.bottom), can,
+                                  bool(el.CachedIsPassword), own, hwnd))
+            except Exception:
+                continue
+    return out
+
+
+def _controls_walk(hwnd: int, limit: int = 600) -> list[Target]:
+    """D41's walk: each property read on its own."""
     import uiautomation as auto
     from uiautomation.uiautomation import _AutomationClient
 
@@ -124,14 +201,8 @@ def controls(hwnd: int, limit: int = 600) -> list[Target]:
                 if not name:
                     continue
                 if c.ControlTypeName == "ButtonControl" and name in _CAPTION:
-                    # D42: "Close" is the window's or a tab's: say which. "Click X" once
-                    # picked the window's Close (the whole app) for a tab.
-                    parent = c.GetParentControl()
-                    ptype = parent.ControlTypeName if parent else ""
-                    if ptype == "TitleBarControl":
-                        name = f"{name} window"
-                    elif ptype == "TabItemControl" and parent.Name:
-                        name = f"{name} (tab {parent.Name[:60]})"
+                    # D42: "Click X" once picked the window's Close (the whole app) for a tab.
+                    name = _caption_name(c, name)
                 out.append(Target(name[:120], c.ControlTypeName, (r.left, r.top, r.right, r.bottom),
                                   _patterns(c, auto), bool(c.Element.CurrentIsPassword), own, hwnd))
             except Exception:

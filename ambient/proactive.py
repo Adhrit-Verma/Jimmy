@@ -365,6 +365,8 @@ class Proactive:
             threading.Thread(target=self._scan, args=(now,), daemon=True, name="deadlines").start()
 
     def _scan(self, now: int) -> None:
+        from . import power
+        power.background()                          # D47: efficiency mode
         try:
             if now - self._budget[1] >= HOUR:
                 self._budget = [config.DEADLINE_CHECKS_PER_HOUR, now]

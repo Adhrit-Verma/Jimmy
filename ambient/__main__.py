@@ -39,6 +39,21 @@ def _doctor() -> int:
         return True, (f"{aw.app} | {len(wt.text)} chars from {wt.nodes} nodes "
                       f"in {wt.elapsed*1000:.0f}ms{' (truncated)' if wt.truncated else ''}")
 
+    def _uia_cache():
+        """D47: the cached control lookup must find what the old walk finds, faster."""
+        from . import act, screen
+        aw = screen.active_window()
+        if not aw.hwnd:
+            return False, "no foreground window"
+        t0 = time.perf_counter()
+        walk = act._controls_walk(aw.hwnd)
+        t1 = time.perf_counter()
+        cached = act._controls_cached(aw.hwnd)
+        t2 = time.perf_counter()
+        same = [(x.name, x.kind) for x in walk] == [(x.name, x.kind) for x in cached]
+        return same, (f"{len(cached)} controls in {(t2 - t1) * 1000:.0f} ms cached vs {len(walk)} in "
+                      f"{(t1 - t0) * 1000:.0f} ms walked" + ("" if same else ": DIFFERENT, set UIA_CACHE = False"))
+
     def _faces():
         from .redact import FaceStage
         fs = FaceStage()
@@ -86,7 +101,8 @@ def _doctor() -> int:
         s.close()
         return True, f"{config.DB_PATH} frames={st['frames']} text={st['text_blocks']}"
 
-    for name, fn in (("screen (dxgi)", _screen), ("uia text", _uia), ("face models", _faces),
+    for name, fn in (("screen (dxgi)", _screen), ("uia text", _uia), ("uia controls (cached)", _uia_cache),
+                     ("face models", _faces),
                      ("ocr", _ocr), ("whisper/cuda", _whisper), ("audio (wasapi)", _audio),
                      ("store", _db)):
         check(name, fn)

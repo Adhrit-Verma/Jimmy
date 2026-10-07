@@ -297,17 +297,20 @@ class Agent:
 
     # --- context -----------------------------------------------------------------
     def context(self, question: str, targets: list[act.Target]) -> list[dict]:
+        """D47: what changes least comes first (SYSTEM and the tools are fixed; then the
+        wiki index, the lists, the live status, the screen), so a provider's prompt
+        cache can reuse the longest prefix."""
         e = self.env
         app, title, bounds = e["window"]()
-        parts = [f"<status>\n{e['status']()}\n</status>", f"<you>\n{e['wiki_index']()}\n</you>",
-                 f"<lists>\n{e['lists']() or '(none)'}\n</lists>",
-                 f"<screen>\n{render_screen(app, title, targets, bounds)}\n</screen>"]
+        parts = [f"<you>\n{e['wiki_index']()}\n</you>", f"<lists>\n{e['lists']() or '(none)'}\n</lists>",
+                 f"<status>\n{e['status']()}\n</status>"]
         apps = e.get("open_apps", lambda: [])()
         if apps:
             parts.append(f"<open>\n{', '.join(apps)}\n</open>")     # D45: misheard app names match these
         no = self._rejected()
         if no:
             parts.append("<rejected>\n" + "\n".join(f'"{n}"' for n in no) + "\n</rejected>")
+        parts.append(f"<screen>\n{render_screen(app, title, targets, bounds)}\n</screen>")
         convo = e["conversation"]()
         if convo:
             parts.append(f"<conversation>\n{convo}\n</conversation>")
@@ -371,6 +374,7 @@ class Agent:
                 st["model"] = model
             if slow:
                 st["slow"] = True
+            st.update(msg.get("_usage") or {})        # D47: prompt tokens, cached tokens
             t.steps.append(st)
             t.messages.append({"role": "assistant", "content": msg.get("content") or "",
                                "tool_calls": [call]})

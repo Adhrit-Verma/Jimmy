@@ -37,7 +37,7 @@ from typing import Callable
 import cv2
 import numpy as np
 
-from . import config
+from . import config, power
 from .redact import SFACE, YUNET
 
 
@@ -814,6 +814,8 @@ class Presence:
                           f"out of the picture; last match {self.last_match:.2f}, FOLLOW_MIN {config.FOLLOW_MIN}"
                           if state == "away" else "")
                 wait = 1.0 if state == "away" and self.track is None else 1 / config.PRESENCE_FPS
+                if power.constrained():
+                    wait *= 2                        # D47: on battery or a busy PC: half as often
                 self._stop.wait(max(0.0, wait - (time.monotonic() - t0)))
         except Exception as exc:                      # presence is optional; capture goes on
             print(f"[presence] stopped: {type(exc).__name__}: {exc}")

@@ -257,3 +257,24 @@ CALL_HINT_EVERY_S = 60       # D45: "on a call: say Jimmy first" on the pill at 
 # waits for the next one if you go on within this gap (VAD's own 0.7 s silence and the
 # pre-roll aren't counted: about 2 s of real pause), and they're heard as one line.
 JOIN_GAP_MS = 1200
+
+# --- the footprint (D47): do the same work with less of the PC -----------------------
+# Background threads (indexer, compaction, wiki, deadline scan) run in Windows'
+# efficiency mode (EcoQoS) at below-normal priority. The voice path never does.
+ECO_BACKGROUND = True
+# On battery, or with the CPU above CPU_BUSY_PCT for CPU_BUSY_S: skip indexing, wiki
+# builds and compaction, and look through the webcam half as often. Capture and voice go on.
+LOAD_AWARE = True
+CPU_BUSY_PCT = 85
+CPU_BUSY_S = 30
+# No keyboard or mouse for IDLE_TICK_AFTER_S and the screen not changing: tick every
+# IDLE_FRAME_INTERVAL_S instead of FRAME_INTERVAL_S. Any change returns to 2 s at once.
+IDLE_TICK_AFTER_S = 60
+IDLE_FRAME_INTERVAL_S = 6.0
+# Same window and title as the last tick: grab first, and if the desktop presented
+# nothing new (DXGI timed out), stop there, before the password-focus check (a UI
+# Automation call). A password box can't take focus without the screen changing.
+SKIP_UNCHANGED_CHECKS = True
+# act.controls reads every control's properties in one UI Automation call (a cache
+# request) instead of ~10 cross-process reads each. Falls back to the old walk on error.
+UIA_CACHE = True
