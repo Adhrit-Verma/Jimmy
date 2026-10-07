@@ -199,6 +199,7 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `tests/test_stage3.py` | stage 3 check. Fake Tier 2 + mocked LLM, no network. |
 | `tests/test_stage2.py` | stage 2 check. The real client runs against `httpx.MockTransport`. |
 | `models/` | YuNet + SFace ONNX. Committed deliberately; small and pinned. |
+| `docs/RESEARCH-AGENT-2026-10.md` | research and a measured roadmap for the agent, voice and footprint (2026-10-07). Nothing in it is built yet. |
 | `docs/img/` | README screenshots: the real overlay and model on **invented** pages, never real captures (they hold personal data). |
 | `data/` | the capture DB and blurred thumbnails. Never commit. |
 
