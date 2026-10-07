@@ -17,9 +17,10 @@
   <img alt="English and Hindi" src="https://img.shields.io/badge/speaks-English%20%2B%20Hindi-f97316">
   <br>
   <img alt="Stages" src="https://img.shields.io/badge/stages-5%20of%205%20done-8b5cf6">
-  <img alt="Checks" src="https://img.shields.io/badge/checks-93%20%2B%20131--utterance%20matrix-0ea5e9">
-  <img alt="Decisions" src="https://img.shields.io/badge/design%20decisions-38%2C%20written%20down-64748b">
+  <img alt="Checks" src="https://img.shields.io/badge/checks-175%20%2B%20177--utterance%20matrix-0ea5e9">
+  <img alt="Decisions" src="https://img.shields.io/badge/design%20decisions-52%2C%20written%20down-64748b">
   <img alt="GPU" src="https://img.shields.io/badge/fits-6%20GB%20laptop%20GPU-76B900?logo=nvidia&logoColor=white">
+  <img alt="MCP" src="https://img.shields.io/badge/MCP-read--only%20recall-111827">
 </p>
 
 <p align="center">
@@ -74,6 +75,23 @@
       <h3>🛡️ Private by construction</h3>
       Faces are blurred before anything touches disk. Banking, password managers and
       incognito windows are never captured, and that rule shipped before the first run.
+    </td>
+  </tr>
+  <tr>
+    <td width="33%" valign="top">
+      <h3>🤖 It does things</h3>
+      <i>"Search YouTube for CarryMinati"</i>: a short plan, one <i>"yes"</i>, then its own
+      cursor types and presses, checking each step worked.
+    </td>
+    <td width="33%" valign="top">
+      <h3>🔒 Rules in code, not in a prompt</h3>
+      A policy layer judges every action before it's shown: no password boxes, no words you
+      didn't say, no site you didn't name without asking.
+    </td>
+    <td width="33%" valign="top">
+      <h3>🪶 Light on your laptop</h3>
+      Background work runs in Windows' efficiency mode, waits on battery or a busy CPU,
+      and capture slows down when you're idle.
     </td>
   </tr>
 </table>
@@ -162,7 +180,7 @@ enough and the pill says so; *"Jimmy, I'm not on a call"* if you aren't.
 <tr>
   <td><b>Hands</b></td>
   <td><i>"click Sign in"</i> · <i>"the blue link"</i> · <i>"search YouTube for CarryMinati"</i> · <i>"close this tab"</i> · <i>"open Chrome"</i> · <i>"close Discord"</i></td>
-  <td>A task gets a short plan and one <i>"yes"</i>; Jimmy's own cursor then does each step and reads the screen again. Anything that can't be undone asks again. Through Windows' accessibility, never your mouse. It understands controls by name, and by look ("the yellow icon") by looking at the screen.</td>
+  <td>A task gets a short plan and one <i>"yes"</i>; Jimmy's own cursor then does the steps back to back, checking after each one that it worked (the box holds the text, the page changed), and stops at the first surprise. Anything that can't be undone, or a site you didn't name, asks again. Through Windows' accessibility, never your mouse. It understands controls by name, and by look ("the yellow icon") by looking at the screen.</td>
 </tr>
 <tr>
   <td><b>About Jimmy</b></td>
@@ -314,6 +332,22 @@ exactly what would have been sent to the model.
 weights on the first run and caches them. Only one `ambient run` can go at a time; a second one
 says so and exits.
 
+**5 · Optional extras.** Jimmy runs without any of these. Each one is a flag in
+[`ambient/config.py`](ambient/config.py) (or an environment variable), and each comment there
+says what to measure before you leave it on.
+
+| Extra | Install | Turn on | What you get |
+|---|---|---|---|
+| Windows OCR | `pip install winocr` | on by itself | Text from canvas apps, games and video, with no Tesseract install |
+| Silero VAD | `pip install onnxruntime silero-vad` | `VAD_ENGINE = "silero"` | Fewer false speech segments in a noisy room, so fewer Whisper runs |
+| Wake word while paused | `pip install openwakeword` + a "Jimmy" model at `models\jimmy.onnx` | `PAUSE_WAKEWORD = True` | The GPU idles through a pause; Whisper wakes only for the name |
+| Natural voice | `pip install kokoro-onnx` + its model files in `models\` | `VOICE_ENGINE = "kokoro"` | A Kokoro voice instead of Windows', with Hindi voices |
+| Turn detector | `pip install onnxruntime tokenizers` + a model folder | `TURN_DETECTOR = Path(...)` | A request cut at "and…" waits for the rest only when it sounds unfinished |
+| Local fallback | `ollama pull qwen3:4b` | `JIMMY_LOCAL_TOOLS=qwen3:4b` | Agent steps keep working when the cloud is down |
+| Lighter webcam, GPU, storage | none | `PRESENCE_STILL_SKIP`, `GPU_RELEASE_AWAY_S`, `JIMMY_EMBED_ON_CPU=1`, `VECTOR_INT8`, `SMALL_THUMBS_UNCHANGED_TEXT` | Fewer face checks while you sit still, VRAM freed while you're away, vectors at a quarter of the size, small screenshots for video |
+| Recipes | none | `AGENT_RECIPES = True` | Jimmy remembers which buttons worked for a request and uses that next time |
+| Trace file | none | `JIMMY_OTEL=1` | Every request as OpenTelemetry spans in `data\logs\otel.jsonl`, for Jaeger or Phoenix |
+
 > **Just want to see the UI?** In `overlay\`, run `.\node_modules\electron\dist\electron.exe . --demo`
 > to see the pill and cards without Python. `ambient run --demo` plays a spoken, 3-minute scripted
 > tour that uses real capture, search, model and voice.
@@ -376,6 +410,27 @@ the top of `ambient/demo.py`).
 
 </details>
 
+### 🔌 Ask Jimmy from Claude Desktop or VS Code
+
+`python -m jimmy mcp` is a small [MCP](https://modelcontextprotocol.io) server with exactly one
+tool, **`recall`**: another assistant can ask *"what was I reading yesterday?"* and gets the same
+evidence Jimmy would use, capped at 6,000 characters and marked as data, not instructions. It
+can't press, type or change anything. In Claude Desktop's `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "jimmy": {
+      "command": "C:\\Code\\Jimmy\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "jimmy", "mcp"],
+      "env": { "PYTHONPATH": "C:\\Code\\Jimmy" }
+    }
+  }
+}
+```
+
+Whatever `recall` returns goes to that assistant and, from there, to its own cloud model.
+
 ---
 
 ## ⚙️ How it works
@@ -395,6 +450,7 @@ flowchart LR
     own --> ui
     ask --> ui
     curtain --> ui
+    db --> mcp["MCP recall<br/>read-only, for other assistants"]
   end
   ask -. "only the evidence it shows you" .-> llm[("Cloud model<br/>NVIDIA Nemotron")]
 ```
@@ -441,6 +497,53 @@ sequenceDiagram
   `<context>` block, below a rule to ignore any instructions found there, because a web page saying
   *"ignore previous instructions"* is exactly the kind of thing that gets captured.
 
+### The life of a task
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor You
+  participant A as Agent
+  participant P as Policy (code)
+  participant M as Cloud model
+  participant U as UI Automation
+  You->>A: "Jimmy, search YouTube for CarryMinati"
+  A->>M: your request + the window's numbered controls + 19 core tools
+  M-->>A: plan: type "CarryMinati" into [2] Search, press Enter in [2]
+  A->>P: each action: right control? your words? risky?
+  P-->>A: allow
+  A->>You: "Here's the plan… Okay?"
+  You->>A: "yes"
+  A->>U: type, then Enter, with Jimmy's cursor showing where
+  U-->>A: ✓ the box holds the text · ✓ the page changed
+  A->>M: what ran + the screen now
+  M-->>A: done: "Searched YouTube for CarryMinati."
+```
+
+- **One loop, native tool calls.** Each step sees Jimmy's live state, your wiki's index, your
+  lists, the open apps and the window in front as numbered controls. Stable parts come first, so
+  the provider can cache them between steps.
+- **Fewer tools per step.** 19 core tools plus the features your words point at, about 1,400
+  tokens instead of 3,300 for all 54; the model can ask for more with `more_tools`.
+- **Every action is checked in code** and the model is told ✓ or ✗, instead of assuming it worked.
+- **A plan's steps run back to back** after your *"yes"*: a two-step search takes two model calls,
+  not four. A renamed button, a failed check or anything risky hands control back.
+- **The policy layer decides, not the prompt.** Refused: password boxes, text you didn't say,
+  stale or rejected controls, closing an app that isn't open. Stopped: CAPTCHAs. Asked again: anything
+  that can't be undone, a site you didn't name, a button whose name reads like an instruction.
+- **Every request is in the decision log** (`python -m jimmy trace`), with tokens, cache hits and checks.
+
+### 🪶 Light on the PC
+
+- **Efficiency mode** (Windows EcoQoS) for indexing, compaction, the wiki and the deadline scan; the
+  voice path never uses it.
+- **Load aware:** on battery or with the CPU above 85 % for 30 s, background work waits and the
+  webcam looks half as often. Capture and voice carry on.
+- **Idle means idle:** with no key or mouse for a minute and a still screen, capture checks every
+  6 s instead of 2, and an unchanged desktop costs no UI Automation call at all.
+- **One accessibility query per window** reads every control's properties at once, instead of
+  about ten cross-process calls per control.
+
 Read the details in [`ARCHITECTURE.md`](ARCHITECTURE.md) and [`DATA-FLOW.md`](DATA-FLOW.md).
 
 ### 📏 By the numbers
@@ -458,6 +561,9 @@ Measured on the development laptop (Ryzen 7 7840HS, RTX 4050 6 GB):
 | Replay of 1.18 h of real history | **5 candidates → 1 card** |
 | Tier 2 precision against blind judges | **0.83** (the bar was 0.80) |
 | Face detection, single-threaded | **20 ms** CPU at 640 px, vs 65 ms on OpenCV's default thread pool |
+| Tools sent per agent step | **19 core, ~1,400 tokens** (all 54 were ~3,300) |
+| Model calls for a two-step screen task | **2** (plan, done), down from 4 |
+| Agent first decision on 130 real commands | **95 %** (the D41 baseline: 71 %) |
 
 ---
 
@@ -500,13 +606,16 @@ These are **absent code paths**, not settings that happen to be off.
 - **Jimmy proposes; you approve.** It acts on another app only when you ask, one action per
   *"yes"*: a scroll, or pressing / typing into the control its cursor is showing you. It never moves
   your mouse, never acts in banking or password-manager windows, and never types into a password box.
+  Those rules live in a policy layer in code, which every proposed action passes, whichever model
+  proposed it.
 - **What leaves the laptop:** only the evidence shown with an answer (at most 6,000 characters, and
   only with a key set), the rare RECALL candidates the cloud double-checks, for a question about
   your screen (or a task that needs a look) that window's latest picture (faces already blurred; never
   an excluded window), the names of the window's buttons and boxes while Jimmy works out a request,
   and once a day what it needs to keep your wiki (your lists, your questions to it, window titles). Set
   `JIMMY_RECALL_VERIFY=none` to keep cards fully local, and `VISION_SCREEN = False` for text-only
-  screen answers.
+  screen answers. If you connect the MCP server, what `recall` returns goes to that assistant too.
+  The optional trace file and recipes stay on your disk and hold no text you typed or said.
 
 A face embedding is a biometric template under India's DPDP Act whether or not it's persisted.
 This design shrinks that exposure substantially; it does not take it to zero. The one stored
@@ -539,7 +648,7 @@ template is yours, created only on request, and *"forget my face"* deletes it.
 ## 🔬 Engineering notes
 
 Every non-obvious call is written down with its evidence in
-[`DECISIONS-AND-WHY.md`](DECISIONS-AND-WHY.md), 38 so far. A few worth knowing:
+[`DECISIONS-AND-WHY.md`](DECISIONS-AND-WHY.md), 52 so far. A few worth knowing:
 
 | Finding | What it changed |
 |---|---|
@@ -551,6 +660,11 @@ Every non-obvious call is written down with its evidence in
 | **Screen furniture looks like content.** Every false RECALL rested on a sidebar or a friend list. | Lines seen in 3 or more capture windows are ignored, and the gate was closed by blind judges. ([D22](DECISIONS-AND-WHY.md#d22--stage-3-closed-on-recorded-data-checked-by-blind-ai-judges)) |
 | **`useEffect(() => el.scrollIntoView())` blanked the overlay.** In this Chromium it returns a Promise, which React then called as a cleanup. | A test scans the overlay source for effects without braces. ([D26](DECISIONS-AND-WHY.md#d26--the-overlay-blanked-on-the-second-answer-a-promise-returned-from-an-effect)) |
 | **`localhost` costs 2.4 s per connection on Windows.** It tries IPv6 first, but Ollama listens on IPv4. | Every local call uses `127.0.0.1` with kept-open clients, and search went from 2.8 s to 0.5 s. ([D38](DECISIONS-AND-WHY.md#d38--performance-with-no-feature-or-accuracy-given-up)) |
+
+| **Every agent step sent all 53 tools**, about 3,300 tokens before the request was even read. | A fixed core plus the feature groups the words point at, and a `more_tools` escape hatch. ([D48](DECISIONS-AND-WHY.md#d48--the-agent-sees-fewer-tools-checks-every-action-and-is-scored-on-whole-tasks)) |
+| **Agents assume their actions worked.** It's the failure the computer-use guides name first. | After each action, code reads the box's value or compares the page and tells the model ✓ or ✗. ([D48](DECISIONS-AND-WHY.md#d48--the-agent-sees-fewer-tools-checks-every-action-and-is-scored-on-whole-tasks)) |
+| **Rules in a prompt lose to a page written to beat them.** Captured text is exactly where an injection would hide. | The guards moved into a policy layer in code that judges every action, whatever model proposed it. ([D49](DECISIONS-AND-WHY.md#d49--a-policy-layer-in-code-a-plans-actions-run-without-a-model-call-each)) |
+| **A model call per click is slow.** A two-step search took four calls. | A plan carries its first concrete actions; after the yes they run back to back until a surprise. ([D49](DECISIONS-AND-WHY.md#d49--a-policy-layer-in-code-a-plans-actions-run-without-a-model-call-each)) |
 
 The performance pass (D38) was checked for **equivalence on a frozen copy of the real database**:
 43 read paths gave the same results before and after.
@@ -574,7 +688,10 @@ The performance pass (D38) was checked for **equivalence on a frozen copy of the
 | + · Live | A curtain that follows you, resting while you're away, asking without the name, timers, forgetting a span | ✅ |
 | + · Hands and eyes | Understanding in context, your lists by voice and in a Memory tab, seeing the screen, a virtual cursor (one action per yes) | ✅ |
 | + · Agent | One loop that sees its state, your wiki, your lists and the screen; multi-step tasks on one yes; a decision log; 95 % on 130 real commands (was 71 %) | ✅ |
-| + · Lighter and safer | Efficiency mode, a slower idle tick, cached UI Automation; fewer tools per step, every action checked, a policy layer in code, a plan's steps run back to back; OCR via Windows; read-only MCP recall. Voice, GPU and memory upgrades built behind flags, to be measured | ✅ | Other ideas are in [`SCOPE.md`](SCOPE.md) →
+| + · Lighter and safer | Efficiency mode, a slower idle tick, cached UI Automation; fewer tools per step, every action checked, a policy layer in code, a plan's steps run back to back; OCR via Windows; read-only MCP recall. Voice, GPU and memory upgrades built behind flags, to be measured | ✅ |
+
+What's next is measuring those flagged upgrades on the laptop, one at a time (see
+[`TIMELINE.md`](TIMELINE.md)). Other ideas are in [`SCOPE.md`](SCOPE.md) →
 *Possible future changes*. The biggest known gap: the vision models this key can reach are
 mid-size, so a picture alone (canvases, video) is described less exactly than a window's text.
 
@@ -631,11 +748,12 @@ Jimmy/
 │   ├── logs.py           the console kept in data\logs, captured text cut to lengths
 │   ├── api.py            127.0.0.1 API for the overlay (stdlib only)
 │   └── config.py         every tunable, with its reasoning
-├── jimmy/              the core: the one LLM client, memory, card engine
+├── jimmy/              the core: the one LLM client, memory, card engine, user wiki,
+│                       MCP recall (mcp.py), OpenTelemetry export (otel.py)
 ├── overlay/            Electron + React + Tailwind + Motion: pill, cards, answers, timeline, insights
 ├── models/             YuNet + SFace ONNX (small, pinned, committed on purpose)
-├── tests/              assert-based checks, no framework
-├── docs/img/           README screenshots (invented data only)
+├── tests/              assert-based checks, no framework; live evals; frozen eval sets in tests/eval/
+├── docs/               the agent/footprint research roadmap; img/: README screenshots (invented data only)
 └── data/               your captures; never committed
 ```
 
@@ -653,6 +771,7 @@ Jimmy/
 | [`DECISIONS-AND-WHY.md`](DECISIONS-AND-WHY.md) | Every non-obvious call, with the evidence behind it |
 | [`SCOPE.md`](SCOPE.md) | What's in, what's out, what's owed |
 | [`TIMELINE.md`](TIMELINE.md) | Stage status and acceptance gates |
+| [`docs/RESEARCH-AGENT-2026-10.md`](docs/RESEARCH-AGENT-2026-10.md) | The research behind D47–D52: where Jimmy stands, what was built, what to measure |
 | [`CLAUDE.md`](CLAUDE.md) | Orientation for AI coding sessions; verified environment facts |
 
 <p align="center"><sub>Built for one laptop and one person.</sub></p>
