@@ -183,7 +183,7 @@ UI_TOOLS = {"click", "type_text", "submit", "open_url",       # one yes for a pl
 RISKY_TOOLS = {"close_app"}                                   # always their own yes
 READ_TOOLS = {"look_at_screen", "find_controls", "search_history", "read_wiki", "list_windows"}
 
-# D47 (A1): every step sent all 53 tools (~3,100 tokens). Now a fixed core, then only the
+# D48 (A1): every step sent all 53 tools (~3,100 tokens). Now a fixed core, then only the
 # Jimmy features a request's words point at (picked in code, no model call), and
 # `more_tools` for the rest. Tool-selection research: past ~30 similar tools, models pick
 # worse; a small relevant set picks better and costs half the tokens.
@@ -215,7 +215,7 @@ _HINDI = re.compile(r"[\u0900-\u097F\u0600-\u06FF]")
 
 
 def select_tools(text: str, extra: set[str] | frozenset = frozenset()) -> list[dict]:
-    """The tools one step sees (D47): the core, the groups the words point at, and any the
+    """The tools one step sees (D48): the core, the groups the words point at, and any the
     model asked for with more_tools. Hindi/Urdu script or AGENT_TOOL_RETRIEVAL off: all."""
     from . import config
     if not getattr(config, "AGENT_TOOL_RETRIEVAL", True) or _HINDI.search(text or ""):
@@ -341,8 +341,8 @@ class Task:
     pending_at: float = 0.0        # D45: when the pending question or approval was asked
     last_index: int = 0            # D45: the control last pointed at (find_controls looks near it)
     last_said: str = ""            # D45: what the last action reported
-    extra_tools: set = field(default_factory=set)      # D47: added by more_tools
-    tool_text: str = ""            # D47: the words tools are picked from (request + recent turns)
+    extra_tools: set = field(default_factory=set)      # D48: added by more_tools
+    tool_text: str = ""            # D48: the words tools are picked from (request + recent turns)
     recipe: list[str] = field(default_factory=list)    # D51: actions done, as "verb “control”"
 
     @property
@@ -415,7 +415,7 @@ class Agent:
         self.cancelled = False
         targets = reading_order(self.env["controls"]())
         self.task = Task(question, self.context(question, targets), targets)
-        # D47: tools follow the request and the last turns ("and delete it" after a list)
+        # D48: tools follow the request and the last turns ("and delete it" after a list)
         self.task.tool_text = f"{question}\n{self.env['conversation']()}"
         return self.run()
 
@@ -764,7 +764,7 @@ class Agent:
         """Do one approved action; (what it said, the check, the controls after)."""
         e = self.env
         nothing = lambda *a: "I can't do that from here."  # noqa: E731
-        before = (e["window"](), [(x.name, x.kind) for x in t.targets])   # D47: to check the effect
+        before = (e["window"](), [(x.name, x.kind) for x in t.targets])   # D48: to check the effect
         if target is not None:
             e["cursor"](target, "type" if name == "type_text" else "click")
         if name == "click":
@@ -796,7 +796,7 @@ class Agent:
         return said, self._verify(name, args, target, before, fresh), fresh
 
     def _verify(self, name: str, args: dict, target, before: tuple, fresh: list[act.Target]) -> str:
-        """D47 (A4): did it work? Checked in code through UI Automation, never assumed:
+        """D48 (A4): did it work? Checked in code through UI Automation, never assumed:
         agents "assume outcomes of their actions without checking" is the failure the
         computer-use guides name. One line for the model: ✓ or ✗ and what was seen."""
         from . import config
@@ -914,7 +914,7 @@ def first_decision(text: str, targets: list[act.Target], screen: str | None, sta
             args = json.loads(calls[0]["function"].get("arguments") or "{}")
         except ValueError:
             args = {}
-        if name == "more_tools":        # D47: it asked for a feature it wasn't shown: add it, ask again
+        if name == "more_tools":        # D48: it asked for a feature it wasn't shown: add it, ask again
             found = find_tools(str(args.get("need") or ""))
             extra.update(found)
             msgs += [{"role": "assistant", "content": msg.get("content") or "", "tool_calls": [calls[0]]},

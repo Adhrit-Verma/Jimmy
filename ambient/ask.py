@@ -1573,7 +1573,7 @@ class Asker:
                 # Jimmy's own features run inside an approved plan, which then goes on.
                 "windows": act.get("windows", lambda: []), "open_apps": act.get("open_apps", lambda: []),
                 "focus_window": act.get("focus_window", nothing), "window_state": act.get("window_state", nothing),
-                "value_of": act.get("value_of", lambda t: None),          # D47: check a typing step
+                "value_of": act.get("value_of", lambda t: None),          # D48: check a typing step
                 "screen_text": act.get("screen_text", lambda: ""),        # D51: OCR, no controls
                 "recipes": act.get("recipes", lambda app, q: ""),         # D51: what worked before
                 "learned": act.get("learned", lambda app, q, steps: None),

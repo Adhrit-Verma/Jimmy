@@ -263,7 +263,7 @@ def press(c, name: str, text: str | None, auto) -> str:
 
 
 def value_of(hwnd: int, t: Target) -> str | None:
-    """D47: what a box holds now (ValuePattern.Value), to check a typing step. None if
+    """D48: what a box holds now (ValuePattern.Value), to check a typing step. None if
     it can't be read (no such control any more, no Value, a password box)."""
     import uiautomation as auto
     from uiautomation.uiautomation import _AutomationClient
@@ -387,7 +387,7 @@ def window_state(hwnd: int, state: str) -> bool:
         want = {"restore": 0, "maximize": 1, "minimize": 2}[state]
         wp.SetWindowVisualState(want)
         try:
-            return int(wp.WindowVisualState) == want          # D47: read it back, don't assume
+            return int(wp.WindowVisualState) == want          # D48: read it back, don't assume
         except Exception:
             return True
 
