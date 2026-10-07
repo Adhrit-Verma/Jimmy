@@ -107,10 +107,13 @@ WASAPI stream (48 kHz stereo int16)
 16 kHz mono int16
         │
         ▼  VadChunker: 30 ms frames, 5-frame pre-roll, 700 ms silence closes
+        │  (D50: VAD_ENGINE "silero": 32 ms frames, Silero's own state per utterance)
 Segment(ts_start, ts_end, source, pcm)
         │
         ▼  queue(maxsize=64) ─► transcribe thread
         │
+        ▼  D50: paused + PAUSE_WAKEWORD: the wake-word model hears the name? else the
+        │  segment is dropped here, never decoded, never stored (D46 stores nothing anyway)
         ▼  Transcriber.transcribe   (D45: initial_prompt = "Jimmy" + the open apps, each minute)
              RMS < 120?                    -> ""   (never decoded)
              no_speech_prob > 0.6?         -> drop segment
@@ -120,6 +123,7 @@ Segment(ts_start, ts_end, source, pcm)
         │
         ▼  Joiner (D45): a line ending on "and / the / close / can you…" waits for the
         │  next one (speech within 1.2 s) and they become one line; else it goes alone
+        │  (D52: with TURN_DETECTOR, a flagged line that sounds whole goes at once)
         ▼  non-empty only
 Asker.hear(ts_end, source, text, ts_start)           (D25, D39; D45: windows by ts_start)
    "…Jimmy…" (up to 3 words before it)  ─┐
@@ -177,6 +181,7 @@ clicked in the overlay (Stage 4).
 ```sql
 embeddings(id INT PK, ref INT /* > 0 text_blocks.id, < 0 -audio_segments.id */,
            ts INT, model TEXT, chunk TEXT /* <= 800 chars */, vec BLOB /* float32, unit length */)
+           -- D52, VECTOR_INT8: new rows are a float32 scale + int8 (dim + 4 bytes); both kinds read
 ```
 
 Stage 5 (D24): a background thread embeds new captures every 60 s with local
@@ -210,7 +215,7 @@ Mon 21 Sep 01:41  [audio/mic]   mic
 |---|---|
 | Window app name and title | Any raw, unblurred frame |
 | Exact UI text (UIA), OCR text | Face embeddings or any biometric template |
-| Blurred thumbnails (~27 KB each) | Anything from an excluded surface |
+| Blurred thumbnails (~27 KB each; D52 opt-in: 480 px when the UI text didn't change) | Anything from an excluded surface |
 | Transcribed speech, with source | Raw audio — only the transcript survives |
 | Face **count** per frame | Face identity, names, or cross-window links |
 | Capture window open/close times | Any link between a person today and tomorrow |
@@ -225,7 +230,7 @@ beside the images, and smaller still now that only new lines are stored.
 typed yes (or `ambient forget`): embeddings by the ids they point at, then
 `text_blocks` of frames in the span (so the FTS delete triggers run), `frames`,
 `audio_segments`, `cards`, `deadlines` seen then, closed capture windows left
-empty; the thumbnail files and empty day folders; Jimmy's `turns` in the span.
+empty; the thumbnail files and empty day folders; Jimmy's `turns` (D51: and `recipes`) in the span.
 Kept: remembered facts, reminders, settings. Then `compact()`: FTS `optimize`,
 `VACUUM`, `wal_checkpoint(TRUNCATE)`. No schema change; Jimmy's `settings` gains
 `eye_contact`, `last_compact` and (D40) `eye_calibration`: JSON of 4 medians and 4
@@ -285,12 +290,23 @@ goals(id INT PK, created INT, text TEXT, state TEXT /* active|done|deleted */, d
 traces(id INT PK, ts INT, heard TEXT, via TEXT, route TEXT, steps TEXT /* JSON */, said TEXT, ms INT,
        wait_ms INT)  -- D42; D45: wait_ms (behind another request) apart from ms (working), and
                      -- steps carry ms (model) + tool_ms; pause/resume rows name their source in via
+                     -- D47: + prompt, cached, out (tokens); D48: + check (✓/✗); D49: + speculative
+recipes(id INT PK, ts INT, app TEXT, request TEXT, steps TEXT /* "type into “Search” → Enter in “Search”" */,
+        uses INT)    -- D51, only with AGENT_RECIPES: control names in order, never typed text;
+                     -- ≤ 50 per app; deleted with the span by "forget"
 ```
+
+D51: with `JIMMY_OTEL=1` each trace row is also appended to `data/logs/otel.jsonl` as
+OTLP JSON spans: names, timings, token counts, check results. No heard or said text and
+no tool arguments.
 
 D42: each agent step sends the model `<status>` (Jimmy's live state), `<you>` (the
 wiki's index), `<lists>`, `<screen>` (the window in front's control names, numbered,
 with rough positions; nothing from excluded windows), the last three turns and the
-request; read tools add their results (a look at the screen sends the latest blurred
+request (D47: in the order `<you>`, `<lists>`, `<status>`, `<open>`, `<rejected>`, `<screen>`,
+`<conversation>`, so the provider can cache the prefix; D48: with the core tools and the
+groups the request names, not all 54; D51: a window with no controls adds its OCR text
+from the latest blurred thumbnail, and with `AGENT_RECIPES` up to two recipes); read tools add their results (a look at the screen sends the latest blurred
 thumbnail with numbers drawn on). The wiki's daily compile sends memories, goals, the
 user's own questions to Jimmy (14 days) and the titles of their most-used windows.
 `data/okf/` holds the wiki (Markdown, never committed).

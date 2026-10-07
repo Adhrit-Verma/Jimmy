@@ -214,6 +214,19 @@ call, an unmeasured lip veto, no visible calibration, a flickering eye, a stale
 timeline after a forget, scroll in Claude). Checks: `tests\test_stage9.py` (14),
 matrix (154), eval 41/41.
 
+## The research roadmap · **built 2026-10-07 (D47–D52), not measured yet**
+
+All five phases of `docs/RESEARCH-AGENT-2026-10.md`: the footprint (D47), fewer tools,
+checked actions and whole-task evals (D48), the policy layer and speculative plan
+actions (D49), lighter voice and webcam (D50), recipes, Windows OCR, a local fallback,
+OTel traces and MCP recall (D51), and the turn detector, Kokoro, int8 vectors and small
+thumbnails (D52). Checks: `tests\test_stage13.py` (24). The cheap, safe items are on;
+everything with an unmeasured threshold, a package or a model file is off.
+**Open, in this order:** the research doc's phase gates on the laptop: CPU % and step
+latency before/after (phase 1); `eval_agent.py` ≥ 124/130, `eval_trajectory.py`, tokens per
+step (phases 2–3); then each flagged item with the measurement its `config.py` comment
+names, one D-record each.
+
 ## The live session of 2026-10-05 · **fixed (D45)**
 
 From the report on that 28-minute session: per-request traces, listening windows

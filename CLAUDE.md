@@ -29,7 +29,13 @@ controls, picks native tools, runs multi-step screen tasks on one yes for a plan
 every decision (`python -m jimmy trace`). 95 % on the 130 real commands (was 71 %).** D43/D44: model
 fallbacks, OpenAI as a second provider. **D45: the fixes from the live session of 2026-10-05**
 (per-request traces, windows from speech start, slow-step fallback and "stop", plans that go on,
-window tools, the console kept in `data/logs/jimmy.log`). "Jimmy, …" → an
+window tools, the console kept in `data/logs/jimmy.log`). **D47–D52: the research roadmap
+built** (`docs/RESEARCH-AGENT-2026-10.md`): a lighter footprint (efficiency mode, load awareness,
+a slower idle tick, cached UI Automation), fewer tools per step, every action checked, whole-task
+evals, a policy layer in code, a plan's actions run without a model call each; and, behind flags
+that stay off until measured on the laptop, Silero VAD, a wake word while paused, a still webcam,
+a GPU budget, recipes, Windows OCR, a local fallback, OTel traces, MCP recall, a turn detector,
+Kokoro, int8 vectors and small thumbnails. "Jimmy, …" → an
 evidence panel and a spoken answer, with no typing needed. Stage 3 (trigger gate) passed its 5-check
 list, blind-judged (D19–D22). Stage 4 is the Electron overlay (D23). Stage 5 is hybrid
 keyword + meaning recall and a timeline window (D24). Remaining work lives in
@@ -105,10 +111,13 @@ cd overlay; npm install; npm run build   # once, and after any change under over
 .\.venv\Scripts\python.exe tests\test_stage10.py  # 7 checks: lists by voice, remind asks what, heard feedback, cursor, Memory tab, vision fallback
 .\.venv\Scripts\python.exe tests\test_stage11.py  # 10 checks: the agent loop, plan/risky approval, typing guard, trace, calls, wiki, failure mid-task
 .\.venv\Scripts\python.exe tests\test_stage12.py  # 28 checks: the 2026-10-05 session's misses (D45), one per report item; D46 pause
+.\.venv\Scripts\python.exe tests\test_stage13.py  # 24 checks: D47–D52 (footprint, tool retrieval, checks, policy, speculation, flags)
 .\.venv\Scripts\python.exe tests\test_commands.py # the command matrix: 177 utterances, talk, a drill
+.\.venv\Scripts\python.exe tests\eval_trajectory.py  # live: 8 whole tasks on invented screens (success, calls, tokens)
 .\.venv\Scripts\python.exe tests\eval_agent.py    # live: 130 real commands through rules + agent (95 %); --system d41 = 71 %
 .\.venv\Scripts\python.exe -m jimmy trace -n 20   # the decision log: heard, how, route, steps, said
 .\.venv\Scripts\python.exe -m jimmy wiki --build  # the user wiki (OKF) in data/okf; without --build prints its index
+.\.venv\Scripts\python.exe -m jimmy mcp          # D51: read-only MCP server on stdio (one tool: recall)
 .\.venv\Scripts\python.exe -m ambient forget "1 to 15 September"   # shows what goes, asks first
 .\.venv\Scripts\python.exe -m ambient compact      # VACUUM + FTS optimize (also runs while you're away)
 .\.venv\Scripts\python.exe tests\eval_tools.py    # live: the model's tool pick (59 cases, with sample lists; needs the key)
@@ -175,12 +184,18 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `ambient/act.py` | D41: the virtual cursor's hands: UI Automation controls of the window in front, name matching, `perform` / `press` (Invoke/Toggle/Select/Expand/SetValue; D45 SetFocus for a box with only Value) after a yes; opening apps by Start-menu shortcut; D45 `top_windows`, `pick_window`, `focus_window`, `window_state`, `SHELL_CLASSES`. |
 | `overlay/src/Memory.jsx` | D41: the Memory tab: reminders, goals, memories; edit, done, delete, select. |
 | `tests/test_stage10.py` | D41 check: lists by voice through the tool pick, reminder ask-back, heard feedback, cursor offer/yes, Memory API, vision fallback. |
-| `ambient/agent.py` | D42: the agent. Context (`<status>`, `<you>`, `<lists>`, `<screen>`; D45 `<open>`, `<rejected>`), 53 native tools, the loop, plan/risky approval, code guards (`name_check`, `said_by_user`; D45 `name_fits`, CAPTCHA, identify-people, `clean_tool_name`), the timed step with a fallback model (D45), `first_decision` for the eval. |
+| `ambient/agent.py` | D42: the agent. Context (`<you>`, `<lists>`, `<status>`, `<open>`, `<rejected>`, `<screen>`, `<conversation>`: stable first, D47), 54 native tools (D48: `CORE` + `GROUPS` by `select_tools`, `more_tools`), the loop, plan/risky approval, code guards (`name_check`, `said_by_user`; D45 `name_fits`, CAPTCHA, identify-people, `clean_tool_name`), the timed step with fallbacks (D45; D51 local), `_verify` (D48 ✓/✗), `_speculate` (D49), recipes (D51), `first_decision` for the eval. |
+| `ambient/policy.py` | D49: what the agent may do, decided in code: `check()` → refuse / stop / ask / allow for every proposed screen action. |
+| `ambient/power.py` | D47: efficiency mode (EcoQoS) for background threads, battery, CPU busy, user idle. No-ops off Windows. |
 | `ambient/logs.py` | D45: tees `ambient run`'s console into `data/logs/jimmy.log`, rotating, with captured text cut to lengths (`redact`). |
 | `jimmy/wiki.py` | D42: the user wiki in Open Knowledge Format: code pages (goals, memories, reminders, habits), model pages (projects, people, interests), index, verify. `data/okf/`. |
 | `tests/test_stage11.py` | D42 check: the agent with a scripted model, through the Asker, traces, calls by name, the wiki. |
 | `tests/test_stage12.py` | D45 check: each miss from the 2026-10-05 session (P0-1 … P2-10 in the report), scripted models, faked UIA and windows. |
-| `tests/eval/` | D42: frozen real commands (`real_commands.json`) and invented screens (`screens.json`). Don't edit labels; add new files. |
+| `tests/test_stage13.py` | D47–D52 check: cached controls vs the walk, the idle tick, tool retrieval, ✓/✗ checks, the policy, speculation, every flagged item with fakes. |
+| `tests/eval_trajectory.py` | D48: live, whole tasks on `tests/eval/trajectories.json` (invented screens that change per action), scored on success, calls, tokens, seconds. |
+| `jimmy/otel.py` | D51: traces as OpenTelemetry GenAI spans (OTLP JSON) to `data/logs/otel.jsonl`, with `JIMMY_OTEL=1`. Names and timings only. |
+| `jimmy/mcp.py` | D51: `python -m jimmy mcp`, a stdio MCP server with one read-only tool, `recall` (6,000-char cap, marked as data). |
+| `tests/eval/` | D42: frozen real commands (`real_commands.json`) and invented screens (`screens.json`); D48 `trajectories.json`. Don't edit labels; add new files. |
 | `tests/eval_agent.py` | D42: live, the first decision on the frozen set: `--system agent` (rules + agent) or `d41` (the baseline). |
 | `tests/equiv_db.py` | D38: before/after equivalence of 43 read paths on a frozen copy of the real DB. Use it for any change to db/recall/insights/gate. |
 | `overlay/src/main.jsx` | picks the page by hash: the overlay, or `#timeline` / `#insights`; reduced motion respected. |
@@ -199,7 +214,7 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `tests/test_stage3.py` | stage 3 check. Fake Tier 2 + mocked LLM, no network. |
 | `tests/test_stage2.py` | stage 2 check. The real client runs against `httpx.MockTransport`. |
 | `models/` | YuNet + SFace ONNX. Committed deliberately; small and pinned. |
-| `docs/RESEARCH-AGENT-2026-10.md` | research and a measured roadmap for the agent, voice and footprint (2026-10-07). Nothing in it is built yet. |
+| `docs/RESEARCH-AGENT-2026-10.md` | research and a measured roadmap for the agent, voice and footprint (2026-10-07). Built as D47–D52; the flagged items still need the measurements it names. |
 | `docs/img/` | README screenshots: the real overlay and model on **invented** pages, never real captures (they hold personal data). |
 | `data/` | the capture DB and blurred thumbnails. Never commit. |
 
@@ -253,7 +268,8 @@ setting that defaults to off.
    focused that box and the focus was checked. Never in excluded windows, never into
    a password box, never text the user didn't say. D45: "click" on a box with only
    Value is UIA `SetFocus`; switching / minimizing / maximizing a window is UIA
-   `SetFocus` / `WindowPattern` (one yes, never a close). Never a CAPTCHA.
+   `SetFocus` / `WindowPattern` (one yes, never a close). Never a CAPTCHA. D49: every proposed
+   action passes `ambient/policy.py` first; a plan's speculative actions only while it says *allow*.
 
 ---
 
@@ -277,7 +293,8 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   worthless for browsers and Electron — which is most of the screen.
 - **Whisper** `distil-small.en` int8 on CUDA: **347 MiB VRAM**, 5 s of audio in
   0.08 s (~60× realtime). Nowhere near the 6 GB ceiling.
-- **Tesseract binary is NOT installed.** OCR degrades to inert. UIA covers normal
+- **Tesseract binary is NOT installed.** OCR degrades to inert unless `winocr` is installed
+  (D51: Windows' own OCR engine, tried first). UIA covers normal
   apps; canvas-rendered apps and video are currently lost. See `SCOPE.md`.
 - **Storage, first real hour (old dhash gate):** 2.0 MB/h, ~26 KB/thumbnail,
   96 % of ticks skipped. **The D18 gate captures more, so re-measure**; 2.0 MB/h
@@ -466,7 +483,18 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
 - **Agent tool ids are in reading order** (top to bottom, then left to right), so a
   window's caption buttons come first. Tests that script ids must count them.
 - **Ambient code never builds a model client, even in eval helpers** (invariant 7):
-  `first_decision` takes the `llm` from its caller.
+  `first_decision` takes the `llm` from its caller. `test_only_one_llm_client` also fails
+  on the text `jimmy.llm` anywhere in `ambient/`: reach core helpers through `jimmy.core`
+  (D50's `unload_local` is re-exported there).
+- **Every screen action goes through `policy.check`** (D49). A new guard belongs there,
+  not in `Agent._act`, so the plan path and speculative actions get it too.
+- **A plan's `actions` run without the model** (D49): a scripted test that gives a plan
+  `actions` needs fewer model steps after the yes; one without them is step by step.
+- **D50–D52 knobs are off for a reason**: each has an unmeasured threshold or needs a
+  package or model file. Turn one on only with the measurement its `config.py` comment
+  names, and record the numbers in a new D-record.
+- **Agent context order is for the prompt cache** (D47): anything per-request goes after
+  `<screen>` (as `<how_it_went_before>` does), or every step misses the cache.
 - **Every unplaced request now costs one tool pick** (D41). Keep the rules for the
   fast, unambiguous phrases; the model resolves the rest with `<state>`. A failed
   pick pauses picks for 60 s (`_pick_down_until`). Re-run `tests/eval_tools.py`

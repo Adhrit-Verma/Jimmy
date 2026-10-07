@@ -264,7 +264,7 @@ calls kept by app name.
 |---|---|
 | Whisper hint words from the screen | The agent's matching fixed the eval's mishearings; hint words need real recordings to prove they don't add errors. |
 | Clicking controls with no UI Automation pattern | Needs real mouse events: lands wherever the pointer's target is; its own design. |
-| Canvas apps (games, some editors) | No controls to number; vision could point at pixels, but acting needs the mouse. |
+| Canvas apps (games, some editors) | No controls to number; vision could point at pixels, but acting needs the mouse. D51: their OCR text now reaches the agent, to read, not to click. |
 | OKF for screen history | OKF's own guidance: curated core only; history stays search (a tool). |
 
 ## Hands and eyes (D41) — built, and NOT built
@@ -308,6 +308,27 @@ the pointer's wheel still does it).
 | A retention policy (e.g. pictures older than N months) | The owner's call; `ambient forget "older than 90 days"` does it by hand. |
 
 ---
+
+## The research roadmap (D47–D52) — built, and NOT built
+
+Built from `docs/RESEARCH-AGENT-2026-10.md`. On by default: efficiency mode for
+background threads, load awareness, the idle tick, the unchanged-desktop skip, cached UI
+Automation, stable-first prompt order with token counts, tool retrieval + `more_tools`,
+✓/✗ action checks, the trajectory eval, the policy layer, speculative plan actions,
+Windows OCR (when `winocr` is installed), OCR text for control-less windows, and
+`jimmy mcp`. Built but **off until measured**: Silero VAD, the paused wake word, the still
+webcam, the GPU release, embeddings on the CPU, recipes, the local step fallback, the OTel
+file, the turn detector, Kokoro, int8 vectors, small thumbnails.
+
+| Not built | Why / what it needs |
+|---|---|
+| Event-driven capture (UIA focus/text events instead of the 2 s poll) | Research P1's larger half. The idle tick and the DXGI skip took the cheap part; events need their own threading design and a live CPU measurement. |
+| Barge-in (talk over Jimmy to stop it) | Needs echo cancellation (WebRTC AEC); until then the mic pauses while Jimmy speaks and "stop" is the barge-in. |
+| A visual screen parser (OmniParser) | Doesn't fit beside Whisper in 6 GB; `look_at_screen` stays on the cloud vision model. |
+| Jimmy as an MCP *client* | Every outside tool's action would need the policy layer and a yes; no vetted server chosen yet. |
+| A trained "Jimmy" wake-word model and the Kokoro/Silero/turn model files | Downloads or training on the laptop; none are committed. |
+| WebP thumbnails | D38's rule: the blind legibility check and the blur re-detection test on WebP first. |
+| The numbers | CPU %, VRAM peak, false wakes, steps per repeated task, eval scores: each flagged item's `config.py` comment says what to measure before it goes on. |
 
 ## Possible future changes
 

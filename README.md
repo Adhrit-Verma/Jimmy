@@ -352,6 +352,8 @@ says so and exits.
 .\.venv\Scripts\python.exe -m jimmy ask "what was I reading yesterday?"
 .\.venv\Scripts\python.exe -m jimmy remember "standup is at 10:30 on weekdays"
 .\.venv\Scripts\python.exe -m jimmy doctor       # key, model, endpoint, data
+.\.venv\Scripts\python.exe -m jimmy trace -n 20  # what Jimmy heard, decided and did
+.\.venv\Scripts\python.exe -m jimmy mcp          # read-only recall for Claude Desktop / VS Code (MCP, stdio)
 
 # Cards
 .\.venv\Scripts\python.exe -m jimmy focus "finish the fellowship essay"   # enables FOCUS nudges
@@ -519,8 +521,13 @@ template is yours, created only on request, and *"forget my face"* deletes it.
 - **Which microphone.** Capture uses the Windows default input. To pick another, set `MIC_DEVICE`
   in `ambient/config.py` to part of its name, for example `"Microphone Array"`. A quiet room can
   read as near-silent because of noise suppression, so test by speaking during `ambient doctor`.
-- **OCR is optional.** Without the Tesseract binary, canvas-rendered apps and video contribute no
-  text. Normal apps are unaffected.
+- **OCR is optional.** `pip install winocr` uses Windows' own OCR engine (offline, nothing else to
+  install); Tesseract works too. Without either, canvas-rendered apps and video contribute no text.
+  Normal apps are unaffected.
+- **Upgrades behind flags.** Silero VAD, a wake word while paused, a still webcam, freeing the GPU
+  while you're away, recipes, a local model fallback, an OpenTelemetry trace file, a turn detector,
+  the Kokoro voice, int8 vectors and small thumbnails are built but off. Each flag in
+  `ambient/config.py` says what to install and what to measure before turning it on.
 - **Every tunable** lives in [`ambient/config.py`](ambient/config.py), with its reasoning next to it.
 - **The console is kept** in `data\logs\jimmy.log` (five 2 MB files, rotating) for diagnosing a
   session: what was heard and what was on screen appear only as lengths, never as text.
@@ -566,16 +573,17 @@ The performance pass (D38) was checked for **equivalence on a frozen copy of the
 | + · Polish | Remember my face, English + Hindi, a performance pass | ✅ |
 | + · Live | A curtain that follows you, resting while you're away, asking without the name, timers, forgetting a span | ✅ |
 | + · Hands and eyes | Understanding in context, your lists by voice and in a Memory tab, seeing the screen, a virtual cursor (one action per yes) | ✅ |
-| + · Agent | One loop that sees its state, your wiki, your lists and the screen; multi-step tasks on one yes; a decision log; 95 % on 130 real commands (was 71 %) | ✅ | Other ideas are in [`SCOPE.md`](SCOPE.md) →
+| + · Agent | One loop that sees its state, your wiki, your lists and the screen; multi-step tasks on one yes; a decision log; 95 % on 130 real commands (was 71 %) | ✅ |
+| + · Lighter and safer | Efficiency mode, a slower idle tick, cached UI Automation; fewer tools per step, every action checked, a policy layer in code, a plan's steps run back to back; OCR via Windows; read-only MCP recall. Voice, GPU and memory upgrades built behind flags, to be measured | ✅ | Other ideas are in [`SCOPE.md`](SCOPE.md) →
 *Possible future changes*. The biggest known gap: the vision models this key can reach are
 mid-size, so a picture alone (canvases, video) is described less exactly than a window's text.
 
 <details>
-<summary><b>Checks</b>: 123 assert-based checks, a 169-utterance command matrix and a 130-command live eval</summary>
+<summary><b>Checks</b>: 175 assert-based checks, a 177-utterance command matrix and two live evals</summary>
 
 ```powershell
 .\.venv\Scripts\python.exe tests\test_stage1.py    # 15 · capture, blur, store
-.\.venv\Scripts\python.exe tests\test_stage2.py    # 14 · LLM client, mocked network
+.\.venv\Scripts\python.exe tests\test_stage2.py    # 17 · LLM client, mocked network
 .\.venv\Scripts\python.exe tests\test_stage3.py    # 11 · trigger gate, no network
 .\.venv\Scripts\python.exe tests\test_stage4.py    #  5 · overlay API and window flags
 .\.venv\Scripts\python.exe tests\test_stage5.py    # 14 · recall, voice, ask-back, demo
@@ -584,10 +592,13 @@ mid-size, so a picture alone (canvases, video) is described less exactly than a 
 .\.venv\Scripts\python.exe tests\test_stage8.py    #  7 · the first real session's misses
 .\.venv\Scripts\python.exe tests\test_stage9.py    # 14 · curtain that follows you, no-name asks, calibration, forget, timers
 .\.venv\Scripts\python.exe tests\test_stage10.py   #  7 · your lists by voice, heard feedback, cursor, Memory tab, vision
-.\.venv\Scripts\python.exe tests\test_stage11.py   #  9 · the agent: plans, risky steps, typing guard, trace, wiki
+.\.venv\Scripts\python.exe tests\test_stage11.py   # 10 · the agent: plans, risky steps, typing guard, trace, wiki
+.\.venv\Scripts\python.exe tests\test_stage12.py   # 28 · the 2026-10-05 session's misses, and pause
+.\.venv\Scripts\python.exe tests\test_stage13.py   # 24 · footprint, tool retrieval, checks, policy, the flagged upgrades
 .\.venv\Scripts\python.exe tests\eval_agent.py     #  live: 130 real commands, rules + agent (95 %)
+.\.venv\Scripts\python.exe tests\eval_trajectory.py  #  live: 8 whole tasks on invented screens
 .\.venv\Scripts\python.exe tests\test_face.py      #  6 · remember my face
-.\.venv\Scripts\python.exe tests\test_commands.py  #  4 · 169 commands, talk that mustn't trigger, a drill
+.\.venv\Scripts\python.exe tests\test_commands.py  #  4 · 177 commands, talk that mustn't trigger, a drill
 .\.venv\Scripts\python.exe tests\eval_tools.py     #  live: the model's tool pick, English + Hindi
 .\.venv\Scripts\python.exe tests\equiv_db.py snap before   # then change code, snap after, diff
 ```
@@ -615,6 +626,9 @@ Jimmy/
 │   ├── presence.py       webcam presence for the privacy curtain
 │   ├── act.py            the virtual cursor's hands (UI Automation, one action per yes)
 │   ├── agent.py          the agent: context, native tools, the loop, plan approval
+│   ├── policy.py         what the agent may do, decided in code (refuse / stop / ask / allow)
+│   ├── power.py          efficiency mode, battery and busy-CPU checks for background work
+│   ├── logs.py           the console kept in data\logs, captured text cut to lengths
 │   ├── api.py            127.0.0.1 API for the overlay (stdlib only)
 │   └── config.py         every tunable, with its reasoning
 ├── jimmy/              the core: the one LLM client, memory, card engine

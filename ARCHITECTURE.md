@@ -103,6 +103,8 @@ every screen reader charges.
 | `insights.py` | where the day went (D31) | estimated from frame times, gap-capped; no model, no new capture |
 | `proactive.py` | cards Jimmy writes itself (D32) | resume, focus offer, reminders, deadlines, recap; acts only on Jimmy |
 | `agent.py` | the agent (D42) | one loop with native tool calls: sees Jimmy's status, the user wiki's index, their lists and the window's numbered controls; acts, looks again; plan once + risky steps; code guards on ids, typed text and names |
+| `policy.py` | what the agent may do (D49) | every proposed screen action → refuse / stop / ask / allow, in code, whichever model proposed it; the guards that were in `Agent._act` live here |
+| `power.py` | the footprint (D47) | EcoQoS + below-normal priority for background threads; battery, CPU busy and user idle as cheap Win32 reads; no-ops off Windows |
 | `act.py` | the virtual cursor's hands (D41) | UI Automation controls of the window in front, matched by name, driven by their own patterns after a yes; no mouse or key events; apps opened by Start-menu shortcut; D45: other top-level windows (list, switch, minimize/maximize/restore through `WindowPattern`), shell popups never count as a window |
 | `logs.py` | the console, kept (D45) | `ambient run` tees stdout/stderr to `data/logs/jimmy.log` (rotating); quoted text, card lines and gate reasons are cut to their length, keys scrubbed |
 | `presence.py` | webcam presence for the curtain (D34, D37, D39) | finds your face once, then follows where you sit (template match when the face is lost); identity per track; resting looks while you're away; for your face only, "looking at the screen" and "lips moving" as yes/no history |
@@ -125,13 +127,18 @@ audio-mic    ──► WASAPI read ──► to_mono16k ──► VadChunker ─
 audio-loopback (disabled by default) ────────────────────────┘        │
                                                                       ▼
 transcribe   ──► Whisper ──► filter ──► Joiner (D45) ──► SQLite write (same lock)
+               D50: paused + a wake-word model → only segments with the name reach Whisper
+               D52: Joiner may ask a turn detector about a dangling line (CPU, opt-in)
+
+wiki-build, compaction, indexer, deadline scan ──► power.background() (D47: EcoQoS),
+               skipped while power.constrained() (battery, CPU busy)
 
 ask (one thread per request) ──► Asker._answer ──► the lock (one answer at a time)
                                    └─ trace: per thread (D45), wait_ms apart from ms
 agent-step (one per model call, D45) ──► chat_tools; the ask thread waits with a
                                    wall-clock limit, asks the fallback, honours "stop"
 
-presence     ──► webcam 4 fps (resting: 1 look/s) ──► observe ──► bus._on_presence
+presence     ──► webcam 4 fps (resting: 1 look/s; D50 still: ~1.5/s; constrained: half) ──► observe ──► bus._on_presence
                    └─ yes/no history (RAM) ◄── Asker._unnamed asks "was it you, looking?"
 ```
 
@@ -300,6 +307,14 @@ strip thumbnails (`/thumb?w=`), and deep links: `open_view` events and
    action ends the task. Windows: list_windows / focus_window / window_state → bus.
    window_action → act (UIA). A shell popup in front → bus.agent_aw → the last app window.
    While the agent waits for an ask_user answer (60 s), lines go to it unless new_request().
+ D47–D49: the context is ordered stable-first for the provider's prompt cache; each step
+   sees CORE + the tool GROUPS its words name (select_tools; more_tools adds one); every
+   proposal → policy.check; every action → _verify (✓/✗ to the model); an approved plan's
+   `actions` run back to back (_speculate) until a surprise. D51: a window with no
+   controls → its OCR text (bus.agent_text); a good task → a recipe (jimmy.db) shown to
+   similar requests (opt-in); steps fall back cloud → cloud second → local (opt-in).
+ D51: `python -m jimmy mcp` is a separate process: stdio JSON-RPC → Jimmy.gather (no
+   model client) → render_context (6,000 chars). Read-only; no action reaches the bus.
  D41: route() places the clear phrases; everything else in chat/recall → the tool pick
    with <state> (reminders, goals, memories with ids + the last turn), while recall
    evidence is fetched in parallel; "answer" → on as before. Lists by voice →
