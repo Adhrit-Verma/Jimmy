@@ -308,28 +308,67 @@ def window_text(hwnd: int,
 _ocr_state: dict[str, object] = {}
 
 
+def _engines() -> list[str]:
+    """D51 (A7): which OCR engines to try, in order. "auto": Windows' own (built in,
+    offline, no install beyond `pip install winocr`), then Tesseract (rarely installed)."""
+    want = config.OCR_ENGINE.lower()
+    return ["windows", "tesseract"] if want == "auto" else [want]
+
+
+def _probe(engine: str) -> None:
+    if engine == "windows":
+        import winocr  # noqa: F401  (Windows.Media.Ocr through WinRT)
+    elif engine == "tesseract":
+        import pytesseract
+        pytesseract.get_tesseract_version()
+    else:
+        raise ValueError(f"unknown OCR engine {engine!r}")
+
+
+def ocr_engine() -> str | None:
+    """The first engine that works here, probed once; None when OCR is inert."""
+    if "engine" not in _ocr_state:
+        _ocr_state["engine"], why = None, []
+        for e in _engines():
+            try:
+                _probe(e)
+                _ocr_state["engine"] = e
+                break
+            except Exception as exc:
+                why.append(f"{e}: {type(exc).__name__}: {exc}")
+        _ocr_state["why"] = "; ".join(why)
+    return _ocr_state["engine"]
+
+
 def ocr_available() -> bool:
-    if "ok" not in _ocr_state:
-        try:
-            import pytesseract
-            pytesseract.get_tesseract_version()
-            _ocr_state["ok"] = True
-        except Exception as exc:
-            _ocr_state["ok"] = False
-            _ocr_state["why"] = f"{type(exc).__name__}: {exc}"
-    return bool(_ocr_state["ok"])
+    return ocr_engine() is not None
+
+
+def _ocr_windows(gray: np.ndarray) -> str:
+    import winocr
+    res = winocr.recognize_cv2_sync(cv2.cvtColor(gray, cv2.COLOR_GRAY2BGRA), config.OCR_LANG)
+    lines = res.get("lines") if isinstance(res, dict) else getattr(res, "lines", None)
+    if lines:
+        return "\n".join(str(ln.get("text") if isinstance(ln, dict) else getattr(ln, "text", "")) for ln in lines)
+    return str((res.get("text") if isinstance(res, dict) else getattr(res, "text", "")) or "")
 
 
 def ocr(bgr: np.ndarray) -> str:
-    """Only for canvas-rendered apps and video, where UIA has nothing to say."""
-    if not config.OCR_ENABLED or not ocr_available():
+    """Only for canvas-rendered apps and video, where UIA has nothing to say. Always
+    handed the blurred frame (faces can't be read)."""
+    if not config.OCR_ENABLED:
         return ""
-    import pytesseract
-    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+    engine = ocr_engine()
+    if engine is None:
+        return ""
+    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY) if bgr.ndim == 3 else bgr
     if gray.shape[1] > 1600:
         s = 1600 / gray.shape[1]
         gray = cv2.resize(gray, (1600, int(gray.shape[0] * s)), interpolation=cv2.INTER_AREA)
     try:
+        if engine == "windows":
+            return _ocr_windows(gray).strip()
+        import pytesseract
         return pytesseract.image_to_string(gray).strip()
     except Exception:
         return ""

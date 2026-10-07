@@ -200,12 +200,24 @@ class LLM:
         first = self.tools_model or self.model
         return next((m for m in (*self.fallbacks, self.model) if m and m != first), None)
 
+    def tool_fallbacks(self) -> list[str]:
+        """D51 (A8): every model an agent step may fall back to, in order: the second
+        cloud model, then a local one ("local:<name>") when LOCAL_TOOLS_MODEL is set."""
+        out = [m for m in (self.tool_fallback(),) if m]
+        if config.LOCAL_TOOLS_MODEL and self.base_url == config.BASE_URL.rstrip("/"):
+            out.append("local:" + config.LOCAL_TOOLS_MODEL)
+        return out
+
     def chat_tools(self, messages: list[dict], tools: list[dict], *, max_tokens: int = 500,
                    temperature: float = 0.0, model: str | None = None) -> dict:
         """D42: one step of the agent. The model's message, with `tool_calls` (OpenAI
         format) or `content`. Thinking off: measured on nemotron-3-super with it on,
         tool calls came back empty; off, 0.5-1.8 s and a sensible first step.
         `model` (D45): this step on another model (tool_fallback), when the first is slow."""
+        if model and model.startswith("local:"):
+            name = model.removeprefix("local:")       # D51: the step on local Ollama
+            local = _LOCAL_TOOLS.get(name) or _LOCAL_TOOLS.setdefault(name, local_llm(name))
+            return local.chat_tools(messages, tools, max_tokens=max_tokens, temperature=temperature, model=name)
         self._require_key()
         body = {**self._body(messages, False, max_tokens, temperature, False), "tools": tools, "tool_choice": "auto",
                 "model": model or self.tools_model or self.model}
@@ -320,6 +332,7 @@ def local_llm(model: str | None = None) -> LLM:
 
 
 _EMBEDDERS: dict[str, LLM] = {}
+_LOCAL_TOOLS: dict[str, LLM] = {}      # D51: local tool-step clients, one per model, kept open
 
 
 def embed(texts: list[str], model: str | None = None) -> list[list[float]]:

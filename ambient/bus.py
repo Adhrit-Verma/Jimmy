@@ -703,6 +703,27 @@ class ContextBus:
         self._last_act_ms = now_ms()
         return f"Opened {url[:60]}."
 
+    def agent_text(self) -> str:
+        """D51 (A7): the window in front, read by OCR from the latest thumbnail (faces
+        already blurred; excluded windows are never captured), for a window whose
+        controls UI Automation can't read. Cut to 1,500 characters."""
+        import cv2
+        if not config.OCR_FOR_AGENT or not screen.ocr_available():
+            return ""
+        now = self.screen_now()
+        if not now or not now["frame"].get("thumb_path"):
+            return ""
+        img = cv2.imread(str(config.DATA_DIR / now["frame"]["thumb_path"]))
+        if img is None:
+            return ""
+        _, _, bounds = self.agent_window()
+        if bounds:
+            k = img.shape[1] / (getattr(self, "_screen_w", None) or img.shape[1])
+            x0, y0, x1, y1 = (max(0, int(v * k)) for v in bounds)
+            if x1 - x0 > 20 and y1 - y0 > 20:
+                img = img[y0:y1, x0:x1]
+        return screen.ocr(img)[:1500]
+
     def look(self, question: str, targets: list) -> str:
         """D42: a look at the screen for the agent. The latest thumbnail (faces blurred,
         never an excluded window) with the controls' numbers drawn on, to a vision
@@ -967,7 +988,11 @@ class ContextBus:
                                      # D45: other windows, by app name; their names help Whisper too
                                      "windows": self.windows_text, "open_apps": self.open_apps,
                                      "focus_window": lambda name: self.window_action(name),
-                                     "value_of": self._value_of,
+                                     "value_of": self._value_of, "screen_text": self.agent_text,
+                                     # D51 (A5): recipes, from the agent's own successes
+                                     "recipes": lambda app, q: "\n".join(
+                                         f'"{r["request"]}": {r["steps"]}' for r in mem.recipes_for(app, q)),
+                                     "learned": mem.add_recipe,
                                      "window_state": lambda name, state: self.window_action(name, state),
                                      "status": lambda: self.status_text(mem), "look": self.look,
                                      "open_url_any": self.open_url, "close_app": close_app,
@@ -1154,7 +1179,7 @@ class ContextBus:
         if verbose:
             print(f"[bus] capturing every {config.FRAME_INTERVAL_S}s -> {self.store.path}")
             print(f"[bus] faces={'on' if self.faces.available else 'MODELS MISSING'} "
-                  f"ocr={'on' if screen.ocr_available() else 'off (no tesseract)'}  ctrl-c to stop")
+                  f"ocr={screen.ocr_engine() or 'off'}  ctrl-c to stop")
 
         last_report = 0.0
         try:

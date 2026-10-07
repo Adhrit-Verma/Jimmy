@@ -17,6 +17,11 @@ except OSError:
     pass
 DATA_DIR = Path(os.environ.get("JIMMY_DATA") or ROOT / "data")
 MEMORY_DB = DATA_DIR / "jimmy.db"
+# D51 (A10): each request's trace also goes to this file as OpenTelemetry GenAI spans
+# (OTLP JSON, one line a request) for local tools: Jaeger, Phoenix, an OTel collector's
+# otlpjsonfile receiver. No prompts, no heard or said text, no tool arguments (the
+# convention's default). Local file only. JIMMY_OTEL=1 turns it on.
+OTEL_FILE = DATA_DIR / "logs" / "otel.jsonl" if os.environ.get("JIMMY_OTEL") == "1" else None
 AMBIENT_DB = DATA_DIR / "ambient.db"   # read-only from here; the ambient layer writes it
 
 # --- the one LLM client (D14) -------------------------------------------------
@@ -87,6 +92,10 @@ FOCUS_INTENT_MAX_H = 8       # a stated focus older than this has expired
 LOCAL_BASE_URL = os.environ.get("JIMMY_LOCAL_URL") or "http://127.0.0.1:11434/v1"
 LOCAL_MODEL = os.environ.get("JIMMY_LOCAL_MODEL") or "qwen2.5:3b"
 CARD_ENGINE = os.environ.get("JIMMY_CARD_ENGINE") or "local"   # "local" | "cloud"
+# D51 (A8): a local Ollama model as the last fallback for an agent step, after the cloud's
+# two (the cloud down or too slow). Empty = off. Must replace the cards model in VRAM, not
+# sit beside it (e.g. qwen3:4b for both): measure eval_tools.py, the card set and VRAM first.
+LOCAL_TOOLS_MODEL = os.environ.get("JIMMY_LOCAL_TOOLS") or ""
 # RECALL needs two yeses (D22): the local model filters, the cloud confirms. Only
 # the few local yeses leave the laptop. "none" = local only (lower precision).
 RECALL_VERIFY = os.environ.get("JIMMY_RECALL_VERIFY") or "cloud"

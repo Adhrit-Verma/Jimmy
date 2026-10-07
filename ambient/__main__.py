@@ -62,8 +62,9 @@ def _doctor() -> int:
 
     def _ocr():
         from . import screen
-        return screen.ocr_available(), ("tesseract present" if screen.ocr_available()
-                                        else "no tesseract binary; UIA-only (canvas/video lost)")
+        e = screen.ocr_engine()     # D51: Windows OCR first, then Tesseract
+        return e is not None, (f"{e} OCR" if e else
+                               "no OCR engine (pip install winocr); UIA-only (canvas/video lost)")
 
     def _whisper():
         import ctranslate2

@@ -172,7 +172,11 @@ def main(argv: list[str] | None = None) -> int:
     t.add_argument("-n", type=int, default=15)
     w = sub.add_parser("wiki", help="the user wiki (OKF): build it, or print its index (D42)")
     w.add_argument("--build", action="store_true")
+    sub.add_parser("mcp", help="a read-only MCP server on stdio: recall for other assistants (D51)")
     args = ap.parse_args(argv)
+    if args.cmd == "mcp":
+        from .mcp import serve
+        return serve()
     if args.cmd == "trace":
         return _trace(args.n)
     if args.cmd == "wiki":

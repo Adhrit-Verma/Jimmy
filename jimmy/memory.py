@@ -81,6 +81,11 @@ CREATE TABLE IF NOT EXISTS traces (
     id INTEGER PRIMARY KEY, ts INT NOT NULL, heard TEXT, via TEXT, route TEXT,
     steps TEXT, said TEXT, ms INT, wait_ms INT
 );
+-- D51 (A5): what worked before, per app: control names in order, never typed text.
+CREATE TABLE IF NOT EXISTS recipes (
+    id INTEGER PRIMARY KEY, ts INT NOT NULL, app TEXT NOT NULL, request TEXT NOT NULL,
+    steps TEXT NOT NULL, uses INT DEFAULT 1
+);
 CREATE TABLE IF NOT EXISTS goals (
     id INTEGER PRIMARY KEY, created INT NOT NULL, text TEXT NOT NULL,
     state TEXT DEFAULT 'active', done_ts INT
@@ -263,11 +268,44 @@ class Memory:
 
     def forget_turns(self, since_ms: int, until_ms: int) -> int:
         """D39: chat turns in a span the user deleted (answers quote what was captured).
-        Remembered facts and reminders stay: those you asked Jimmy to keep."""
+        Remembered facts and reminders stay: those you asked Jimmy to keep. D51: recipes
+        learned in the span go too (control names are screen content)."""
         with self._lock:
             n = self.conn.execute("DELETE FROM turns WHERE ts >= ? AND ts < ?", (since_ms, until_ms)).rowcount
+            self.conn.execute("DELETE FROM recipes WHERE ts >= ? AND ts < ?", (since_ms, until_ms))
             self.conn.commit()
         return n
+
+    def add_recipe(self, app: str, request: str, steps: str) -> None:
+        """D51 (A5): the same steps in the same app again count as one recipe, used more."""
+        now = int(time.time() * 1000)
+        with self._lock:
+            row = self.conn.execute("SELECT id FROM recipes WHERE app = ? AND steps = ?", (app, steps)).fetchone()
+            if row:
+                self.conn.execute("UPDATE recipes SET ts = ?, uses = uses + 1, request = ? WHERE id = ?",
+                                  (now, request[:200], row[0]))
+            else:
+                self.conn.execute("INSERT INTO recipes(ts, app, request, steps) VALUES (?,?,?,?)",
+                                  (now, app, request[:200], steps[:600]))
+                # at most 50 per app: the oldest, least used go
+                self.conn.execute("""DELETE FROM recipes WHERE app = ? AND id NOT IN (SELECT id FROM recipes
+                                     WHERE app = ? ORDER BY uses DESC, ts DESC LIMIT 50)""", (app, app))
+            self.conn.commit()
+
+    def recipes_for(self, app: str, request: str, n: int = 2) -> list[dict]:
+        """The recipes in this app whose requests share the most words with this one."""
+        import re
+        want = set(re.findall(r"[\w']+", request.lower())) - {"the", "a", "an", "to", "on", "in", "and", "my", "it"}
+        with self._lock:
+            rows = [dict(r) for r in self.conn.execute(
+                "SELECT request, steps, uses, ts FROM recipes WHERE app = ? ORDER BY ts DESC LIMIT 200", (app,))]
+        scored = []
+        for r in rows:
+            words = set(re.findall(r"[\w']+", r["request"].lower()))
+            hit = len(want & words)
+            if hit and hit / max(1, len(want)) >= 0.34:
+                scored.append((hit, r["uses"], r["ts"], r))
+        return [r for *_, r in sorted(scored, key=lambda x: x[:3], reverse=True)[:n]]
 
     def add_trace(self, t: dict) -> None:
         import json
@@ -275,6 +313,10 @@ class Memory:
                     (int(t.get("ts") or time.time() * 1000), str(t.get("heard") or "")[:500], t.get("via") or "",
                      t.get("route") or "", json.dumps(t.get("steps") or [], ensure_ascii=False)[:8000],
                      str(t.get("said") or "")[:500], int(t.get("ms") or 0), int(t.get("wait_ms") or 0)))
+        from . import config
+        if config.OTEL_FILE:                    # D51 (A10): the same request as OTel spans, locally
+            from .otel import export
+            export(t, config.OTEL_FILE)
 
     def traces(self, n: int = 20) -> list[dict]:
         import json

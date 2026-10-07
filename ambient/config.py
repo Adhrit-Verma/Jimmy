@@ -51,6 +51,11 @@ UIA_MAX_DEPTH = 30
 UIA_BUDGET_S = 0.60          # abandon the walk past this, whatever we have is what we get
 UIA_MIN_CHARS = 40           # below this, the window is probably canvas-rendered -> try OCR
 OCR_ENABLED = True           # silently inert if the Tesseract binary is absent
+# D51 (A7): "auto" tries Windows' built-in OCR (Windows.Media.Ocr via `pip install winocr`),
+# then Tesseract; "windows" / "tesseract" pick one. OCR_LANG is a Windows OCR language tag
+# (installed OCR languages: Get-WindowsCapability -Online -Name "Language.OCR*").
+OCR_ENGINE = "auto"
+OCR_LANG = "en"
 
 # --- face stage (ephemeral; see AMBIENT_LAYER.md Stage 1b) ----------------
 FACE_SCORE_THRESHOLD = 0.7
@@ -318,3 +323,13 @@ PRESENCE_STILL_MAX_S = 2.0
 # seconds away or paused, ask Ollama to unload its models (the next search reloads bge-m3,
 # ~6 s). 0 = never. Whisper stays loaded: the name must still be heard.
 GPU_RELEASE_AWAY_S = 0
+
+# --- the agent, smarter over time (D51) -----------------------------------------------
+# A5: after a screen task ends well, code writes a "recipe" (the app, the request, the
+# control names used in order; never the typed text) to jimmy.db, and the next similar
+# request in that app sees the best two as <how_it_went_before>. Deleted by "forget".
+# NOT measured: run a repeated-task eval (steps on the second run) before switching on.
+AGENT_RECIPES = False
+# A7: a window with no readable controls (canvas, games, some Electron panes): the agent
+# gets the OCR'd text of the latest blurred frame of it, as text it can't click.
+OCR_FOR_AGENT = True

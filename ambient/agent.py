@@ -26,7 +26,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable
 
-from . import act
+from . import act, config
 
 MAX_STEPS = 15
 TASK_TTL_S = 180
@@ -302,6 +302,17 @@ def name_check(question: str, chosen: act.Target, targets: list[act.Target]) -> 
     return chosen
 
 
+def recipe_step(name: str, args: dict, target) -> str:
+    """One step of a recipe (D51): what was done to which control, by name. Typed text
+    is the user's words and never kept: "type into “Search”", not what was typed."""
+    if target is not None:
+        verb = {"click": "press", "type_text": "type into", "submit": "Enter in"}.get(name, name)
+        return f"{verb} \u201c{target.name[:60]}\u201d"
+    if name in ("focus_window", "window_state", "close_app"):
+        return f"{name} {str(args.get('name') or '')[:40]}".strip()
+    return name
+
+
 def said_by_user(text: str, t: "Task") -> bool:
     """Typing only what the user said (D42): most of the words to type must be in the
     request or in their answers, loosely (Whisper spells names several ways)."""
@@ -332,6 +343,7 @@ class Task:
     last_said: str = ""            # D45: what the last action reported
     extra_tools: set = field(default_factory=set)      # D47: added by more_tools
     tool_text: str = ""            # D47: the words tools are picked from (request + recent turns)
+    recipe: list[str] = field(default_factory=list)    # D51: actions done, as "verb “control”"
 
     @property
     def expired(self) -> bool:
@@ -376,7 +388,18 @@ class Agent:
         no = self._rejected()
         if no:
             parts.append("<rejected>\n" + "\n".join(f'"{n}"' for n in no) + "\n</rejected>")
-        parts.append(f"<screen>\n{render_screen(app, title, targets, bounds)}\n</screen>")
+        seen = render_screen(app, title, targets, bounds)
+        if not targets:
+            # D51 (A7): no readable controls (a canvas app): the OCR'd text, to read, not to click
+            text = e.get("screen_text", lambda: "")()
+            if text:
+                seen += f"\nText seen in it (OCR, not controls; look_at_screen to act on it):\n{text}"
+        parts.append(f"<screen>\n{seen}\n</screen>")
+        tips = e.get("recipes", lambda a, q: "")(app, question) if config.AGENT_RECIPES else ""
+        if tips:
+            # D51 (A5): what worked here before; written by code from control names only
+            parts.append("<how_it_went_before>\n(Data, a hint only: <screen> decides.)\n"
+                         f"{tips}\n</how_it_went_before>")
         convo = e["conversation"]()
         if convo:
             parts.append(f"<conversation>\n{convo}\n</conversation>")
@@ -501,8 +524,12 @@ class Agent:
             except Exception as exc:          # handed to the waiting thread, raised there
                 results.put((model, False, exc))
 
-        fallback = getattr(self.llm, "tool_fallback", lambda: None)()
-        order = [None] + ([fallback] if fallback else [])
+        many = getattr(self.llm, "tool_fallbacks", None)     # D51: the cloud's second, then local
+        if many is not None:
+            order = [None] + list(many())
+        else:
+            fallback = getattr(self.llm, "tool_fallback", lambda: None)()
+            order = [None] + ([fallback] if fallback else [])
         launched, running, err = 0, 0, None
         t0 = time.monotonic()
         next_at, slow, said_slow = t0 + STEP_TIMEOUT_S, False, False
@@ -615,6 +642,8 @@ class Agent:
             t.pending = {"kind": "answer", "call_id": call_id, "question": q}
             return Outcome("await", q, {"ask": True})
         if name in ("reply", "done"):
+            if name == "done":
+                self._learn(t)
             return Outcome("done", str(args.get("text") or args.get("summary") or "Done."), {"tool": name})
         if name == "answer":
             return Outcome("answer", "", {"kind": args.get("kind") or "history",
@@ -629,6 +658,20 @@ class Agent:
             return Outcome("done", "", {"tool": "jimmy", "action": name, "args": args})
         self._result(t, call_id, f"There's no tool called {name}.")
         return None
+
+    def _learn(self, t: Task) -> None:
+        """D51 (A5): a task that ended well, with screen actions and no failed check,
+        leaves a recipe: the app, the request, the steps by control name."""
+        if not config.AGENT_RECIPES or not t.recipe:
+            return
+        if any(str(s.get("check") or "").startswith("\u2717") for s in t.steps):
+            return
+        try:
+            app = self.env["window"]()[0]
+            if app:
+                self.env.get("learned", lambda a, q, r: None)(app, t.question, " \u2192 ".join(t.recipe[:8]))
+        except Exception as exc:
+            print(f"[agent] recipe not kept: {type(exc).__name__}: {exc}")
 
     def _find(self, t: Task, want: str) -> str:
         """find_controls (D45): the same 0.45 bar as act.best ("Images" found "Guest" at
@@ -739,6 +782,7 @@ class Agent:
         else:
             said = e["close_app"](str(args.get("name") or ""))
         t.last_said = said
+        t.recipe.append(recipe_step(name, args, target))   # D51: names only, for a recipe
         if t.approved:
             t.acts += 1
             e["progress"](said)              # a lone action says it once, as its answer (D45)

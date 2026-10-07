@@ -606,6 +606,176 @@ def test_d50_presence_skips_the_detector_while_you_sit_still():
     print("ok  D50: present and still, the webcam reuses the last look; motion looks at once")
 
 
+# --- D51: the agent, smarter over time ---------------------------------------------------
+
+def test_d51_recipes_names_only_and_forgotten():
+    from jimmy.memory import Memory
+    mem = Memory(":memory:")
+    did, e = _world()
+    e.update(recipes=lambda app, q: "\n".join(f'"{r["request"]}": {r["steps"]}' for r in mem.recipes_for(app, q)),
+             learned=mem.add_recipe)
+    config.AGENT_RECIPES = True
+    try:
+        llm = Script(call("plan", steps=["type", "search"], actions=[
+            {"tool": "type_text", "id": 1, "name": "Search", "text": "carryminati"},
+            {"tool": "submit", "id": 1, "name": "Search"}]), call("done", summary="Searched."))
+        ag = Agent(llm, e)
+        ag.start("search carryminati on youtube")
+        ag.answer(True)
+        rows = mem.recipes_for("Chrome", "search mrbeast on youtube")
+        assert len(rows) == 1 and rows[0]["steps"] == "type into \u201cSearch\u201d \u2192 Enter in \u201cSearch\u201d", rows
+        assert "carryminati" not in rows[0]["steps"], "typed text is never kept"
+        did2, e2 = _world()
+        e2.update(recipes=e["recipes"], learned=mem.add_recipe)
+        llm2 = Script(call("done", summary="."))
+        Agent(llm2, e2).start("search mrbeast on youtube")
+        ctx = llm2.seen[0][1]["content"]
+        assert "<how_it_went_before>" in ctx and "Enter in" in ctx, ctx[-400:]
+        assert ctx.index("<how_it_went_before>") > ctx.index("<screen>"), "after the stable prefix"
+        assert not mem.recipes_for("Chrome", "set a timer"), "unrelated requests get none"
+        mem.add_recipe("Chrome", "search cats on youtube", rows[0]["steps"])
+        assert len(mem.conn.execute("SELECT * FROM recipes").fetchall()) == 1, "the same steps: one recipe"
+        # a failed check: nothing learned
+        mem2 = Memory(":memory:")
+        did3, e3 = _world()
+        e3.update(value_of=lambda t: "carry", learned=mem2.add_recipe)
+        ag = Agent(Script(call("plan", steps=["type"], actions=[
+            {"tool": "type_text", "id": 1, "name": "Search", "text": "carryminati"}]), call("done", summary=".")), e3)
+        ag.start("type carryminati")
+        ag.answer(True)
+        assert not mem2.conn.execute("SELECT * FROM recipes").fetchall(), "\u2717 in the task: no recipe"
+        mem.forget_turns(0, 1 << 62)
+        assert not mem.conn.execute("SELECT * FROM recipes").fetchall(), "forget takes recipes too"
+    finally:
+        config.AGENT_RECIPES = False
+    llm3 = Script(call("done", summary="."))
+    Agent(llm3, e).start("search mrbeast on youtube")
+    assert "<how_it_went_before>" not in llm3.seen[0][1]["content"], "off by default: the prompt is unchanged"
+    print("ok  D51: a task that went well leaves a recipe of control names; similar requests see it")
+
+
+def test_d51_ocr_engines_and_text_for_the_agent():
+    from ambient import screen
+    fake = types.ModuleType("winocr")
+    fake.recognize_cv2_sync = lambda img, lang: {"lines": [{"text": "Level 3"}, {"text": "Score 1200"}]}
+    saved = dict(screen._ocr_state)
+    sys.modules["winocr"] = fake
+    try:
+        screen._ocr_state.clear()
+        assert screen.ocr_engine() == "windows", "Windows' own OCR first"
+        assert screen.ocr(np.zeros((90, 160, 3), np.uint8)) == "Level 3\nScore 1200"
+        screen._ocr_state.clear()
+        config.OCR_ENGINE = "tesseract"
+        sys.modules["pytesseract"] = None                    # not installed
+        assert screen.ocr_engine() is None and screen.ocr(np.zeros((9, 9, 3), np.uint8)) == ""
+    finally:
+        config.OCR_ENGINE = "auto"
+        sys.modules.pop("winocr", None)
+        sys.modules.pop("pytesseract", None)
+        screen._ocr_state.clear()
+        screen._ocr_state.update(saved)
+    llm = Script(call("done", summary="."))
+    Agent(llm, env([], screen=[], screen_text=lambda: "Level 3\nScore 1200")).start("what level am I on")
+    ctx = llm.seen[0][1]["content"]
+    assert "Text seen in it (OCR, not controls" in ctx and "Score 1200" in ctx, ctx
+    llm = Script(call("done", summary="."))
+    Agent(llm, env([], screen_text=lambda: "Level 3")).start("what level am I on")
+    assert "OCR" not in llm.seen[0][1]["content"], "with controls, UI Automation is enough"
+    print("ok  D51: Windows OCR, then Tesseract; a window with no controls is read as text for the agent")
+
+
+def test_d51_a_local_model_is_the_last_fallback():
+    import httpx
+    from jimmy import config as jcfg, llm as jllm
+    jcfg.LOCAL_TOOLS_MODEL = "qwen3:4b"
+    sent = []
+
+    def handler(req):
+        sent.append((str(req.url), json.loads(req.content)["model"]))
+        return httpx.Response(200, json={"choices": [{"message": {"content": "", "tool_calls": [
+            {"id": "c1", "type": "function", "function": {"name": "done", "arguments": "{}"}}]}}]})
+    try:
+        cloud = jllm.LLM(key="k", transport=httpx.MockTransport(handler))
+        fb = cloud.tool_fallbacks()
+        assert fb[-1] == "local:qwen3:4b" and len(fb) == 2, fb
+        jllm._LOCAL_TOOLS["qwen3:4b"] = jllm.LLM(key="ollama", model="qwen3:4b", base_url=jcfg.LOCAL_BASE_URL,
+                                                 transport=httpx.MockTransport(handler))
+        msg = cloud.chat_tools([{"role": "user", "content": "hi"}], [], model="local:qwen3:4b")
+        assert msg["tool_calls"][0]["function"]["name"] == "done"
+        assert sent[-1] == (jcfg.LOCAL_BASE_URL + "/chat/completions", "qwen3:4b"), sent
+        assert not jllm.local_llm("x").tool_fallbacks(), "a local client has no local fallback of its own"
+    finally:
+        jcfg.LOCAL_TOOLS_MODEL = ""
+        jllm._LOCAL_TOOLS.clear()
+
+    class Down(Script):
+        def tool_fallbacks(self):
+            return ["second", "local:qwen3:4b"]
+
+        def chat_tools(self, messages, tools, model=None, **kw):
+            self.tools_seen.append(model)
+            if model != "local:qwen3:4b":
+                raise RuntimeError(f"{model or 'first'} is down")
+            return call("timer", seconds=60)
+    llm = Down()
+    out = Agent(llm, env([])).start("set a timer for a minute")
+    assert llm.tools_seen == [None, "second", "local:qwen3:4b"] and out.data.get("action") == "timer", llm.tools_seen
+    print("ok  D51: the cloud down, an agent step goes to the second model, then the local one")
+
+
+def test_d51_otel_spans_carry_no_content():
+    import tempfile
+    from jimmy import otel
+    t = {"ts": 1_000, "heard": "search my secret thing", "via": "voice", "route": "agent", "said": "Searched secret.",
+         "ms": 900, "wait_ms": 100, "steps": [
+             {"tool": "type_text", "args": {"text": "my secret thing"}, "ms": 400, "model": "m1", "prompt": 1800,
+              "cached": 1500, "out": 20, "tool_ms": 200, "check": "\u2713 The box now holds the text."},
+             {"tool": "submit", "args": {"id": 1}, "ms": 0, "tool_ms": 300, "speculative": True,
+              "check": "\u2717 Nothing changed yet"}]}
+    sp = otel.spans(t)
+    names = [s["name"] for s in sp]
+    assert names == ["invoke_agent jimmy", "chat m1", "execute_tool type_text", "execute_tool submit"], names
+    assert all(s["traceId"] == sp[0]["traceId"] for s in sp) and sp[1]["parentSpanId"] == sp[0]["spanId"]
+    blob = json.dumps(sp)
+    assert "secret" not in blob, "no heard, said or typed text"
+    attrs = {a["key"]: a["value"] for a in sp[1]["attributes"]}
+    assert attrs["gen_ai.usage.input_tokens"] == {"intValue": "1800"} and "gen_ai.usage.cache_read.input_tokens" in attrs
+    assert sp[0]["startTimeUnixNano"] == str(1_100 * 1_000_000) and sp[3].get("status") == {"code": 2}
+    with tempfile.TemporaryDirectory() as d:
+        path = Path(d) / "logs" / "otel.jsonl"
+        otel.export(t, path)
+        otel.export(t, path)
+        lines = path.read_text(encoding="utf-8").splitlines()
+        assert len(lines) == 2 and json.loads(lines[0])["resourceSpans"][0]["scopeSpans"][0]["spans"][0]["name"] \
+            == "invoke_agent jimmy"
+    print("ok  D51: traces as OpenTelemetry GenAI spans in a local file, names and timings only")
+
+
+def test_d51_mcp_server_is_read_only_recall():
+    import io
+    from jimmy import mcp
+    from jimmy.core import Snippet
+    asked = []
+    srv = mcp.Server(gather=lambda q: asked.append(q) or [Snippet(1_700_000_000_000, "Chrome", "x" * 9000)])
+    init = srv.handle({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18"}})
+    assert init["result"]["capabilities"] == {"tools": {"listChanged": False}}
+    tools = srv.handle({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})["result"]["tools"]
+    assert [t["name"] for t in tools] == ["recall"] and tools[0]["annotations"]["readOnlyHint"], "one tool, no actions"
+    r = srv.handle({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+                    "params": {"name": "recall", "arguments": {"query": "what was I reading yesterday"}}})["result"]
+    text = r["content"][0]["text"]
+    assert not r["isError"] and text.startswith(mcp.NOTE) and "<context>" in text, "marked as data"
+    assert text.count("x") <= 6000, "the same 6,000-character cap as a model's context"
+    assert asked == ["what was I reading yesterday"]
+    assert srv.handle({"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "click"}})["error"]
+    assert srv.handle({"jsonrpc": "2.0", "method": "notifications/initialized"}) is None
+    out = io.StringIO()
+    mcp.serve(io.StringIO('{"jsonrpc":"2.0","id":7,"method":"ping"}\nnot json\n'), out, srv)
+    replies = [json.loads(x) for x in out.getvalue().splitlines()]
+    assert replies[0] == {"jsonrpc": "2.0", "id": 7, "result": {}} and replies[1]["error"]["code"] == -32700
+    print("ok  D51: an MCP server on stdio offers recall only, capped and marked as data")
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

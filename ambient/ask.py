@@ -1516,6 +1516,9 @@ class Asker:
                 "windows": act.get("windows", lambda: []), "open_apps": act.get("open_apps", lambda: []),
                 "focus_window": act.get("focus_window", nothing), "window_state": act.get("window_state", nothing),
                 "value_of": act.get("value_of", lambda t: None),          # D47: check a typing step
+                "screen_text": act.get("screen_text", lambda: ""),        # D51: OCR, no controls
+                "recipes": act.get("recipes", lambda app, q: ""),         # D51: what worked before
+                "learned": act.get("learned", lambda app, q, steps: None),
                 "step": self._agent_step, "slow": self._agent_slow, "feature": self._feature})
         return self.agent
 
