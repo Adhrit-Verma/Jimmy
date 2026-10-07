@@ -286,3 +286,6 @@ AGENT_TOOL_RETRIEVAL = True
 # A4: after every action, code checks the effect (the box holds the text; the page or
 # title changed) and tells the model ✓ or ✗.
 VERIFY_ACTIONS = True
+# A3 (D49): a plan can carry its first concrete actions; after the yes they run with no
+# model call between them while each control still matches and each check passes.
+SPECULATIVE_ACTIONS = True

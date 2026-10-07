@@ -51,7 +51,8 @@ For each request pick exactly one tool for the next step. Rules:
   (cursor? on a call? can you see me?) -> `reply` using <status>, or jimmy presence.
 - Doing something in the window in front (click, type, search, open a link, close a
   tab) -> act on the numbered controls in <screen>. More than one action -> call
-  `plan` first with short steps; the user approves once. "Search X" is always
+  `plan` first with short steps (and, when <screen> already shows the controls, their
+  concrete `actions`, which then run without another turn); the user approves once. "Search X" is always
   a plan straight away (type X into the search box, then submit or press search). Spoken names are often
   misheard: match them to the closest control name ("guest road" -> "Guest mode",
   "cross"/"X" -> a "Close" button, "carry minotti" -> "CarryMinati"). A reference by
@@ -142,8 +143,13 @@ TOOLS = [_fn(n, d, p, r) for n, d, p, r in JIMMY] + [
     _fn("reply", "Say one or two short sentences directly (about Jimmy itself, greetings, a quick fact).",
         {"text": _S}, ["text"]),
     _fn("ask_user", "Ask the user one short question and wait for the answer.", {"question": _S}, ["question"]),
-    _fn("plan", "Before a multi-step screen task: the short steps you'll take. The user approves once.",
-        {"steps": {"type": "array", "items": _S}}, ["steps"]),
+    _fn("plan", "Before a multi-step screen task: the short steps you'll take. The user approves once. "
+        "actions (optional): the first steps as concrete calls on <screen>'s numbers; after the yes they run "
+        "one by one, without asking you again, while each control still matches and each check passes.",
+        {"steps": {"type": "array", "items": _S},
+         "actions": {"type": "array", "items": {"type": "object", "properties": {
+             "tool": {"type": "string", "enum": ["click", "type_text", "submit"]}, "id": _I, "name": _S, "text": _S},
+             "required": ["tool", "id", "name"]}}}, ["steps"]),
     _fn("click", "Press a control in <screen> by its number and name (buttons, links, tabs, checkboxes,"
         " menus; a text box gets the cursor).", {"id": _I, "name": _S}, ["id", "name"]),
     _fn("type_text", "Type text into a box in <screen> by its number and name (replaces what's there).",
@@ -588,7 +594,8 @@ class Agent:
             if not steps:
                 self._result(t, call_id, "A plan needs steps.")
                 return None
-            t.plan, t.pending = steps, {"kind": "plan", "call_id": call_id}
+            acts = [a for a in (args.get("actions") or []) if isinstance(a, dict)][:6]
+            t.plan, t.pending = steps, {"kind": "plan", "call_id": call_id, "actions": acts}
             numbered = " ".join(f"{i}. {s.rstrip('.')}." for i, s in enumerate(steps, 1))
             return Outcome("await", f"Here's the plan: {numbered} Okay?", {"plan": steps})
         if name in UI_TOOLS or name in RISKY_TOOLS:
@@ -645,38 +652,17 @@ class Agent:
         return note + "Nothing like that in this window." + (f" Nearby, in reading order:\n{near}" if near else "")
 
     def _act(self, t: Task, call_id: str, name: str, args: dict) -> Outcome | None:
-        """A screen action: shown first, done after a yes (or under an approved plan)."""
-        target = self._target(t, args) if name in ("click", "type_text", "submit") else None
-        if name in ("click", "type_text", "submit") and target is None:
-            self._result(t, call_id, "No control has that number. Use a number from <screen>.")
+        """A screen action: through the policy layer (D49), shown first, done after a yes
+        (or under an approved plan); anything the policy calls risky asks on its own."""
+        from . import policy
+        apps = self.env.get("open_apps", lambda: None)() if name == "close_app" else None
+        v = policy.check(name, args, t, self._rejected(), apps)
+        if v.kind == "refuse":
+            self._result(t, call_id, v.say)
             return None
-        if target is not None and not name_fits(str(args.get("name") or ""), target):
-            # D45: after a maximize the numbers shifted and "click 4" (Maximize) proposed New Tab.
-            self._result(t, call_id, f"Control {args.get('id')} is now \u201c{target.name}\u201d, not "
-                                     f"\u201c{args.get('name')}\u201d: the screen changed. Use the new numbers.")
-            return None
-        if target is not None and name == "click":
-            target = name_check(t.question, target, t.targets)
-        if target is not None and CAPTCHA.search(target.name):
-            return Outcome("done", NO_CAPTCHA, {"tool": "reply"})
-        if target is not None and target.name in self._rejected():
-            self._result(t, call_id, f"The user said no to \u201c{target.name}\u201d a moment ago: pick another "
-                                     "control, or look_at_screen.")
-            return None
-        if name == "type_text" and (target.password or not said_by_user(str(args.get("text") or ""), t)):
-            self._result(t, call_id, "Not typing that: a password box, or words the user didn't say. "
-                                     "Ask the user what to type.")
-            return None
-        if name in ("focus_window", "window_state") and not str(args.get("name") or "").strip():
-            self._result(t, call_id, "Which app? Give its name.")
-            return None
-        if name == "window_state" and args.get("state") not in ("minimize", "maximize", "restore"):
-            self._result(t, call_id, "state is minimize, maximize or restore.")
-            return None
-        risky = name in RISKY_TOOLS or bool(target and act.RISKY.search(target.name))
-        if name == "open_url" and not re.match(r"^https?://\S+$", str(args.get("url") or "")):
-            self._result(t, call_id, "Only http(s) addresses.")
-            return None
+        if v.kind == "stop":
+            return Outcome("done", v.say, {"tool": "reply"})
+        target, risky = v.target, v.kind == "ask"
         if target is not None:
             t.last_index = t.targets.index(target) if target in t.targets else 0
         if risky or not t.approved:
@@ -684,11 +670,11 @@ class Agent:
                          "target": target}
             if target:
                 self.env["cursor"](target, "type" if name == "type_text" else "click")
-            return Outcome("await", self._ask_line(name, args, target, risky), {"act": name})
+            return Outcome("await", self._ask_line(name, args, target, risky, v.why), {"act": name})
         return self._do(t, call_id, name, args, target)
 
     @staticmethod
-    def _ask_line(name: str, args: dict, target, risky: bool) -> str:
+    def _ask_line(name: str, args: dict, target, risky: bool, why: str = "") -> str:
         what = {"click": lambda: f"Press \u201c{target.name}\u201d",
                 "type_text": lambda: f"Type \u201c{str(args.get('text'))[:40]}\u201d into \u201c{target.name}\u201d",
                 "submit": lambda: f"Run the search in \u201c{target.name}\u201d",
@@ -696,9 +682,43 @@ class Agent:
                 "close_app": lambda: f"Close {args.get('name')}",
                 "focus_window": lambda: f"Switch to {args.get('name')}",
                 "window_state": lambda: f"{str(args.get('state')).capitalize()} {args.get('name')}"}[name]()
-        return f"{what}?{' Careful: that may not be undoable.' if risky else ''} Say yes."
+        warn = f" {why}" if why else " Careful: that may not be undoable." if risky else ""
+        return f"{what}?{warn} Say yes."
+
+    def _speculate(self, t: Task, actions: list[dict]) -> tuple[list[str], list[act.Target]]:
+        """D49 (A3, UFO2's speculative multi-action): run the plan's concrete actions
+        after its yes, one by one, with no model call between them, while each passes
+        the policy (the control at that number still has that name; nothing risky) and
+        each check passes. The first surprise hands control back to the model."""
+        from . import config, policy
+        lines: list[str] = []
+        if not getattr(config, "SPECULATIVE_ACTIONS", True):
+            return lines, t.targets
+        for i, a in enumerate(actions, 1):
+            name = str(a.get("tool") or "")
+            if name not in ("click", "type_text", "submit") or self.cancelled:
+                break
+            v = policy.check(name, a, t, self._rejected())
+            if v.kind != "allow":
+                lines.append(f"(stopped before action {i}: {v.say or 'it needs its own yes'})")
+                break
+            said, check, fresh = self._execute(t, name, a, v.target)
+            t.targets = fresh
+            t.steps.append({"tool": name, "args": a, "ms": 0, "speculative": True, **({"check": check[:80]}
+                                                                                       if check else {})})
+            lines.append(f"{i}. {name} \u201c{v.target.name}\u201d: {said} {check}".strip())
+            if check.startswith("\u2717") or check.startswith("(No visible"):
+                break
+        return lines, t.targets
 
     def _do(self, t: Task, call_id: str, name: str, args: dict, target) -> Outcome | None:
+        said, check, fresh = self._execute(t, name, args, target)
+        if check:
+            t.steps[-1]["check"] = check[:80]
+        return self._observe(t, call_id, f"{said} {check}".strip(), fresh)
+
+    def _execute(self, t: Task, name: str, args: dict, target) -> tuple[str, str, list[act.Target]]:
+        """Do one approved action; (what it said, the check, the controls after)."""
         e = self.env
         nothing = lambda *a: "I can't do that from here."  # noqa: E731
         before = (e["window"](), [(x.name, x.kind) for x in t.targets])   # D47: to check the effect
@@ -729,10 +749,7 @@ class Agent:
             time.sleep(0.8)                  # let the window react before looking again
         if fresh is None:
             fresh = reading_order(e["controls"]())
-        check = self._verify(name, args, target, before, fresh)
-        if check:
-            t.steps[-1]["check"] = check[:80]
-        return self._observe(t, call_id, f"{said} {check}".strip(), fresh)
+        return said, self._verify(name, args, target, before, fresh), fresh
 
     def _verify(self, name: str, args: dict, target, before: tuple, fresh: list[act.Target]) -> str:
         """D47 (A4): did it work? Checked in code through UI Automation, never assumed:
@@ -806,7 +823,13 @@ class Agent:
             return Outcome("done", "Okay, I won't.", {"cancelled": True})
         if p["kind"] == "plan":
             t.approved = True
-            self._result(t, p["call_id"], "Approved. Go ahead, one step at a time.")
+            ran, fresh = self._speculate(t, p.get("actions") or [])
+            if ran:
+                app, title, bounds = self.env["window"]()
+                self._result(t, p["call_id"], "Approved. Already done, without asking you again:\n" + "\n".join(ran)
+                             + f"\nScreen now:\n{render_screen(app, title, fresh, bounds)}")
+            else:
+                self._result(t, p["call_id"], "Approved. Go ahead, one step at a time.")
             return self.run()
         out = self._do(t, p["call_id"], p["name"], p["args"], p.get("target"))
         if out is not None:
