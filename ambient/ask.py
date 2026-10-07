@@ -22,6 +22,8 @@ import threading
 import time
 from typing import Callable
 
+import numpy as np
+
 from jimmy import config as jcfg
 from jimmy.core import LLMError, Snippet
 from jimmy.memory import fts_query
@@ -797,6 +799,11 @@ def speakable(text: str, limit: int = config.VOICE_MAX_CHARS) -> str:
     return out or text[:limit]
 
 
+def make_voice(**kw) -> "Voice":
+    """D52 (V4): the configured voice: SAPI, or Kokoro (which falls back to SAPI)."""
+    return KokoroVoice(**kw) if config.VOICE_ENGINE.lower() == "kokoro" else Voice(**kw)
+
+
 class Voice:
     """Windows' built-in text-to-speech (SAPI via comtypes, already installed).
     Its own thread (COM likes one), interruptible, reports start and end."""
@@ -859,6 +866,57 @@ class Voice:
                     speaking = False
                     self.on_end()
 
+
+class KokoroVoice(Voice):
+    """D52 (V4): Kokoro-82M through kokoro-onnx, played on the default output with
+    PyAudio (already installed for capture). CPU only while speaking. Devanagari text
+    gets the Hindi voice. Stops mid-sentence on `stop`, like SAPI. If Kokoro can't load,
+    this is SAPI."""
+
+    def _engine(self):
+        from kokoro_onnx import Kokoro
+        return Kokoro(str(config.KOKORO_MODEL), str(config.KOKORO_VOICES))
+
+    @staticmethod
+    def pick(text: str) -> tuple[str, str]:
+        hindi = any("\u0900" <= ch <= "\u097f" for ch in text)
+        return (config.KOKORO_VOICE_HI, "hi") if hindi else (config.KOKORO_VOICE, "en-us")
+
+    def _run(self) -> None:
+        try:
+            tts = self._engine()
+            import pyaudiowpatch as pa
+            audio = pa.PyAudio()
+        except Exception as exc:
+            print(f"[voice] Kokoro unavailable ({type(exc).__name__}: {exc}); using Windows' voice")
+            return Voice._run(self)
+        speaking, stream, rate = False, None, 0
+        while (text := self._q.get()) is not None:
+            if not speaking:
+                speaking = True
+                self.on_start()
+            try:
+                voice, lang = self.pick(text)
+                samples, sr = tts.create(text, voice=voice, speed=config.KOKORO_SPEED, lang=lang)
+                if stream is None or sr != rate:
+                    if stream is not None:
+                        stream.close()
+                    stream, rate = audio.open(format=pa.paFloat32, channels=1, rate=int(sr), output=True), sr
+                pcm = (np.asarray(samples, dtype=np.float32) * (self.volume / 100)).clip(-1, 1)
+                step = int(sr * 0.1)
+                for at in range(0, len(pcm), step):     # 100 ms at a time, so "stop" is quick
+                    if self._stop.is_set():
+                        break
+                    stream.write(pcm[at:at + step].tobytes())
+            except Exception as exc:
+                print(f"[voice] {type(exc).__name__}: {exc}")
+            finally:
+                if self._q.empty() or self._stop.is_set():
+                    speaking = False
+                    self.on_end()
+        if stream is not None:
+            stream.close()
+        audio.terminate()
 
 class Asker:
     """Turns a spoken or typed question into overlay events: answer_start,

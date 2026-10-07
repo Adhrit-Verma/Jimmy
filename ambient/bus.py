@@ -284,14 +284,17 @@ class ContextBus:
         blurred, face_count, _ordinals = self.faces.process(frame, w.id)
         c.faces_blurred += face_count
 
-        thumb = screen.save_thumb(blurred, ts) if self.want_thumbs else None
+        # The frame row is always written (it's the timeline); text only if new.
+        fresh = new_lines(wt.text, w.seen_lines)
+        # D52 (P8): no new screen text (a video, a cursor): a small thumbnail is enough.
+        small = (config.SMALL_THUMBS_UNCHANGED_TEXT and not fresh and len(wt.text) >= config.UIA_MIN_CHARS)
+        thumb = (screen.save_thumb(blurred, ts, width=config.THUMB_SMALL_WIDTH if small else None)
+                 if self.want_thumbs else None)
         # D32: the page's address, to reopen it later. Only reached past both
         # exclusion checks; query and fragment dropped (screen.clean_url).
         url = screen.clean_url(wt.url) if wt.url else None
         frame_id = self.store.add_frame(w.id, aw.app, aw.title, thumb, face_count, ts, url)
 
-        # The frame row is always written (it's the timeline); text only if new.
-        fresh = new_lines(wt.text, w.seen_lines)
         if self.store.add_text(frame_id, "uia", fresh):
             c.text_blocks += 1
         if len(wt.text) < config.UIA_MIN_CHARS:
@@ -920,10 +923,10 @@ class ContextBus:
         from .act import submit as act_submit
         from .audio import NOT_CALL_APPS
 
-        from .ask import Asker, Voice
+        from .ask import Asker, make_voice
         from .audio import app_label, mic_holders, not_a_call
         from .recall import timeline_hooks
-        self._voice = Voice(on_start=self._voice_started, on_end=self._voice_ended) \
+        self._voice = make_voice(on_start=self._voice_started, on_end=self._voice_ended) \
             if config.VOICE_ANSWERS else None
         if not self.gate:                  # --no-cards: a stated focus still needs a home
             from jimmy import config as jcfg

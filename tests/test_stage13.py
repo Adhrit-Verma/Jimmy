@@ -776,6 +776,126 @@ def test_d51_mcp_server_is_read_only_recall():
     print("ok  D51: an MCP server on stdio offers recall only, capped and marked as data")
 
 
+# --- D52: voice and storage, later ---------------------------------------------------------
+
+class _Tok:
+    """A tokenizer stand-in: one id per word; <|im_end|> is id 0."""
+    def __init__(self):
+        self.vocab = {"<|im_end|>": 0}
+
+    def token_to_id(self, t):
+        return self.vocab.get(t)
+
+    def encode(self, text):
+        ids = [self.vocab.setdefault(w, len(self.vocab)) for w in text.split()]
+        return types.SimpleNamespace(ids=ids)
+
+
+class _TurnModel:
+    """Logits: end-of-turn likely unless the line ends on "and"."""
+    def __init__(self, tok):
+        self.tok = tok
+
+    def get_inputs(self):
+        return [types.SimpleNamespace(name="input_ids")]
+
+    def run(self, _, feed):
+        ids = feed["input_ids"][0]
+        logits = np.zeros((1, len(ids), 8), dtype=np.float32)
+        logits[0, -1, 0] = -5.0 if ids[-1] == self.tok.vocab.get("and") else 5.0
+        return [logits]
+
+
+def test_d52_turn_detector_lets_whole_lines_go():
+    from ambient import audio
+    tok = _Tok()
+    det = audio.TurnDetector(session=_TurnModel(tok), tokenizer=tok)
+    assert det.complete("open the one on the left") > 0.85 and det.complete("maximize the window and") < 0.1
+    j = audio.Joiner()
+    assert j.feed(0, 1000, "mic", "can you close") == [] and j.held, "the rule alone holds it"
+    j = audio.Joiner()
+    j.detector = det
+    assert j.feed(0, 1000, "mic", "can you close") == [(0, 1000, "mic", "can you close")], "sounds whole: goes"
+    assert j.feed(2000, 3000, "mic", "maximize the window and") == [] and j.held, "sounds cut: held"
+    assert j.feed(3500, 4500, "mic", "close chrome")[0][3] == "maximize the window and close chrome"
+    assert j.feed(9000, 9500, "mic", "hello there") == [(9000, 9500, "mic", "hello there")], "no dangle: never asked"
+
+    class Broken:
+        def complete(self, t):
+            raise RuntimeError("onnx")
+    j.detector = Broken()
+    assert j.feed(10_000, 11_000, "mic", "open the") == [] and j.detector is None, "broken: the rule, as before"
+    assert audio.TurnDetector.load() is None, "off by default"
+    print("ok  D52: a turn detector lets a flagged line go when it sounds whole; the rule otherwise")
+
+
+def test_d52_kokoro_voice_picks_and_falls_back():
+    from ambient import ask
+    assert ask.KokoroVoice.pick("Opening Chrome.") == (config.KOKORO_VOICE, "en-us")
+    assert ask.KokoroVoice.pick("ठीक है, खोल रहा हूँ") == (config.KOKORO_VOICE_HI, "hi"), "Devanagari: the Hindi voice"
+    fell = []
+    real = ask.Voice._run
+    ask.Voice._run = lambda self: fell.append(type(self).__name__)
+    try:
+        config.VOICE_ENGINE = "kokoro"
+        v = ask.make_voice()
+        assert isinstance(v, ask.KokoroVoice)
+        for _ in range(50):
+            if fell:
+                break
+            time.sleep(0.02)
+        assert fell == ["KokoroVoice"], "no kokoro_onnx here: Windows' voice"
+        v.close()
+    finally:
+        config.VOICE_ENGINE = "sapi"
+        ask.Voice._run = real
+    print("ok  D52: Kokoro speaks English or Hindi by the script, and falls back to Windows' voice")
+
+
+def test_d52_int8_vectors_rank_like_float32():
+    from ambient import recall
+    rng = np.random.default_rng(7)
+    vecs = rng.normal(size=(300, 1024)).astype(np.float32)
+    vecs /= np.linalg.norm(vecs, axis=1, keepdims=True)
+    q = vecs[17] + 0.3 * rng.normal(size=1024).astype(np.float32)
+    q /= np.linalg.norm(q)
+    plain = [recall.pack(v) for v in vecs]
+    config.VECTOR_INT8 = True
+    try:
+        small = [recall.pack(v) for v in vecs]
+    finally:
+        config.VECTOR_INT8 = False
+    assert len(plain[0]) == 4096 and len(small[0]) == 1028, "a quarter of the size"
+    a = recall.unpack_page(plain, 1024) @ q
+    mixed = small[:150] + plain[150:]                    # rows from before and after the switch
+    b = recall.unpack_page(mixed, 1024) @ q
+    top_a, top_b = set(np.argsort(-a)[:20]), set(np.argsort(-b)[:20])
+    assert int(np.argmax(b)) == 17 and len(top_a & top_b) >= 19, (len(top_a & top_b))
+    assert np.abs(a - b).max() < 0.01
+    try:
+        recall.unpack_page([b"x" * 10], 1024)
+        raise AssertionError("a wrong size must not be read")
+    except ValueError:
+        pass
+    print("ok  D52: int8 vectors (with a scale) rank like float32; old and new rows read together")
+
+
+def test_d52_small_thumbnails_for_unchanged_text():
+    import tempfile
+    import cv2
+    from ambient import screen
+    img = np.full((1080, 1920, 3), 90, np.uint8)
+    with tempfile.TemporaryDirectory() as d:
+        big = screen.save_thumb(img, 1_000, Path(d) / "thumbs")
+        little = screen.save_thumb(img, 2_000, Path(d) / "thumbs", width=config.THUMB_SMALL_WIDTH)
+        w_big = cv2.imread(str(Path(d) / big)).shape[1]
+        w_small = cv2.imread(str(Path(d) / little)).shape[1]
+    assert (w_big, w_small) == (config.THUMB_WIDTH, 480), (w_big, w_small)
+    src = (Path(__file__).resolve().parents[1] / "ambient" / "bus.py").read_text(encoding="utf-8")
+    assert "screen.save_thumb(blurred, ts, width=" in src, "still only the blurred frame (invariant 4)"
+    print("ok  D52: a frame with no new text can be kept at 480 px; the blurred frame only")
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

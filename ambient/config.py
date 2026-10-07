@@ -333,3 +333,29 @@ AGENT_RECIPES = False
 # A7: a window with no readable controls (canvas, games, some Electron panes): the agent
 # gets the OCR'd text of the latest blurred frame of it, as text it can't click.
 OCR_FOR_AGENT = True
+
+# --- voice and storage, later (D52) ---------------------------------------------------
+# V3: a folder with an end-of-turn model (model.onnx + tokenizer.json, e.g. LiveKit's open
+# turn detector). Asked only about lines the dangling-word rule would hold: at or above
+# TURN_COMPLETE the line goes at once. None = the rule alone (D45). Needs onnxruntime and
+# tokenizers. NOT measured: count held lines and wrongly split requests before using it.
+TURN_DETECTOR: Path | None = None
+TURN_COMPLETE = 0.85
+# V4: "sapi" (Windows' voice, English) or "kokoro" (Kokoro-82M via kokoro-onnx, on the CPU
+# only while speaking, Hindi voices too). Kokoro falls back to SAPI if it can't load.
+# NOT judged by ear yet.
+VOICE_ENGINE = "sapi"
+KOKORO_MODEL = MODELS_DIR / "kokoro-v1.0.onnx"
+KOKORO_VOICES = MODELS_DIR / "voices-v1.0.bin"
+KOKORO_VOICE = "af_heart"
+KOKORO_VOICE_HI = "hf_alpha"
+KOKORO_SPEED = 1.1
+# P7: store new meaning-search vectors as int8 with a per-vector scale (1,028 bytes
+# instead of 4,096). Old float32 rows still read. Proof first: tests/equiv_db.py, top-k
+# overlap >= 99 % on the frozen copy of the real DB (D38 measured 99.5 % for int8).
+VECTOR_INT8 = False
+# P8: a frame whose screen text didn't change (a video, a cursor, an animation) is kept
+# as a THUMB_SMALL_WIDTH thumbnail instead of THUMB_WIDTH. A frame with new text, or with
+# too little UI text to rely on (OCR reads the thumbnail), stays full size.
+SMALL_THUMBS_UNCHANGED_TEXT = False
+THUMB_SMALL_WIDTH = 480

@@ -420,16 +420,18 @@ class ScreenSource:
         return np.ascontiguousarray(arr[:, :, :3]) if arr.shape[2] == 4 else arr
 
 
-def save_thumb(bgr: np.ndarray, ts_ms: int, thumb_dir: Path | None = None) -> str:
-    """Write the (already blurred) frame as a small JPEG. Returns a relative path."""
+def save_thumb(bgr: np.ndarray, ts_ms: int, thumb_dir: Path | None = None, width: int | None = None) -> str:
+    """Write the (already blurred) frame as a small JPEG. Returns a relative path.
+    `width` (D52): narrower than THUMB_WIDTH for a frame whose text didn't change."""
+    width = width or config.THUMB_WIDTH
     root = Path(thumb_dir or config.THUMB_DIR)
     day = time.strftime("%Y%m%d", time.localtime(ts_ms / 1000))
     out_dir = root / day
     out_dir.mkdir(parents=True, exist_ok=True)
     h, w = bgr.shape[:2]
-    if w > config.THUMB_WIDTH:
-        s = config.THUMB_WIDTH / w
-        bgr = cv2.resize(bgr, (config.THUMB_WIDTH, max(1, int(h * s))),
+    if w > width:
+        s = width / w
+        bgr = cv2.resize(bgr, (width, max(1, int(h * s))),
                          interpolation=cv2.INTER_AREA)
     path = out_dir / f"{ts_ms}.jpg"
     opts = [cv2.IMWRITE_JPEG_QUALITY, config.THUMB_JPEG_QUALITY]

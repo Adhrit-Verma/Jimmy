@@ -172,6 +172,51 @@ def dangles(text: str) -> bool:
     return words[-1] in DANGLING or words[-2:] in (["can", "you"], ["could", "you"])
 
 
+class TurnDetector:
+    """D52 (V3): does a transcript sound finished, by its meaning? An end-of-turn model
+    (LiveKit's open turn detector, a small Qwen, ONNX on one CPU thread) gives the chance
+    that the next token ends the user's turn. Asked only about lines `dangles` flags, so
+    its cost stays near zero; `Joiner` lets a flagged line go at once when it says done.
+    TURN_DETECTOR is a folder with model.onnx (or model_q8.onnx) and tokenizer.json."""
+
+    def __init__(self, folder: Path | str | None = None, session=None, tokenizer=None):
+        if session is None or tokenizer is None:
+            import onnxruntime as ort
+            from tokenizers import Tokenizer
+            root = Path(folder or config.TURN_DETECTOR)
+            model = next((root / n for n in ("model_q8.onnx", "model.onnx", "onnx/model_q8.onnx")
+                          if (root / n).exists()), None)
+            if model is None:
+                raise FileNotFoundError(f"no turn-detector model in {root}")
+            opts = ort.SessionOptions()
+            opts.intra_op_num_threads = opts.inter_op_num_threads = 1
+            session = ort.InferenceSession(str(model), sess_options=opts, providers=["CPUExecutionProvider"])
+            tokenizer = Tokenizer.from_file(str(root / "tokenizer.json"))
+        self.session, self.tokenizer = session, tokenizer
+        self.end_id = tokenizer.token_to_id("<|im_end|>")
+
+    @classmethod
+    def load(cls) -> "TurnDetector | None":
+        if not config.TURN_DETECTOR:
+            return None
+        try:
+            return cls()
+        except Exception as exc:
+            print(f"[audio] turn detector off ({type(exc).__name__}: {exc}); the dangling-word rule decides")
+            return None
+
+    def complete(self, text: str) -> float:
+        """The chance this line is a whole turn, 0..1."""
+        ids = self.tokenizer.encode(f"<|im_start|>user\n{text.strip()}").ids[-128:]
+        feed = {self.session.get_inputs()[0].name: np.array([ids], dtype=np.int64)}
+        out = np.asarray(self.session.run(None, feed)[0], dtype=np.float32)
+        if out.size == 1:                       # a model that already gives the probability
+            return float(out.reshape(-1)[0])
+        logits = out.reshape(-1, out.shape[-1])[-1]
+        e = np.exp(logits - logits.max())
+        return float(e[self.end_id] / e.sum()) if self.end_id is not None else 0.0
+
+
 class Joiner:
     """D45: hold a transcript that ends on a dangling word, and join it to the next one
     from the same source if that began within JOIN_GAP_MS; otherwise let it go once
@@ -182,6 +227,21 @@ class Joiner:
         self.gap_ms, self.wait_ms, self.quiet_ms = gap_ms, wait_ms, quiet_ms
         self.held: dict[str, tuple[int, int, str]] = {}      # source -> (ts_start, ts_end, text)
         self.spoke_at: dict[str, int] = {}                    # source -> when speech last began
+        self.detector: TurnDetector | None = None             # D52: set by the pipeline when configured
+
+    def _holds(self, text: str) -> bool:
+        """Hold this line for the rest? The rule flags it; the detector, if any, can
+        say it's a whole turn after all ("open the one on the left", "close")."""
+        if not dangles(text):
+            return False
+        if self.detector is None:
+            return True
+        try:
+            return self.detector.complete(text) < config.TURN_COMPLETE
+        except Exception as exc:
+            print(f"[audio] turn detector failed ({type(exc).__name__}); holding as before")
+            self.detector = None
+            return True
 
     def started(self, source: str, ts_ms: int) -> None:
         self.spoke_at[source] = ts_ms
@@ -194,7 +254,7 @@ class Joiner:
                 ts_start, text = h[0], f"{h[2]} {text}"
             else:
                 out.append((h[0], h[1], source, h[2]))
-        if dangles(text):
+        if self._holds(text):
             self.held[source] = (ts_start, ts_end, text)
         else:
             out.append((ts_start, ts_end, source, text))
@@ -674,6 +734,7 @@ class AudioPipeline:
         self._pa = pa.PyAudio()
         self.transcriber = Transcriber()
         self.wake = WakeWord.load()
+        self.joiner.detector = TurnDetector.load()
         for dev, source in self._devices():
             t = _CaptureThread(self._pa, dev, source, self._q, self._stop, self.paused, self.on_start)
             t.start()

@@ -19,6 +19,7 @@ from jimmy import config as jcfg
 from jimmy.core import LLMError, embed
 from jimmy.memory import fts_query
 
+from . import config
 from .db import Store
 
 CHUNK_CHARS = 800          # bge-m3 takes far more; smaller chunks match more precisely
@@ -40,6 +41,31 @@ def chunks(text: str, size: int = CHUNK_CHARS) -> list[str]:
     return out
 
 
+def pack(v: np.ndarray) -> bytes:
+    """A unit vector for the store: float32, or (D52, P7, VECTOR_INT8) a float32 scale
+    then int8 components, a quarter of the size."""
+    if not config.VECTOR_INT8:
+        return np.asarray(v, dtype=np.float32).tobytes()
+    scale = float(np.abs(v).max()) / 127 or 1.0
+    return np.float32(scale).tobytes() + np.round(v / scale).astype(np.int8).tobytes()
+
+
+def unpack_page(blobs: list[bytes], dim: int) -> np.ndarray:
+    """Stored vectors -> one float32 matrix. A page may mix both kinds (rows written
+    before and after VECTOR_INT8): float32 is 4 x dim bytes, int8 is dim + 4."""
+    if all(len(b) == 4 * dim for b in blobs):
+        return np.frombuffer(b"".join(blobs), dtype=np.float32).reshape(len(blobs), dim)
+    out = np.empty((len(blobs), dim), dtype=np.float32)
+    for i, b in enumerate(blobs):
+        if len(b) == 4 * dim:
+            out[i] = np.frombuffer(b, dtype=np.float32)
+        elif len(b) == dim + 4:
+            out[i] = np.frombuffer(b, dtype=np.int8, offset=4).astype(np.float32) * np.frombuffer(b[:4], np.float32)[0]
+        else:
+            raise ValueError(f"a stored vector of {len(b)} bytes doesn't fit {dim} dimensions")
+    return out
+
+
 def index(store: Store, batch: int = 32, limit: int = 400, model: str | None = None) -> int:
     """Embed up to `limit` unindexed blocks. Returns chunks embedded (0 = caught up).
 
@@ -53,7 +79,7 @@ def index(store: Store, batch: int = 32, limit: int = 400, model: str | None = N
         part = todo[i:i + batch]
         vecs = np.asarray(embed([c for _, _, c in part], model), dtype=np.float32)
         vecs /= np.linalg.norm(vecs, axis=1, keepdims=True) + 1e-9   # cosine = dot product
-        store.add_embeddings([(ref, ts, model, c, v.tobytes()) for (ref, ts, c), v in zip(part, vecs)])
+        store.add_embeddings([(ref, ts, model, c, pack(v)) for (ref, ts, c), v in zip(part, vecs)])
         done += len(part)
     return done
 
@@ -77,7 +103,7 @@ def semantic(store: Store, query: str, since_ms: int = 0, until_ms: int = 1 << 6
     # a chunk), and text is fetched for the winners alone. Same order, same ranking.
     ids, scores = [], []
     for page in chain([first], pages):            # chain, not (first, *pages): that loads them all
-        mat = np.frombuffer(b"".join(v for _, v in page), dtype=np.float32).reshape(len(page), -1)
+        mat = unpack_page([v for _, v in page], len(q))
         scores.append(mat @ q)
         ids.append(np.fromiter((i for i, _ in page), dtype=np.int64, count=len(page)))
         del mat, page                             # one page alive at a time
