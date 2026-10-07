@@ -289,3 +289,32 @@ VERIFY_ACTIONS = True
 # A3 (D49): a plan can carry its first concrete actions; after the yes they run with no
 # model call between them while each control still matches and each check passes.
 SPECULATIVE_ACTIONS = True
+
+# --- voice and webcam, lighter (D50) ------------------------------------------------
+# V1: which voice detector cuts the mic into segments. "webrtc" (D2's, 30 ms frames) or
+# "silero" (a small ONNX model, 32 ms frames, fewer false segments in noise, so fewer
+# Whisper decodes). Silero needs onnxruntime and the model at SILERO_VAD_MODEL (or the
+# silero-vad package); without them it says so once and falls back to webrtc.
+# NOT measured on this mic yet: replay a recorded hour both ways before switching.
+VAD_ENGINE = "webrtc"
+SILERO_VAD_MODEL = MODELS_DIR / "silero_vad.onnx"
+SILERO_THRESHOLD = 0.5       # speech probability that counts a 32 ms frame as voiced
+# V2: while paused (D46) only the name matters. With a wake-word model (openWakeWord,
+# a custom "Jimmy" ONNX at WAKEWORD_MODEL), a paused segment reaches Whisper only if the
+# model heard the name in it, so the GPU idles through a paused evening. Off: every
+# paused segment is decoded, as in D46. Needs `pip install openwakeword` and the model.
+PAUSE_WAKEWORD = False
+WAKEWORD_MODEL = MODELS_DIR / "jimmy.onnx"
+WAKEWORD_THRESHOLD = 0.5
+# P5: you're at the screen and the picture hasn't moved: skip the face detector and keep
+# the last look, at PRESENCE_STILL_FPS, looking properly at least every PRESENCE_STILL_MAX_S.
+# Any motion (mean grey change >= PRESENCE_STILL_MOTION on 40x30) looks at once.
+# NOT measured on the real camera: the threshold is a guess; eye contact needs real looks.
+PRESENCE_STILL_SKIP = False
+PRESENCE_STILL_MOTION = 1.5
+PRESENCE_STILL_FPS = 1.5
+PRESENCE_STILL_MAX_S = 2.0
+# P6: the GPU budget (6 GB shared by Whisper, the cards model and bge-m3). After this many
+# seconds away or paused, ask Ollama to unload its models (the next search reloads bge-m3,
+# ~6 s). 0 = never. Whisper stays loaded: the name must still be heard.
+GPU_RELEASE_AWAY_S = 0

@@ -675,6 +675,30 @@ class Presence:
             tr.owner = False                    # someone at the screen, and it isn't you
         return on
 
+    def _still(self, t: float, gray: np.ndarray, tracker: Tracker, looked: float) -> bool:
+        """D50 (P5): skip this frame's detection? Only while you're present and followed,
+        the last real look saw you, it was under PRESENCE_STILL_MAX_S ago, and the 40x30
+        picture moved less than PRESENCE_STILL_MOTION since the previous frame. A skipped
+        frame repeats the last look's gaze into the history (lips: not moving), so eye
+        contact and "did you speak" keep their samples."""
+        if not config.PRESENCE_STILL_SKIP or self._enrol is not None or self._calib is not None \
+                or self._want_enrol or self._want_calib:
+            self._still_probe = None
+            return False
+        tiny = cv2.resize(gray, (40, 30), interpolation=cv2.INTER_AREA).astype(np.int16)
+        prev, self._still_probe = getattr(self, "_still_probe", None), tiny
+        tr = self.track
+        if (prev is None or tr is None or tracker.state != "present" or tr.alive < looked
+                or t - looked >= config.PRESENCE_STILL_MAX_S
+                or float(np.abs(tiny - prev).mean()) >= config.PRESENCE_STILL_MOTION):
+            return False
+        tr.alive = t
+        last = self.history[-1] if self.history else None
+        self.history.append((int(time.time() * 1000), last[1] if last else None,
+                             (False if last[2] is not None else None) if last else None,
+                             last[3] if last else None))
+        return True
+
     def observe(self, t: float, small: np.ndarray, gray: np.ndarray, faces: list, rec, tracker: Tracker) -> str:
         """One frame -> the state (D39). `faces`: YuNet rows scoring >= PRESENCE_KEEP_SCORE."""
         dark = float(gray.mean()) < config.DARK_FRAME
@@ -771,6 +795,12 @@ class Presence:
                         del small, gray
                         self._stop.wait(max(0.0, 1.0 - (time.monotonic() - t0)))
                         continue
+                elif self._still(t0, gray, tracker, looked):
+                    # D50 (P5): you're here and nothing in the picture moved: the last
+                    # look stands. No detector, no face crop; a real look every STILL_MAX_S.
+                    del small, gray
+                    self._stop.wait(max(0.0, 1 / config.PRESENCE_STILL_FPS - (time.monotonic() - t0)))
+                    continue
                 else:
                     probe = None
                 looked = t0

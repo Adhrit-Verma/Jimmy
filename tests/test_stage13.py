@@ -8,6 +8,8 @@ import sys
 import threading
 import time
 import types
+
+import numpy as np
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -435,6 +437,173 @@ def test_d49_policy_holds_against_the_page():
     v = policy.check("click", {"id": 1, "name": "I'm not a robot"}, _task("tick it", [cap]), [])
     assert v.kind == "stop", v
     print("ok  D49: the policy refuses, stops or asks in code, whatever the page or the model says")
+
+
+# --- D50: voice and webcam, lighter ------------------------------------------------------
+
+class _FakeSilero:
+    """Stands in for the ONNX session: speech when the frame is loud. Records shapes."""
+
+    def __init__(self):
+        self.shapes = []
+
+    def run(self, _, feed):
+        x, st = feed["input"], feed["state"]
+        self.shapes.append((x.shape, st.shape, int(feed["sr"])))
+        loud = float(np.abs(x[:, 64:]).mean()) > 0.05
+        return np.array([[0.9 if loud else 0.1]], dtype=np.float32), st + 1
+
+
+def test_d50_silero_frames_and_fallback():
+    from ambient import audio
+    sess = _FakeSilero()
+    vad = audio.SileroVad(session=sess)
+    ch = audio.VadChunker("mic", silence_ms=96, min_ms=100, vad=vad)
+    assert ch.frame_len == 512 and ch.frame_ms == 32, "Silero's 32 ms frames, not WebRTC's 30"
+    loud = (np.sin(np.arange(512 * 10) / 3) * 8000).astype(np.int16)
+    pcm = np.concatenate([np.zeros(512 * 3, np.int16), loud, np.zeros(512 * 3, np.int16)])
+    segs = ch.push(pcm, 0)
+    assert len(segs) == 1 and segs[0].ts_start < 3 * 32, segs
+    assert sess.shapes[0] == ((1, 576), (2, 1, 128), 16000), "64 samples of context + 512, state, rate"
+    assert float(vad._state.sum()) == 0 and not vad._context.any(), "state cleared after the utterance"
+    old = config.SILERO_VAD_MODEL
+    config.SILERO_VAD_MODEL = Path("/nonexistent/silero.onnx")
+    try:
+        v = audio.make_vad("silero")
+        assert type(v).__name__ == "WebRtcVad" and v.frame_ms == 30, "no model: WebRTC, said once"
+    finally:
+        config.SILERO_VAD_MODEL = old
+    assert type(audio.VadChunker("mic").vad).__name__ == "WebRtcVad", "default unchanged"
+    print("ok  D50: Silero VAD on 32 ms frames with its state; WebRTC when it can't load")
+
+
+class _FakeWake:
+    def __init__(self, hot):
+        self.hot, self.calls = hot, 0
+
+    def reset(self):
+        pass
+
+    def predict(self, frame):
+        self.calls += 1
+        return {"jimmy": 0.9 if self.hot and frame.any() else 0.0}
+
+
+def test_d50_paused_speech_reaches_whisper_only_with_the_name():
+    from ambient import audio
+    heard, decoded = [], []
+    pipe = audio.AudioPipeline(lambda a, b, src, text: heard.append(text), mic=False, loopback=False)
+    pipe.transcriber = types.SimpleNamespace(transcribe=lambda pcm: decoded.append(len(pcm)) or "jimmy resume")
+    paused = {"on": True}
+    pipe.name_only = lambda: paused["on"]
+    pipe.wake = audio.WakeWord(model=_FakeWake(hot=False))
+    seg = audio.Segment(0, 1000, "mic", np.ones(16000, np.int16))
+    assert not pipe._worth_decoding(seg), "paused, no name: Whisper never runs"
+    pipe.wake = audio.WakeWord(model=_FakeWake(hot=True))
+    assert pipe._worth_decoding(seg), "paused, the name: decoded"
+    paused["on"] = False
+    pipe.wake = audio.WakeWord(model=_FakeWake(hot=False))
+    assert pipe._worth_decoding(seg), "not paused: everything is decoded, as before"
+    paused["on"] = True
+    pipe._q.put(seg)
+    pipe._stop.set()
+    pipe._drain()
+    assert pipe.skipped == 1 and not decoded and not heard, (pipe.skipped, decoded, heard)
+
+    class Broken:
+        def reset(self):
+            pass
+
+        def predict(self, f):
+            raise RuntimeError("onnx")
+    pipe.wake = audio.WakeWord(model=Broken())
+    assert pipe._worth_decoding(seg) and pipe.wake is None, "a broken model falls back to D46"
+    assert audio.WakeWord.load() is None, "off by default"
+    print("ok  D50: while paused, a wake-word model keeps segments without the name from Whisper")
+
+
+def test_d50_gpu_budget_and_embeddings_on_cpu():
+    import httpx
+    import jimmy.core as jcore
+    from ambient import bus as bus_mod
+    from jimmy import config as jcfg, llm as jllm
+    clock, calls, done = [100.0], [], threading.Event()
+    real_time, real_unload = bus_mod.time, jcore.unload_local
+    bus_mod.time = types.SimpleNamespace(monotonic=lambda: clock[0], sleep=time.sleep, strftime=time.strftime)
+    jcore.unload_local = lambda: calls.append(1) or done.set() or ["qwen2.5:3b"]
+    b = types.SimpleNamespace()
+    try:
+        config.GPU_RELEASE_AWAY_S = 0
+        bus_mod.ContextBus._gpu_budget(b, True)
+        assert not calls and not hasattr(b, "_away_since"), "0: never"
+        config.GPU_RELEASE_AWAY_S = 60
+        bus_mod.ContextBus._gpu_budget(b, True)
+        clock[0] += 30
+        bus_mod.ContextBus._gpu_budget(b, True)
+        assert not calls, "not yet"
+        clock[0] += 31
+        bus_mod.ContextBus._gpu_budget(b, True)
+        done.wait(2)
+        bus_mod.ContextBus._gpu_budget(b, True)
+        assert calls == [1], "once per absence"
+        bus_mod.ContextBus._gpu_budget(b, False)
+        assert b._gpu_released is None, "back: armed again"
+    finally:
+        config.GPU_RELEASE_AWAY_S = 0
+        bus_mod.time, jcore.unload_local = real_time, real_unload
+    sent = []
+
+    def handler(req):
+        sent.append((req.url.path, json.loads(req.content)))
+        return httpx.Response(200, json={"embeddings": [[0.1, 0.2]]} if req.url.path.endswith("embed") else {})
+    saved = dict(jllm._EMBEDDERS)
+    jllm._EMBEDDERS[jcfg.EMBED_MODEL] = jllm.LLM(key="ollama", model=jcfg.EMBED_MODEL, base_url=jcfg.LOCAL_BASE_URL,
+                                                 transport=httpx.MockTransport(handler))
+    try:
+        jllm.embed(["hello"])
+        assert "options" not in sent[-1][1], "default: Ollama places it"
+        jcfg.EMBED_ON_CPU = True
+        jllm.embed(["hello"])
+        assert sent[-1][1]["options"] == {"num_gpu": 0}
+        assert jllm.unload_local(["bge-m3"]) == ["bge-m3"] and sent[-1] == (
+            "/api/generate", {"model": "bge-m3", "keep_alive": 0})
+    finally:
+        jcfg.EMBED_ON_CPU = False
+        jllm._EMBEDDERS.clear()
+        jllm._EMBEDDERS.update(saved)
+    print("ok  D50: away long enough, Ollama's models leave the GPU once; bge-m3 can run on the CPU")
+
+
+def test_d50_presence_skips_the_detector_while_you_sit_still():
+    from ambient.presence import Follow, Presence, Tracker
+
+    class Nobody:
+        known = False
+    p, tr = Presence(lambda i: None, owner=Nobody()), Tracker()
+    gray = np.full((480, 640), 120, np.uint8)
+    p.track = Follow(np.array([200, 100, 120, 150] + [0] * 11, dtype=np.float32), gray[::4, ::4], 10.0)
+    p.history.append((0, True, False, True))
+    config.PRESENCE_STILL_SKIP = True
+    try:
+        assert not p._still(10.2, gray, tr, 10.0), "first frame: nothing to compare with"
+        assert p._still(10.4, gray, tr, 10.0), "same picture, seen 0.4 s ago: skip"
+        assert p.history[-1][1:] == (True, False, True) and p.track.alive == 10.4, "the last look repeated"
+        moved = gray.copy()
+        moved[100:300, 200:400] = 30
+        assert not p._still(10.6, moved, tr, 10.0), "motion: a real look"
+        assert not p._still(12.5, moved, tr, 10.0), "a real look at least every PRESENCE_STILL_MAX_S"
+        tr.state = "away"
+        assert not p._still(12.6, moved, tr, 12.5), "only while you're present"
+        tr.state = "present"
+        p._want_calib = True
+        assert not p._still(12.7, moved, tr, 12.5), "never during a calibration"
+        p._want_calib = False
+        config.PRESENCE_STILL_SKIP = False
+        p._still(12.8, moved, tr, 12.5)
+        assert not p._still(12.9, moved, tr, 12.5), "off: every frame is looked at"
+    finally:
+        config.PRESENCE_STILL_SKIP = False
+    print("ok  D50: present and still, the webcam reuses the last look; motion looks at once")
 
 
 if __name__ == "__main__":

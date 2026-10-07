@@ -94,6 +94,19 @@ def _doctor() -> int:
                   + (f" | other inputs: {', '.join(others)}" if others and not heard else ""))
         return heard, detail
 
+    def _vad():
+        """D50: the configured voice detector, and the wake word if it's on."""
+        from .audio import WakeWord, make_vad
+        v = make_vad()
+        want = config.VAD_ENGINE.lower()
+        got = "silero" if type(v).__name__ == "SileroVad" else "webrtc"
+        ok, detail = got == want, f"{got} ({v.frame_ms} ms frames)" + ("" if got == want else f", wanted {want}")
+        if config.PAUSE_WAKEWORD:
+            w = WakeWord.load()
+            ok = ok and w is not None
+            detail += "; wake word " + ("loaded" if w else f"missing ({config.WAKEWORD_MODEL})")
+        return ok, detail
+
     def _db():
         from .db import Store
         s = Store(config.DB_PATH)
@@ -104,6 +117,7 @@ def _doctor() -> int:
     for name, fn in (("screen (dxgi)", _screen), ("uia text", _uia), ("uia controls (cached)", _uia_cache),
                      ("face models", _faces),
                      ("ocr", _ocr), ("whisper/cuda", _whisper), ("audio (wasapi)", _audio),
+                     ("voice detector", _vad),
                      ("store", _db)):
         check(name, fn)
 

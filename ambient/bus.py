@@ -1133,6 +1133,7 @@ class ContextBus:
         if self.want_audio:
             from .audio import AudioPipeline
             self._audio = AudioPipeline(self._on_audio, on_start=self._on_speech_start)
+            self._audio.name_only = lambda: now_ms() < self.paused_until     # D50: the wake word's moment
             try:
                 self._audio.start()
                 if verbose:
@@ -1170,6 +1171,7 @@ class ContextBus:
                     if rest:
                         self._maybe_compact()
                         self._maybe_wiki()
+                    self._gpu_budget(status == "paused" or rest)
                 except Exception as exc:
                     status = f"error:{type(exc).__name__}:{exc}"
                 if verbose and (status.startswith("error") or time.monotonic() - last_report > 10):
@@ -1182,6 +1184,29 @@ class ContextBus:
         finally:
             self.close(verbose=verbose)
         return self.counters
+
+    def _gpu_budget(self, away: bool) -> None:
+        """D50 (P6): away or paused for GPU_RELEASE_AWAY_S: Ollama drops the cards model
+        and bge-m3 from VRAM, once, on a background thread. Coming back clears the mark;
+        the next search or card reloads what it needs."""
+        if not config.GPU_RELEASE_AWAY_S:
+            return
+        now = time.monotonic()
+        if not away:
+            self._away_since = self._gpu_released = None
+            return
+        since = getattr(self, "_away_since", None) or now
+        self._away_since = since
+        if getattr(self, "_gpu_released", None) or now - since < config.GPU_RELEASE_AWAY_S:
+            return
+        self._gpu_released = True
+
+        def go() -> None:
+            from jimmy.core import unload_local
+            power.background()
+            done = unload_local()
+            print(f"[bus] away {config.GPU_RELEASE_AWAY_S:.0f} s: unloaded {', '.join(done) or 'nothing'} from the GPU")
+        threading.Thread(target=go, daemon=True, name="gpu-release").start()
 
     def _interval(self, status: str) -> float:
         """D47: 2 s while you work; IDLE_FRAME_INTERVAL_S once nothing has changed and

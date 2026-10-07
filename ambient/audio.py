@@ -9,6 +9,7 @@ from __future__ import annotations
 import queue
 import threading
 import time
+from pathlib import Path
 from typing import Callable, NamedTuple
 
 import numpy as np
@@ -240,6 +241,121 @@ def to_mono16k(raw: bytes, in_rate: int, channels: int) -> np.ndarray:
     return np.clip(a, -32768, 32767).astype(np.int16)
 
 
+class WebRtcVad:
+    """D2's detector: WebRTC VAD on 30 ms frames."""
+    frame_ms = 30
+
+    def __init__(self, aggressiveness: int = config.VAD_AGGRESSIVENESS, frame_ms: int = config.VAD_FRAME_MS):
+        import webrtcvad
+        self.vad, self.frame_ms = webrtcvad.Vad(aggressiveness), frame_ms
+
+    def is_speech(self, frame: np.ndarray) -> bool:
+        return self.vad.is_speech(frame.tobytes(), RATE)
+
+    def reset(self) -> None:
+        pass
+
+
+class SileroVad:
+    """D50 (V1): Silero VAD v5 through onnxruntime, on 32 ms frames (512 samples), on
+    one CPU thread. The model keeps a recurrent state and the last 64 samples as context
+    between frames, like the reference wrapper; `reset` clears both between utterances."""
+    frame_ms = 32
+    _CONTEXT = 64
+
+    def __init__(self, model: Path | str | None = None, threshold: float = config.SILERO_THRESHOLD,
+                 session=None):
+        self.threshold = threshold
+        if session is None:
+            import onnxruntime as ort
+            path = Path(model or config.SILERO_VAD_MODEL)
+            if not path.exists():
+                path = _silero_from_package()
+            opts = ort.SessionOptions()
+            opts.intra_op_num_threads = opts.inter_op_num_threads = 1
+            session = ort.InferenceSession(str(path), sess_options=opts, providers=["CPUExecutionProvider"])
+        self.session = session
+        self.reset()
+
+    def reset(self) -> None:
+        self._state = np.zeros((2, 1, 128), dtype=np.float32)
+        self._context = np.zeros((1, self._CONTEXT), dtype=np.float32)
+
+    def prob(self, frame: np.ndarray) -> float:
+        x = (frame.astype(np.float32) / 32768.0).reshape(1, -1)
+        x = np.concatenate([self._context, x], axis=1)
+        out, self._state = self.session.run(None, {"input": x, "state": self._state,
+                                                   "sr": np.array(RATE, dtype=np.int64)})
+        self._context = x[:, -self._CONTEXT:]
+        return float(np.asarray(out).reshape(-1)[0])
+
+    def is_speech(self, frame: np.ndarray) -> bool:
+        return self.prob(frame) >= self.threshold
+
+
+def _silero_from_package() -> Path:
+    """The ONNX file the silero-vad pip package ships, if it's installed."""
+    from importlib import resources
+    path = Path(str(resources.files("silero_vad") / "data" / "silero_vad.onnx"))
+    if not path.exists():
+        raise FileNotFoundError(f"no Silero model at {config.SILERO_VAD_MODEL} or in silero_vad")
+    return path
+
+
+_VAD_WARNED: set[str] = set()
+
+
+def make_vad(engine: str | None = None):
+    """The configured voice detector; Silero falls back to WebRTC, saying so once."""
+    engine = (engine or config.VAD_ENGINE).lower()
+    if engine == "silero":
+        try:
+            return SileroVad()
+        except Exception as exc:
+            if "silero" not in _VAD_WARNED:
+                _VAD_WARNED.add("silero")
+                print(f"[audio] Silero VAD unavailable ({type(exc).__name__}: {exc}); using WebRTC VAD")
+    return WebRtcVad()
+
+
+class WakeWord:
+    """D50 (V2): an openWakeWord model for "Jimmy", used only while paused (D46): a paused
+    segment reaches Whisper only if this heard the name in it. CPU, ~80 ms frames."""
+    FRAME = 1280                       # 80 ms at 16 kHz, openWakeWord's chunk
+
+    def __init__(self, model=None, threshold: float = config.WAKEWORD_THRESHOLD):
+        self.threshold = threshold
+        if model is None:
+            from openwakeword.model import Model
+            path = Path(config.WAKEWORD_MODEL)
+            if not path.exists():
+                raise FileNotFoundError(f"no wake-word model at {path}")
+            model = Model(wakeword_models=[str(path)], inference_framework="onnx")
+        self.model = model
+
+    @classmethod
+    def load(cls) -> "WakeWord | None":
+        if not config.PAUSE_WAKEWORD:
+            return None
+        try:
+            return cls()
+        except Exception as exc:
+            print(f"[audio] wake word off ({type(exc).__name__}: {exc}); paused speech goes to Whisper")
+            return None
+
+    def heard(self, pcm: np.ndarray) -> bool:
+        """Did this segment (int16 mono 16 kHz) contain the name?"""
+        try:
+            self.model.reset()
+        except Exception:
+            pass
+        for i in range(0, len(pcm) - self.FRAME + 1, self.FRAME):
+            scores = self.model.predict(pcm[i:i + self.FRAME])
+            if scores and max(scores.values()) >= self.threshold:
+                return True
+        return False
+
+
 class VadChunker:
     """Accumulate speech, emit a segment once the talker stops.
 
@@ -255,10 +371,13 @@ class VadChunker:
                  silence_ms: int = config.VAD_SILENCE_MS,
                  min_ms: int = config.SEG_MIN_MS,
                  max_ms: int = config.SEG_MAX_MS,
-                 preroll_frames: int = 5):
-        import webrtcvad
+                 preroll_frames: int = 5,
+                 vad=None):
         self.source = source
-        self.vad = webrtcvad.Vad(aggressiveness)
+        # D50: WebRTC (30 ms frames) or Silero (32 ms); the frame size is the detector's.
+        self.vad = vad if vad is not None else (make_vad() if config.VAD_ENGINE != "webrtc"
+                                                 else WebRtcVad(aggressiveness, frame_ms))
+        frame_ms = getattr(self.vad, "frame_ms", frame_ms)
         self.frame_len = int(RATE * frame_ms / 1000)
         self.frame_ms = frame_ms
         self.silence_frames = max(1, silence_ms // frame_ms)
@@ -270,11 +389,17 @@ class VadChunker:
         self._quiet = 0
         self._start_ms = 0
 
+    def _vad_reset(self) -> None:
+        reset = getattr(self.vad, "reset", None)       # Silero's state is per utterance
+        if reset:
+            reset()
+
     def _emit(self, end_ms: int) -> Segment | None:
         if not self._cur:
             return None
         pcm = np.concatenate(self._cur)
         self._cur, self._quiet = [], 0
+        self._vad_reset()
         if len(pcm) * 1000 // RATE < self.min_ms:
             return None
         return Segment(self._start_ms, end_ms, self.source, pcm)
@@ -289,7 +414,7 @@ class VadChunker:
             frame = buf[i * self.frame_len:(i + 1) * self.frame_len]
             f_ms = offset_ms + i * self.frame_ms
             try:
-                voiced = self.vad.is_speech(frame.tobytes(), RATE)
+                voiced = self.vad.is_speech(frame)
             except Exception:
                 voiced = False
             if voiced:
@@ -326,6 +451,7 @@ class VadChunker:
         """Drop everything buffered, including a half-finished utterance."""
         self._tail = np.zeros(0, dtype=np.int16)
         self._pre, self._cur, self._quiet = [], [], 0
+        self._vad_reset()
 
 
 class Transcriber:
@@ -446,8 +572,8 @@ class _CaptureThread(threading.Thread):
     def run(self) -> None:
         rate = int(self.device["defaultSampleRate"])
         ch = min(2, int(self.device["maxInputChannels"]))
-        block = int(rate * config.VAD_FRAME_MS / 1000) * 4
         chunker = VadChunker(self.source)
+        block = int(rate * chunker.frame_ms / 1000) * 4
         chunker.on_start = self.on_start
         watch = SilenceWatch()
         try:
@@ -510,6 +636,11 @@ class AudioPipeline:
         self._pa = None
         self.transcriber: Transcriber | None = None
         self.errors: list[str] = []
+        # D50 (V2): while `name_only()` (paused), a segment goes to Whisper only if the
+        # wake-word model heard the name in it. None: every segment is decoded.
+        self.name_only: Callable[[], bool] | None = None
+        self.wake: WakeWord | None = None
+        self.skipped = 0                   # paused segments the wake word kept from Whisper
 
     def _devices(self) -> list[tuple[dict, str]]:
         import pyaudiowpatch as pa
@@ -542,6 +673,7 @@ class AudioPipeline:
         import pyaudiowpatch as pa
         self._pa = pa.PyAudio()
         self.transcriber = Transcriber()
+        self.wake = WakeWord.load()
         for dev, source in self._devices():
             t = _CaptureThread(self._pa, dev, source, self._q, self._stop, self.paused, self.on_start)
             t.start()
@@ -557,6 +689,10 @@ class AudioPipeline:
                 self._deliver(self.joiner.due(int(time.time() * 1000)))
                 continue
             try:
+                if not self._worth_decoding(seg):
+                    self.skipped += 1
+                    self._deliver(self.joiner.nothing(seg.source))
+                    continue
                 text = self.transcriber.transcribe(seg.pcm)
                 if text:
                     self._deliver(self.joiner.feed(seg.ts_start, seg.ts_end, seg.source, text))
@@ -566,6 +702,17 @@ class AudioPipeline:
                 self.errors.append(f"transcribe: {type(exc).__name__}: {exc}")
             self._deliver(self.joiner.due(int(time.time() * 1000), busy=not self._q.empty()))
         self._deliver(self.joiner.due(1 << 62))          # stopping: whatever is held goes now
+
+    def _worth_decoding(self, seg: Segment) -> bool:
+        """D50 (V2): paused, with a wake-word model: only a segment holding the name."""
+        if self.wake is None or self.name_only is None or not self.name_only():
+            return True
+        try:
+            return self.wake.heard(seg.pcm)
+        except Exception as exc:
+            self.errors.append(f"wake word: {type(exc).__name__}: {exc}")
+            self.wake = None             # broken: back to D46's decode-everything
+            return True
 
     def _deliver(self, lines: list[tuple[int, int, str, str]]) -> None:
         for ts_start, ts_end, source, text in lines:

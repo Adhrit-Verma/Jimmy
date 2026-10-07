@@ -338,10 +338,31 @@ def embed(texts: list[str], model: str | None = None) -> list[list[float]]:
         # chunks is slower than a chat reply (a 60 s limit timed out on first use).
         resp = client._http().post(f"{root}/api/embed",
                                    json={"model": client.model, "input": texts,
-                                         "keep_alive": config.EMBED_KEEP_ALIVE},
+                                         "keep_alive": config.EMBED_KEEP_ALIVE,
+                                         # D50 (P6): the GPU left to Whisper and the cards model
+                                         **({"options": {"num_gpu": 0}} if config.EMBED_ON_CPU else {})},
                                    timeout=httpx.Timeout(300, connect=5))
         if resp.status_code != 200:
             raise LLMError(f"embeddings HTTP {resp.status_code}: {resp.text[:200]}")
         return resp.json()["embeddings"]
     except httpx.HTTPError as exc:
         raise LLMError(f"embedding model unreachable: {type(exc).__name__}: {exc}") from exc
+
+
+def unload_local(models: list[str] | None = None) -> list[str]:
+    """D50 (P6): ask local Ollama to drop models from VRAM now (keep_alive 0). Returns the
+    ones it confirmed; the next use reloads them. Whisper isn't Ollama's and stays."""
+    names = models or [config.LOCAL_MODEL, config.EMBED_MODEL]
+    client = _EMBEDDERS.get(config.EMBED_MODEL) or _EMBEDDERS.setdefault(config.EMBED_MODEL,
+                                                                       local_llm(config.EMBED_MODEL))
+    root = client.base_url.removesuffix("/v1")
+    done = []
+    for name in names:
+        try:
+            r = client._http().post(f"{root}/api/generate", json={"model": name, "keep_alive": 0},
+                                    timeout=httpx.Timeout(10, connect=2))
+            if r.status_code == 200:
+                done.append(name)
+        except httpx.HTTPError:
+            pass
+    return done

@@ -98,6 +98,10 @@ EMBED_MODEL = os.environ.get("JIMMY_EMBED_MODEL") or "bge-m3"
 # D38: Ollama unloads a model 5 min after its last use, and the first question
 # after that waited ~6 s for bge-m3 (664 MB) to load. An hour, asked on each call.
 EMBED_KEEP_ALIVE = "60m"
+# D50 (P6): run bge-m3 on the CPU (Ollama's num_gpu 0), leaving the GPU to Whisper and the
+# cards model. Slower per call; NOT measured: check search time and nvidia-smi before using.
+# Changing it makes Ollama reload the model once.
+EMBED_ON_CPU = os.environ.get("JIMMY_EMBED_ON_CPU", "") == "1"
 # D38: httpx closes an idle connection after 5 s by default, so the "one warm
 # connection" (D15) was cold for nearly every real question. Keep it two minutes.
 KEEPALIVE_S = 120
