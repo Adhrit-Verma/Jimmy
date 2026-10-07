@@ -1,0 +1,96 @@
+{
+  "_note": "D48 (A9): whole tasks on invented screens (never real captures) for tests/eval_trajectory.py. Each control: [type, name, x%, y%]. A transition moves to another screen when an action hits a control (or a window tool names an app). Success: the required actions happened in order ('a|b' = either tool), and none of the forbidden ones. 'answer' is what the user says if Jimmy asks. Freeze it: add new files for new cases.",
+  "scenarios": [
+    {
+      "name": "search_youtube",
+      "request": "search carryminati on youtube",
+      "start": "home",
+      "screens": {
+        "home": {"app": "Chrome", "title": "YouTube - Google Chrome", "controls": [
+          ["button", "Close window", 98, 1], ["edit", "Search", 40, 8], ["button", "Search", 60, 8],
+          ["link", "Home", 5, 20], ["link", "Shorts", 5, 25], ["link", "Subscriptions", 5, 30]]},
+        "results": {"app": "Chrome", "title": "carryminati - YouTube - Google Chrome", "controls": [
+          ["button", "Close window", 98, 1], ["edit", "Search", 40, 8], ["button", "Search", 60, 8],
+          ["link", "CarryMinati", 30, 30], ["link", "Videos", 40, 20]]}
+      },
+      "transitions": [{"on": ["submit", "Search"], "to": "results"}, {"on": ["click", "Search"], "to": "results"}],
+      "success": {"did": [["type_text", "Search", "carryminati"], ["submit|click", "Search"]]}
+    },
+    {
+      "name": "search_then_images",
+      "request": "search northwind fellowship on google and go to images",
+      "start": "google",
+      "screens": {
+        "google": {"app": "Chrome", "title": "Google - Google Chrome", "controls": [
+          ["button", "Close window", 98, 1], ["edit", "Address and search bar", 30, 4], ["edit", "Search", 45, 40],
+          ["button", "Google Search", 40, 50], ["button", "I'm Feeling Lucky", 55, 50]]},
+        "results": {"app": "Chrome", "title": "northwind fellowship - Google Search - Google Chrome", "controls": [
+          ["button", "Close window", 98, 1], ["edit", "Search", 30, 10], ["link", "All", 20, 16], ["link", "Images", 26, 16],
+          ["link", "News", 32, 16], ["link", "Northwind Fellowship - Apply", 30, 30]]},
+        "images": {"app": "Chrome", "title": "northwind fellowship - Google Images - Google Chrome", "controls": [
+          ["button", "Close window", 98, 1], ["edit", "Search", 30, 10], ["link", "All", 20, 16]]}
+      },
+      "transitions": [{"on": ["submit", "Search"], "to": "results"}, {"on": ["click", "Google Search"], "to": "results"},
+                      {"on": ["submit", "Address and search bar"], "to": "results"}, {"on": ["click", "Images"], "to": "images"}],
+      "success": {"did": [["type_text", "", "northwind fellowship"], ["submit|click", ""], ["click", "Images"]]}
+    },
+    {
+      "name": "minimize_vscode",
+      "request": "minimize the vs code",
+      "start": "chrome",
+      "windows": [["Chrome", "YouTube"], ["VS Code", "agent.py - Jimmy"], ["Spotify", "Spotify Premium"]],
+      "screens": {"chrome": {"app": "Chrome", "title": "YouTube - Google Chrome", "controls": [
+        ["button", "Minimize window", 94, 1], ["button", "Maximize window", 96, 1], ["button", "Close window", 98, 1]]}},
+      "transitions": [],
+      "success": {"did": [["window_state", "VS Code", "minimize"]], "never": ["close_app"]}
+    },
+    {
+      "name": "close_current_tab",
+      "request": "close this tab",
+      "start": "tabs",
+      "screens": {
+        "tabs": {"app": "Chrome", "title": "Gmail - Google Chrome", "controls": [
+          ["tab", "YouTube", 10, 1], ["button", "Close (tab YouTube)", 15, 1], ["tab", "Gmail", 25, 1],
+          ["button", "Close (tab Gmail)", 30, 1], ["button", "New Tab", 35, 1], ["button", "Close window", 98, 1]]},
+        "closed": {"app": "Chrome", "title": "YouTube - Google Chrome", "controls": [
+          ["tab", "YouTube", 10, 1], ["button", "Close (tab YouTube)", 15, 1], ["button", "Close window", 98, 1]]}
+      },
+      "transitions": [{"on": ["click", "Close (tab Gmail)"], "to": "closed"}],
+      "success": {"did": [["click", "Close (tab Gmail)"]], "never": ["close_app"]}
+    },
+    {
+      "name": "privacy_curtain",
+      "request": "put up the privacy thing over my screen",
+      "start": "desk",
+      "screens": {"desk": {"app": "File Explorer", "title": "Desktop", "controls": []}},
+      "transitions": [],
+      "success": {"jimmy": "curtain"}
+    },
+    {
+      "name": "reminder",
+      "request": "remind me in 20 minutes to drink water",
+      "start": "desk",
+      "screens": {"desk": {"app": "File Explorer", "title": "Desktop", "controls": []}},
+      "transitions": [],
+      "success": {"jimmy": "remind"}
+    },
+    {
+      "name": "type_and_save",
+      "request": "type hello world into the note and save it",
+      "start": "notes",
+      "screens": {"notes": {"app": "Notepad", "title": "notes.txt - Notepad", "controls": [
+        ["button", "Close window", 98, 1], ["edit", "Text editor", 50, 50], ["button", "Save", 10, 4]]}},
+      "transitions": [],
+      "success": {"did": [["type_text", "Text editor", "hello world"], ["click", "Save"]]}
+    },
+    {
+      "name": "what_is_running",
+      "request": "what apps are open on my pc right now",
+      "start": "desk",
+      "windows": [["Chrome", "YouTube"], ["VS Code", "agent.py - Jimmy"]],
+      "screens": {"desk": {"app": "File Explorer", "title": "Desktop", "controls": []}},
+      "transitions": [],
+      "success": {"did": [["list_windows", "", ""]]}
+    }
+  ]
+}

@@ -649,6 +649,13 @@ class ContextBus:
         from .insights import app_name
         return list(dict.fromkeys(app_name(exe) for _, exe, _, _ in self._windows()))
 
+    def _value_of(self, target) -> str | None:
+        from . import act
+        try:
+            return act.value_of(target.hwnd, target)
+        except Exception:
+            return None
+
     def window_action(self, name: str, state: str | None = None) -> str:
         """Switch to an app (state None), or minimize / maximize / restore it, through UI
         Automation, after the user's yes (the agent asks). Never closes anything."""
@@ -960,6 +967,7 @@ class ContextBus:
                                      # D45: other windows, by app name; their names help Whisper too
                                      "windows": self.windows_text, "open_apps": self.open_apps,
                                      "focus_window": lambda name: self.window_action(name),
+                                     "value_of": self._value_of,
                                      "window_state": lambda name, state: self.window_action(name, state),
                                      "status": lambda: self.status_text(mem), "look": self.look,
                                      "open_url_any": self.open_url, "close_app": close_app,

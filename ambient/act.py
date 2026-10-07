@@ -262,6 +262,25 @@ def press(c, name: str, text: str | None, auto) -> str:
     return f"I can't press “{name}” without your mouse."
 
 
+def value_of(hwnd: int, t: Target) -> str | None:
+    """D47: what a box holds now (ValuePattern.Value), to check a typing step. None if
+    it can't be read (no such control any more, no Value, a password box)."""
+    import uiautomation as auto
+    from uiautomation.uiautomation import _AutomationClient
+    with auto.UIAutomationInitializerInThread():
+        root = auto.ControlFromHandle(hwnd)
+        uia = _AutomationClient.instance().IUIAutomation
+        found = root.Element.FindAll(4, uia.CreatePropertyCondition(auto.PropertyId.NameProperty,
+                                                                     t.uia_name or t.name))
+        for i in range(found.Length):
+            c = auto.Control.CreateControlFromElement(found.GetElement(i))
+            if c.ControlTypeName != t.kind or c.Element.CurrentIsPassword:
+                continue
+            vp = c.GetPattern(auto.PatternId.ValuePattern)
+            return str(vp.Value) if vp else None
+    return None
+
+
 def submit(hwnd: int, t: Target) -> str:
     """D42: press Enter in a box (to run what was typed there). The box is focused
     through UI Automation and Enter is sent only if the focus really landed there,
@@ -365,8 +384,12 @@ def window_state(hwnd: int, state: str) -> bool:
         wp = auto.ControlFromHandle(hwnd).GetPattern(auto.PatternId.WindowPattern)
         if not wp:
             return False
-        wp.SetWindowVisualState({"restore": 0, "maximize": 1, "minimize": 2}[state])
-        return True
+        want = {"restore": 0, "maximize": 1, "minimize": 2}[state]
+        wp.SetWindowVisualState(want)
+        try:
+            return int(wp.WindowVisualState) == want          # D47: read it back, don't assume
+        except Exception:
+            return True
 
 
 def focus_window(hwnd: int) -> bool:

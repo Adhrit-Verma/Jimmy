@@ -254,6 +254,66 @@ def test_d47_prompt_order_and_cache_hits():
     print("ok  D47: the stable prefix comes first; each step records prompt and cached tokens")
 
 
+# --- D48: the agent --------------------------------------------------------------------
+
+def test_d48_a_step_sees_the_tools_its_words_point_at():
+    import json as _json
+    full = len(_json.dumps(agent_mod.TOOLS))
+    small = agent_mod.select_tools("what's on my screen")
+    assert len(small) == len(agent_mod.CORE) and len(_json.dumps(small)) < full / 2, "core only, under half"
+    names = {t["function"]["name"] for t in agent_mod.select_tools("remind me at 5 to call mom")}
+    assert {"remind", "list_reminders"} <= names and "curtain" not in names
+    assert len(agent_mod.select_tools("मेरे रिमाइंडर दिखाओ")) == len(agent_mod.TOOLS), "Hindi: everything"
+    llm = Script(call("more_tools", need="a countdown timer"), call("timer", seconds=300))
+    out = Agent(llm, env([])).start("can you set one for five minutes")
+    assert "timer" not in llm.tools_seen[0], "not shown at first"
+    assert "timer" in llm.tools_seen[1] and out.data.get("action") == "timer", (llm.tools_seen, out)
+    config.AGENT_TOOL_RETRIEVAL = False
+    try:
+        assert len(agent_mod.select_tools("what's on my screen")) == len(agent_mod.TOOLS)
+    finally:
+        config.AGENT_TOOL_RETRIEVAL = True
+    print("ok  D48: the core tools plus the features a request names; more_tools for the rest")
+
+
+def test_d48_every_action_is_checked():
+    values = {"Search": "carryminati"}
+    llm = Script(call("plan", steps=["type", "search"]), call("type_text", id=1, name="Search", text="carryminati"),
+                 call("submit", id=1, name="Search"), call("done", summary="Done."))
+    ag = Agent(llm, env([], value_of=lambda t: values.get(t.name)))
+    ag.start("search carryminati")
+    ag.answer(True)
+    typed, sub = ag.last_steps[1], ag.last_steps[2]
+    assert typed["check"].startswith("\u2713") and "\u2713 The box now holds" in llm.seen[2][-1]["content"]
+    assert sub["check"].startswith("\u2717 Nothing changed"), "same title, same controls after Enter: said so"
+    values["Search"] = "carry"
+    llm = Script(call("plan", steps=["type"]), call("type_text", id=1, name="Search", text="carryminati"),
+                 call("done", summary="Done."))
+    ag = Agent(llm, env([], value_of=lambda t: values.get(t.name)))
+    ag.start("type carryminati")
+    ag.answer(True)
+    assert ag.last_steps[1]["check"].startswith("\u2717 The box holds"), ag.last_steps
+    print("ok  D48: each action's effect is checked in code (the box's value, the page) and reported")
+
+
+def test_d48_the_trajectory_harness_scores_whole_tasks():
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import eval_trajectory as ev
+    scs = {s["name"]: s for s in ev.load()}
+    # reading order of the YouTube home: [1] Close window, [2] Search box, [3] Search button, [4] Home...
+    llm = Script(call("plan", steps=["type it", "search"]), call("type_text", id=2, name="Search", text="carryminati"),
+                 call("submit", id=2, name="Search"), call("done", summary="Searched."))
+    r = ev.run(scs["search_youtube"], llm)
+    assert r["ok"] and r["calls"] == 4 and r["did"][-1] == ("submit", "Search", ""), r
+    bad = ev.run(scs["minimize_vscode"], Script(call("close_app", name="VS Code")))
+    assert not bad["ok"], "closing is never minimizing"
+    good = ev.run(scs["minimize_vscode"], Script(call("window_state", name="VS Code", state="minimize")))
+    assert good["ok"], good
+    cur = ev.run(scs["privacy_curtain"], Script(call("curtain", on=True)))
+    assert cur["ok"], cur
+    print("ok  D48: the trajectory eval runs whole tasks on invented screens and scores them")
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

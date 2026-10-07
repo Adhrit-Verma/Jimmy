@@ -278,3 +278,11 @@ SKIP_UNCHANGED_CHECKS = True
 # act.controls reads every control's properties in one UI Automation call (a cache
 # request) instead of ~10 cross-process reads each. Falls back to the old walk on error.
 UIA_CACHE = True
+
+# --- the agent (D48) ------------------------------------------------------------------
+# A1: each step sees the core tools plus the Jimmy features its words point at (picked in
+# code), and `more_tools` for the rest: ~1,300-1,700 tokens of tools instead of ~3,100.
+AGENT_TOOL_RETRIEVAL = True
+# A4: after every action, code checks the effect (the box holds the text; the page or
+# title changed) and tells the model ✓ or ✗.
+VERIFY_ACTIONS = True

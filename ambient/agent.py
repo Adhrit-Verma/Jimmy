@@ -166,6 +166,9 @@ TOOLS = [_fn(n, d, p, r) for n, d, p, r in JIMMY] + [
         {"query": _S}, ["query"]),
     _fn("read_wiki", "Read a page of the user's wiki listed in <you>.", {"page": _S}, ["page"]),
     _fn("done", "The task is finished: say so in one short sentence.", {"summary": _S}, ["summary"]),
+    _fn("more_tools", "Jimmy's own features not listed here (reminders, timers, goals, memories, curtain, "
+        "pause, focus, timeline, voice, face, eye calibration, calls, copy, draft...): name what you need "
+        "and they're added for the next step.", {"need": _S}, ["need"]),
 ]
 JIMMY_NAMES = {n for n, *_ in JIMMY}
 TOOL_NAMES = {t["function"]["name"] for t in TOOLS}
@@ -173,6 +176,61 @@ UI_TOOLS = {"click", "type_text", "submit", "open_url",       # one yes for a pl
             "focus_window", "window_state"}                   # D45: minimize/maximize isn't risky
 RISKY_TOOLS = {"close_app"}                                   # always their own yes
 READ_TOOLS = {"look_at_screen", "find_controls", "search_history", "read_wiki", "list_windows"}
+
+# D47 (A1): every step sent all 53 tools (~3,100 tokens). Now a fixed core, then only the
+# Jimmy features a request's words point at (picked in code, no model call), and
+# `more_tools` for the rest. Tool-selection research: past ~30 similar tools, models pick
+# worse; a small relevant set picks better and costs half the tokens.
+CORE = ["answer", "reply", "ask_user", "plan", "click", "type_text", "submit", "find_controls", "look_at_screen",
+        "list_windows", "focus_window", "window_state", "open_app", "close_app", "open_url", "search_history",
+        "read_wiki", "done", "more_tools"]
+GROUPS: list[tuple[re.Pattern, list[str]]] = [(re.compile(rx, re.I), names) for rx, names in (
+    (r"timeline|insight|dashboard|day map|memory (?:tab|window)|show me .*(?:yesterday|today|ago|at \d)|go to",
+     ["open_view", "goto"]),
+    (r"\b(?:close|hide|clear|dismiss|scroll|next|previous|back|panel|ui|uae|ua|overlay|card|suggestion)s?\b",
+     ["close_ui", "scroll", "step", "close"]),
+    (r"curtain|privacy|hide (?:my )?screen", ["curtain"]),
+    (r"\bpause|stop (?:listening|recording|capturing|watching)|resume|start (?:listening|recording|watching)|"
+     r"listen again|go private", ["pause", "resume"]),
+    (r"\bfocus", ["focus", "unfocus"]),
+    (r"remind|reminder|timer|alarm|countdown|\bin \d+ (?:min|sec|hour)", ["remind", "list_reminders",
+     "reminder_update", "reminder_delete", "timer", "cancel_timer"]),
+    (r"\bgoals?\b", ["goal_add", "list_goals", "goal_done", "goal_update", "goal_delete"]),
+    (r"remember|memor|forget (?:that|what)|about me|my (?:name|sister|brother|mom|dad|wife|husband)",
+     ["remember", "list_memories", "memory_update", "memory_delete"]),
+    (r"\b(?:delete|erase|wipe|forget|purge)\b", ["forget_data", "reminder_delete", "goal_delete", "memory_delete"]),
+    (r"\bface\b|\beyes?\b|calibrat|\bsee me\b|camera|webcam|looking at", ["remember_face", "forget_face",
+     "calibrate_eyes", "presence"]),
+    (r"\bcopy\b|\bdraft|write (?:a |an )?(?:reply|message|email)", ["copy_screen", "draft"]),
+    (r"voice|louder|softer|quieter|\bmute|speak|volume", ["volume"]),
+    (r"\bcall\b|discord|teams|zoom|meeting|\bmic\b", ["not_a_call"]),
+)]
+_HINDI = re.compile(r"[\u0900-\u097F\u0600-\u06FF]")
+
+
+def select_tools(text: str, extra: set[str] | frozenset = frozenset()) -> list[dict]:
+    """The tools one step sees (D47): the core, the groups the words point at, and any the
+    model asked for with more_tools. Hindi/Urdu script or AGENT_TOOL_RETRIEVAL off: all."""
+    from . import config
+    if not getattr(config, "AGENT_TOOL_RETRIEVAL", True) or _HINDI.search(text or ""):
+        return TOOLS
+    want = set(CORE) | set(extra)
+    for rx, names in GROUPS:
+        if rx.search(text or ""):
+            want.update(names)
+    return [t for t in TOOLS if t["function"]["name"] in want]
+
+
+def find_tools(need: str) -> list[str]:
+    """more_tools: the Jimmy features a description points at (the groups, then names and
+    descriptions word by word)."""
+    hits = [n for rx, names in GROUPS if rx.search(need or "") for n in names]
+    words = set(re.findall(r"[a-z]{4,}", (need or "").lower()))
+    for t in TOOLS:
+        f = t["function"]
+        if f["name"] not in CORE and words & set(re.findall(r"[a-z]{4,}", f"{f['name']} {f['description']}".lower())):
+            hits.append(f["name"])
+    return list(dict.fromkeys(hits))
 # D45: Jimmy never solves a bot check for you (2026-10-05: it pressed "I'm not a robot").
 CAPTCHA = re.compile(r"not a robot|captcha|verify (?:that )?you(?:'re| are) (?:a )?human|i am human|"
                      r"human verification|are you a robot|bot check", re.I)
@@ -266,6 +324,8 @@ class Task:
     pending_at: float = 0.0        # D45: when the pending question or approval was asked
     last_index: int = 0            # D45: the control last pointed at (find_controls looks near it)
     last_said: str = ""            # D45: what the last action reported
+    extra_tools: set = field(default_factory=set)      # D47: added by more_tools
+    tool_text: str = ""            # D47: the words tools are picked from (request + recent turns)
 
     @property
     def expired(self) -> bool:
@@ -326,6 +386,8 @@ class Agent:
         self.cancelled = False
         targets = reading_order(self.env["controls"]())
         self.task = Task(question, self.context(question, targets), targets)
+        # D47: tools follow the request and the last turns ("and delete it" after a list)
+        self.task.tool_text = f"{question}\n{self.env['conversation']()}"
         return self.run()
 
     def waiting_for_answer(self) -> bool:
@@ -424,10 +486,11 @@ class Agent:
         answered, whether it was slow); (None, …) when cancelled."""
         results: queue.Queue = queue.Queue()
         msgs = list(t.messages)
+        tools = select_tools(t.tool_text or t.question, t.extra_tools)
 
         def go(model: str | None) -> None:
             try:
-                msg = self.llm.chat_tools(msgs, TOOLS, **({"model": model} if model else {}))
+                msg = self.llm.chat_tools(msgs, tools, **({"model": model} if model else {}))
                 results.put((model, True, msg))
             except Exception as exc:          # handed to the waiting thread, raised there
                 results.put((model, False, exc))
@@ -494,6 +557,15 @@ class Agent:
 
     def _step(self, t: Task, call_id: str, name: str, args: dict) -> Outcome | None:
         e = self.env
+        if name == "more_tools":
+            found = find_tools(str(args.get("need") or ""))
+            t.extra_tools.update(found)
+            self._result(t, call_id, (f"Added: {', '.join(found)}." if found else
+                                      "No feature like that. Use the tools you have, or reply that you can't."))
+            return None
+        if name in TOOL_NAMES and name not in {f["function"]["name"] for f in select_tools(
+                t.tool_text or t.question, t.extra_tools)}:
+            t.extra_tools.add(name)              # a known tool it wasn't shown: allowed, and kept
         if name in READ_TOOLS:
             if name == "look_at_screen":
                 q = str(args.get("question") or "")
@@ -629,6 +701,7 @@ class Agent:
     def _do(self, t: Task, call_id: str, name: str, args: dict, target) -> Outcome | None:
         e = self.env
         nothing = lambda *a: "I can't do that from here."  # noqa: E731
+        before = (e["window"](), [(x.name, x.kind) for x in t.targets])   # D47: to check the effect
         if target is not None:
             e["cursor"](target, "type" if name == "type_text" else "click")
         if name == "click":
@@ -654,7 +727,35 @@ class Agent:
             fresh = self._settle()           # D45: a results page loads after Enter
         else:
             time.sleep(0.8)                  # let the window react before looking again
-        return self._observe(t, call_id, said, fresh)
+        if fresh is None:
+            fresh = reading_order(e["controls"]())
+        check = self._verify(name, args, target, before, fresh)
+        if check:
+            t.steps[-1]["check"] = check[:80]
+        return self._observe(t, call_id, f"{said} {check}".strip(), fresh)
+
+    def _verify(self, name: str, args: dict, target, before: tuple, fresh: list[act.Target]) -> str:
+        """D47 (A4): did it work? Checked in code through UI Automation, never assumed:
+        agents "assume outcomes of their actions without checking" is the failure the
+        computer-use guides name. One line for the model: ✓ or ✗ and what was seen."""
+        from . import config
+        if not getattr(config, "VERIFY_ACTIONS", True) or name in ("close_app", "focus_window", "window_state"):
+            return ""                        # those report their own result (they read the state back)
+        if name == "type_text" and target is not None:
+            got = self.env.get("value_of", lambda t: None)(target)
+            if got is None:
+                return ""
+            want = " ".join(str(args.get("text") or "").split()).casefold()
+            if want and want in " ".join(str(got).split()).casefold():
+                return "\u2713 The box now holds the text."
+            return f"\u2717 The box holds \u201c{str(got)[:40]}\u201d, not what was typed."
+        (_, title0, _), names0 = before
+        _, title1, _ = self.env["window"]()
+        changed = title1 != title0 or [(x.name, x.kind) for x in fresh] != names0
+        if name in ("submit", "open_url") or (target is not None and target.kind == "HyperlinkControl"):
+            return ("\u2713 The page changed." if changed else
+                    "\u2717 Nothing changed yet (same title, same controls): check before going on.")
+        return "" if changed else "(No visible change after that: check before going on.)"
 
     def _settle(self) -> list[act.Target]:
         """Wait (up to ~2.5 s) for the window's controls to stop changing: after Enter
@@ -735,16 +836,23 @@ def first_decision(text: str, targets: list[act.Target], screen: str | None, sta
     order = reading_order(targets)
     msgs = ag.context(text, order)
     task = Task(text, msgs, order)
-    for _ in range(3):               # code's refusals (a made-up text to type, a bad id) count
-        msg = ag.llm.chat_tools(msgs, TOOLS)
+    extra: set[str] = set()
+    for _ in range(4):               # code's refusals (a made-up text to type, a bad id) count
+        msg = ag.llm.chat_tools(msgs, select_tools(text, extra))
         calls = msg.get("tool_calls") or []
         if not calls:
             return "reply", None
-        name = calls[0]["function"]["name"]
+        name = clean_tool_name(calls[0]["function"]["name"])
         try:
             args = json.loads(calls[0]["function"].get("arguments") or "{}")
         except ValueError:
             args = {}
+        if name == "more_tools":        # D47: it asked for a feature it wasn't shown: add it, ask again
+            found = find_tools(str(args.get("need") or ""))
+            extra.update(found)
+            msgs += [{"role": "assistant", "content": msg.get("content") or "", "tool_calls": [calls[0]]},
+                     {"role": "tool", "tool_call_id": calls[0]["id"], "content": f"Added: {', '.join(found)}."}]
+            continue
         refused = ((name == "type_text" and not said_by_user(str(args.get("text") or ""), task))
                    or (name in ("click", "type_text", "submit") and ag._target(task, args) is None))
         if not refused:
