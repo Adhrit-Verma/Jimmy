@@ -381,8 +381,10 @@ _WHY_YOU = re.compile(r"^(?:but\s+|and\s+|so\s+|okay\s+)?why (?:did|do|would|hav
                       r"tell|told)\b|^why (?:that|this) one\b|^why (?:that|this)\W*$|^how did you (?:know|decide|pick|choose)\b",
                       re.I)
 
-CHAT_STYLE = """This is conversation, not a search. Reply in one short sentence, plain text,
-easy to read aloud. If the request is unclear, ask one short question back instead.
+CHAT_STYLE = """This is conversation, not a search. Reply in one or two short sentences, plain
+text, the way a friend sitting beside them would say it: natural, warm, contractions, no
+lists or headings (it's read aloud). Match their language: Hindi or Hinglish gets the
+same back. If the request is unclear, ask one short question back instead.
 You can see their screen and their history; never say you can't. If asked what you
 can do: recall what they saw or heard ("what was that form on Friday?"), explain their
 screen ("what's on my screen?"), show where their day went ("how was my day?"), set
@@ -1577,8 +1579,20 @@ class Asker:
                 "screen_text": act.get("screen_text", lambda: ""),        # D51: OCR, no controls
                 "recipes": act.get("recipes", lambda app, q: ""),         # D51: what worked before
                 "learned": act.get("learned", lambda app, q, steps: None),
-                "step": self._agent_step, "slow": self._agent_slow, "feature": self._feature})
+                "step": self._agent_step, "slow": self._agent_slow, "feature": self._feature,
+                "steps": self._agent_steps, "doing": self._agent_doing})        # D55, D57
         return self.agent
+
+    def _agent_steps(self, d: dict) -> None:
+        """D57: the plan as a live card while it runs; the final answer carries the last one."""
+        from . import ui
+        self._steps_card = ui.steps(d)
+        if self._steps_card:
+            self.publish({"type": "steps", "ui": self._steps_card})
+
+    def _agent_doing(self, line: str) -> None:
+        """D55: what Jimmy is about to do on its own, with a moment to say stop."""
+        self.publish({"type": "toast", "text": line, "icon": "act"})
 
     def _agent_step(self, text: str | None) -> None:
         """D45: each agent step shows itself: "thinking", and an approved plan's step."""
@@ -1633,6 +1647,7 @@ class Asker:
             self._say(said, question, source, aid)
             return None
         self._say(out.say or "Okay.", question, source, aid, awaiting=out.kind == "await")
+        self._card(out, aid)
         if out.kind == "await":
             if out.data.get("ask"):
                 self.listen_until = now_ms() + config.CLARIFY_WAIT_S * 1000
@@ -1642,11 +1657,33 @@ class Asker:
                 self.publish({"type": "listening", "prompt": "say yes or no", "ms": 20_000})
         return None
 
+    def _card(self, out, aid: str) -> None:
+        """D56: the card beside the agent's words: "which one?" as buttons, a yes/no as two
+        buttons, a plan as its steps, the model's table or checklist, or the finished plan."""
+        from . import ui
+        steps = getattr(self, "_steps_card", None)
+        card = None
+        if out.kind == "await":
+            if out.data.get("choices"):
+                card = ui.choice(out.say, out.data["choices"])
+            elif out.data.get("plan"):
+                card = steps
+            elif out.data.get("act"):
+                card = ui.confirm(out.say.replace(" Say yes.", ""), "")
+        elif out.data.get("ui"):
+            card = out.data["ui"]                          # validated in the agent (model=True)
+        elif steps and steps["data"]["state"] in ("done", "failed", "stopped"):
+            card = steps
+        if out.kind != "await":
+            self._steps_card = None
+        if card:
+            self.publish({"type": "answer_ui", "id": aid, "ui": card})
+
     def _say(self, text: str, question: str, source: str, aid: str, awaiting: bool = False) -> None:
         """A short spoken line in the answer panel (the agent's replies, plans, questions)."""
         self.publish({"type": "answer_start", "id": aid, "question": question, "source": source,
-                      "mode": "clarify" if awaiting else "chat", "history": []})
-        self.publish({"type": "answer_evidence", "id": aid, "mode": "clarify" if awaiting else "chat",
+                      "mode": "ask" if awaiting else "chat", "history": []})     # D56: not D28's "screen or earlier?"
+        self.publish({"type": "answer_evidence", "id": aid, "mode": "ask" if awaiting else "chat",
                       "evidence": [], "window": None, "terms": [], "days": []})
         self.publish({"type": "answer_delta", "id": aid, "text": text})
         self.publish({"type": "answer_end", "id": aid, "text": text, "awaiting": awaiting})
@@ -1836,8 +1873,8 @@ class Asker:
             if tool == "cannot" and not said.lower().startswith(("i ", "i'", "sorry")):
                 said = f"I can't do that: {said[0].lower() + said[1:]}"
             self.publish({"type": "answer_start", "id": aid, "question": question, "source": source,
-                          "mode": "clarify" if tool == "ask_back" else "chat", "history": []})
-            self.publish({"type": "answer_evidence", "id": aid, "mode": "clarify" if tool == "ask_back" else "chat",
+                          "mode": "ask" if tool == "ask_back" else "chat", "history": []})
+            self.publish({"type": "answer_evidence", "id": aid, "mode": "ask" if tool == "ask_back" else "chat",
                           "evidence": [], "window": None, "terms": [], "days": []})
             self.publish({"type": "answer_delta", "id": aid, "text": said})
             self.publish({"type": "answer_end", "id": aid, "text": said, "awaiting": tool == "ask_back"})
@@ -1983,7 +2020,7 @@ class Asker:
         if ag is not None and ag.task is not None and not force:
             p = ag.task.pending or {}
             c = command(question) if mode == "command" else None
-            if (p.get("kind") == "answer" and ag.waiting_for_answer() and not (c and c[0] in ("hush", "close_ui"))
+            if (p.get("kind") in ("answer", "choose") and ag.waiting_for_answer() and not (c and c[0] in ("hush", "close_ui"))
                     and not new_request(question, ag.pending_question())):
                 # D45: Jimmy asked; this is the answer, even a plain "Yes." or "the first one"
                 # (they route as commands/navigation, and "Yes." got "Nothing to confirm.").

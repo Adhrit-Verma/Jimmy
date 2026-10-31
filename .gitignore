@@ -16,3 +16,11 @@ overlay/node_modules/
 overlay/dist/
 *.png
 !docs/img/*.png
+Raya (Slowed).mp3
+
+# D53: optional models, downloaded on this machine (see ambient/config.py); too big to commit
+models/kokoro-v1.0.onnx
+models/voices-v1.0.bin
+models/turn-detector/
+models/silero_vad.onnx
+models/jimmy.onnx

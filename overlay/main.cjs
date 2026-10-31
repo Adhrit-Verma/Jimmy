@@ -176,7 +176,44 @@ async function listen() {
   }
 }
 
+// D56/D57: --demo-ui <template> shows one Intelligent UI card on invented data, for a
+// snapshot (README images are never real captures).
+const demoUiAt = process.argv.indexOf("--demo-ui");
+const DEMO_UI = demoUiAt > -1 ? process.argv[demoUiAt + 1] : null;
+const DEMO_CARDS = {
+  steps: { template: "steps", data: { title: "", steps: ["Type “carryminati” in the search box", "Press Enter",
+    "Open the Videos tab"], status: ["done", "done", "running"], state: "running", auto: true } },
+  choice: { template: "choice", data: { question: "Which one?", options: ["Search (box)", "Search (button)", "Search settings"] } },
+  confirm: { template: "confirm", data: { what: "Close Spotify?", why: "", yes: "Do it", no: "Cancel" } },
+  table: { template: "table", data: { title: "Trains to Pune tomorrow", columns: ["Train", "Leaves", "Arrives", "Fare"],
+    rows: [["Deccan Queen", "17:10", "20:25", "₹ 245"], ["Intercity", "06:40", "09:57", "₹ 180"],
+           ["Pragati", "16:25", "19:50", "₹ 210"]] } },
+  checklist: { template: "checklist", data: { title: "Clear the DNS cache", items: ["Open Terminal as admin",
+    "Run ipconfig /flushdns", "Restart the browser"] } },
+  chart: { template: "chart", data: { title: "This week", unit: "h", bars: [{ label: "VS Code", value: 14.5 },
+    { label: "Chrome", value: 9 }, { label: "Discord", value: 3.2 }, { label: "Spotify", value: 1 }] } },
+  list: { template: "list", data: { title: "Reminders", items: [{ text: "Call the bank", note: "today 17:00" },
+    { text: "Submit the form", note: "Fri" }], more: 0 } },
+};
+const DEMO_SAY = { steps: "", choice: "Which one: “Search (box)”, “Search (button)” or “Search settings”?",
+  confirm: "Close Spotify? Careful: that may not be undoable.", table: "Three trains tomorrow; the Deccan Queen is fastest.",
+  checklist: "Three steps; tick them off as you go.", chart: "Mostly VS Code this week.", list: "You have two reminders." };
+
+function demoUi(name) {
+  send({ type: "state", paused: false, paused_until: 0, cards: true, timers: [] });
+  if (name === "steps") { send({ type: "steps", ui: DEMO_CARDS.steps }); return; }
+  const id = "demo-ui";
+  send({ type: "answer_start", id, question: "Jimmy, " + { choice: "click search", confirm: "close spotify",
+    table: "trains to pune tomorrow?", checklist: "how do I clear the DNS cache?", chart: "how was my week?",
+    list: "what are my reminders?" }[name], source: "voice", mode: ["choice", "confirm"].includes(name) ? "ask" : "chat", history: [] });
+  send({ type: "answer_evidence", id, mode: ["choice", "confirm"].includes(name) ? "ask" : "chat", evidence: [] });
+  send({ type: "answer_delta", id, text: DEMO_SAY[name] });
+  send({ type: "answer_end", id, awaiting: ["choice", "confirm"].includes(name) });
+  send({ type: "answer_ui", id, ui: DEMO_CARDS[name] });
+}
+
 function demo() {
+  if (DEMO_UI) return demoUi(DEMO_UI);
   const lines = [
     { kind: "RECALL", line: "Same Sunandha UI/UX resume as Tue 15:02" },
     { kind: "FOCUS", line: "Back to: apply for jobs and review" },

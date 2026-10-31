@@ -4,6 +4,7 @@ import {
   AppWindow, BarChart3, Bell, Brain, CalendarClock, Check, Clock, Ear, ExternalLink, Eye, EyeOff, Globe, History, Keyboard, Lightbulb, MessageCircle, MonitorSmartphone, MousePointer2, MoveRight, Pause, Play, Power, RotateCcw, ScanFace, ShieldCheck, Target, Timer, Trash2, X,
 } from "lucide-react";
 import Answer from "./Answer.jsx";
+import { StepsFloat } from "./Templates.jsx";
 
 const CARD_MS = 12_000;      // a card fades on its own; × is the only real dismissal
 const ANSWER_MS = 30_000;    // D35: an answer fades after 30 s unless hovered (was a minute: clutter)
@@ -530,6 +531,8 @@ export default function App() {
   const [recent, setRecent] = useState([]);    // this session's typed questions; never saved
   const [presence, setPresence] = useState({ state: "off", curtain: false });   // D34
   const [enrol, setEnrol] = useState(null);                                    // D37
+  const [steps, setSteps] = useState(null);                                    // D57: a plan, live
+  const stepsTimer = useRef(null);
   const [cursor, setCursor] = useState(null);                                  // D41: Jimmy's own pointer
   const cursorTimer = useRef(null);
   const cursorN = useRef(0);
@@ -661,6 +664,12 @@ export default function App() {
                        event: ev.event ?? a.event }));
       }
       if (ev.type === "answer_delta") same((a) => ({ ...a, status: "answering", text: a.text + ev.text }));
+      if (ev.type === "answer_ui") same((a) => ({ ...a, ui: ev.ui }));                       // D56
+      if (ev.type === "steps") {                                                            // D57
+        clearTimeout(stepsTimer.current);
+        setSteps(ev.ui);
+        if (!["running", "proposed"].includes(ev.ui?.data?.state)) stepsTimer.current = setTimeout(() => setSteps(null), 6000);
+      }
       if (ev.type === "answer_end" || ev.type === "answer_error") {
         if (!ev.awaiting) setMood(null);   // a question back keeps the pill listening
         same((a) => ({ ...a, status: ev.type === "answer_end" ? "done" : "error", error: ev.error }));
@@ -693,6 +702,7 @@ export default function App() {
         onMouseEnter={() => clearTimeout(hideTimer.current)}
         onMouseLeave={() => { if (answer?.status === "done") hideTimer.current = setTimeout(() => setAnswer(null), ANSWER_MS); }}
       >
+        {!answer && <StepsFloat ui={steps} />}
         <Guard resetKey={answer?.id} onError={() => bridge?.pointerOverUi(false)}>
           <AnimatePresence>{answer && <Answer key={answer.id} answer={answer} onClose={closeAnswer}
             openIndex={openIndex} setOpenIndex={setOpenIndex}

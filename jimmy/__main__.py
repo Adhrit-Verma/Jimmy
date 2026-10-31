@@ -75,14 +75,21 @@ def _doctor() -> int:
     key = api_key()
     row(bool(key), "api key", f"{config.API_KEY_ENV} {'is set' if key else 'is NOT set'}")
     try:
-        r = httpx.get(f"{config.BASE_URL}/models", timeout=10,          # OpenAI lists only with a key
-                      headers={"Authorization": f"Bearer {key}"} if key and config.OPENAI else None)
-        ids = {m["id"] for m in r.json().get("data", [])}
+        r = httpx.get(f"{config.BASE_URL}/models", timeout=10,          # OpenAI and Gemini list only with a key
+                      headers={"Authorization": f"Bearer {key}"} if key and (config.OPENAI or config.GEMINI) else None)
+        ids = {m["id"].removeprefix("models/") for m in r.json().get("data", [])}
         # Listed is not the same as usable by this account: the round trip decides.
         row(config.MODEL in ids, "model", f"{config.MODEL} "
             f"{'is listed' if config.MODEL in ids else 'is NOT in the endpoint model list'}")
     except Exception as exc:
         row(False, "endpoint", f"{config.BASE_URL} unreachable: {type(exc).__name__}")
+    if config.GEMINI:
+        # D54: the free tier's terms, and what happens when its quota runs out.
+        b = LLM().backup
+        row(b is not None, "backup", f"{b.model} answers when Gemini can't (quota, outage)" if b else
+            "no NVIDIA_API_KEY: when the free quota runs out, Jimmy can't answer until midnight Pacific")
+        print("  note  free tier     Google may have reviewers read free-tier input (screen text you ask about)."
+              + ("" if config.GEMINI_SCREENSHOTS else " Screenshots stay with NVIDIA (JIMMY_GEMINI_SCREENSHOTS=1 sends them)."))
     if key:
         llm = LLM(key)
         try:

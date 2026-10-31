@@ -125,7 +125,7 @@ def test_llm_errors_are_clear():
         assert _llm(flaky).chat([]) == "ok" and calls["n"] == 2, "one retry on 429"
     finally:
         jc.RETRY_WAIT_S = wait
-    assert not LLM(key="").configured
+    assert not LLM(key="", base_url="https://llm.test/v1").configured      # (D54: a default client may have a backup)
     print("ok  llm errors + retry")
 
 
@@ -187,6 +187,13 @@ def test_retired_model_falls_back():
         return httpx.Response(200, json={"choices": [{"message": {"content": "fine"}}]})
 
     llm = LLM(key="k", transport=httpx.MockTransport(handler))
+    if not jc.MODEL_FALLBACKS:          # D54: Gemini has no second model of its own (NVIDIA backs it up)
+        try:
+            llm.chat([])
+        except LLMError as exc:
+            assert "410" in str(exc)
+        print("ok  retired model falls back (gemini: the NVIDIA backup does it, stage 14)")
+        return
     assert llm.chat_tools([], [])["content"] == "fine"
     # NVIDIA: gpt-oss picks tools, ultra answers; OpenAI: Luna does both, so the fallback is next.
     assert asked == [jc.TOOLS_MODEL, jc.MODEL if jc.TOOLS_MODEL != jc.MODEL else jc.MODEL_FALLBACKS[0]], asked
@@ -354,7 +361,7 @@ def test_offline_answer_shows_retrieval():
     store = _ambient_fixture()
     plugin = AmbientPlugin(":memory:")
     plugin._store = store
-    jim = Jimmy(Memory(":memory:"), LLM(key=""), [plugin])
+    jim = Jimmy(Memory(":memory:"), LLM(key="", base_url="https://llm.test/v1"), [plugin])   # no backup either
     out = jim.ask("sqlite fts5")
     assert out.startswith("[offline") and "FTS5" in out
     print("ok  offline mode shows retrieval")

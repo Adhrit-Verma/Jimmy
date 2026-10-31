@@ -210,8 +210,8 @@ class TurnDetector:
         ids = self.tokenizer.encode(f"<|im_start|>user\n{text.strip()}").ids[-128:]
         feed = {self.session.get_inputs()[0].name: np.array([ids], dtype=np.int64)}
         out = np.asarray(self.session.run(None, feed)[0], dtype=np.float32)
-        if out.size == 1:                       # a model that already gives the probability
-            return float(out.reshape(-1)[0])
+        if out.size == 1 or out.ndim == 2:      # the probability itself: one, or one per position
+            return float(out.reshape(-1)[-1])   # (LiveKit's ONNX exports `prob`, batch x tokens; D53)
         logits = out.reshape(-1, out.shape[-1])[-1]
         e = np.exp(logits - logits.max())
         return float(e[self.end_id] / e.sum()) if self.end_id is not None else 0.0

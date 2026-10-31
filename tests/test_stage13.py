@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import ambient.agent as agent_mod  # noqa: E402
 import ambient.ask as ask_mod  # noqa: E402
 from ambient import act, config, power  # noqa: E402
+config.AUTONOMY = "always"      # D55: these checks are of the yes-for-every-action rules; stage 14 checks "when_unsure"
 from ambient.agent import Agent  # noqa: E402
 from ambient.db import Store  # noqa: E402
 
@@ -556,19 +557,20 @@ def test_d50_gpu_budget_and_embeddings_on_cpu():
     def handler(req):
         sent.append((req.url.path, json.loads(req.content)))
         return httpx.Response(200, json={"embeddings": [[0.1, 0.2]]} if req.url.path.endswith("embed") else {})
-    saved = dict(jllm._EMBEDDERS)
+    saved, was_cpu = dict(jllm._EMBEDDERS), jcfg.EMBED_ON_CPU     # D53: the default is now the CPU
     jllm._EMBEDDERS[jcfg.EMBED_MODEL] = jllm.LLM(key="ollama", model=jcfg.EMBED_MODEL, base_url=jcfg.LOCAL_BASE_URL,
                                                  transport=httpx.MockTransport(handler))
     try:
+        jcfg.EMBED_ON_CPU = False
         jllm.embed(["hello"])
-        assert "options" not in sent[-1][1], "default: Ollama places it"
+        assert "options" not in sent[-1][1], "off: Ollama places it"
         jcfg.EMBED_ON_CPU = True
         jllm.embed(["hello"])
         assert sent[-1][1]["options"] == {"num_gpu": 0}
         assert jllm.unload_local(["bge-m3"]) == ["bge-m3"] and sent[-1] == (
             "/api/generate", {"model": "bge-m3", "keep_alive": 0})
     finally:
-        jcfg.EMBED_ON_CPU = False
+        jcfg.EMBED_ON_CPU = was_cpu
         jllm._EMBEDDERS.clear()
         jllm._EMBEDDERS.update(saved)
     print("ok  D50: away long enough, Ollama's models leave the GPU once; bge-m3 can run on the CPU")
@@ -697,7 +699,8 @@ def test_d51_a_local_model_is_the_last_fallback():
     try:
         cloud = jllm.LLM(key="k", transport=httpx.MockTransport(handler))
         fb = cloud.tool_fallbacks()
-        assert fb[-1] == "local:qwen3:4b" and len(fb) == 2, fb
+        # the cloud's second model (none on Gemini: its backup is NVIDIA, D54), then the local one
+        assert fb[-1] == "local:qwen3:4b" and len(fb) == (1 if jcfg.GEMINI else 2), fb
         jllm._LOCAL_TOOLS["qwen3:4b"] = jllm.LLM(key="ollama", model="qwen3:4b", base_url=jcfg.LOCAL_BASE_URL,
                                                  transport=httpx.MockTransport(handler))
         msg = cloud.chat_tools([{"role": "user", "content": "hi"}], [], model="local:qwen3:4b")
@@ -811,6 +814,16 @@ def test_d52_turn_detector_lets_whole_lines_go():
     tok = _Tok()
     det = audio.TurnDetector(session=_TurnModel(tok), tokenizer=tok)
     assert det.complete("open the one on the left") > 0.85 and det.complete("maximize the window and") < 0.1
+
+    class _ProbModel(_TurnModel):
+        """D53: LiveKit's real export gives `prob`, one end-of-turn chance per token (1 x n)."""
+        def run(self, _, feed):
+            ids = feed["input_ids"][0]
+            p = np.full((1, len(ids)), 1e-4, dtype=np.float32)
+            p[0, -1] = 0.0003 if ids[-1] == self.tok.vocab.get("and") else 0.33
+            return [p]
+    real = audio.TurnDetector(session=_ProbModel(tok), tokenizer=tok)
+    assert abs(real.complete("turn the curtain on") - 0.33) < 1e-6 and real.complete("scroll down and") < 0.001
     j = audio.Joiner()
     assert j.feed(0, 1000, "mic", "can you close") == [] and j.held, "the rule alone holds it"
     j = audio.Joiner()
@@ -834,8 +847,12 @@ def test_d52_kokoro_voice_picks_and_falls_back():
     assert ask.KokoroVoice.pick("Opening Chrome.") == (config.KOKORO_VOICE, "en-us")
     assert ask.KokoroVoice.pick("ठीक है, खोल रहा हूँ") == (config.KOKORO_VOICE_HI, "hi"), "Devanagari: the Hindi voice"
     fell = []
-    real = ask.Voice._run
+    real, real_engine = ask.Voice._run, ask.KokoroVoice._engine
     ask.Voice._run = lambda self: fell.append(type(self).__name__)
+
+    def missing(self):                          # D53: whether or not kokoro-onnx is installed here
+        raise ModuleNotFoundError("No module named 'kokoro_onnx'")
+    ask.KokoroVoice._engine = missing
     try:
         config.VOICE_ENGINE = "kokoro"
         v = ask.make_voice()
@@ -848,7 +865,7 @@ def test_d52_kokoro_voice_picks_and_falls_back():
         v.close()
     finally:
         config.VOICE_ENGINE = "sapi"
-        ask.Voice._run = real
+        ask.Voice._run, ask.KokoroVoice._engine = real, real_engine
     print("ok  D52: Kokoro speaks English or Hindi by the script, and falls back to Windows' voice")
 
 

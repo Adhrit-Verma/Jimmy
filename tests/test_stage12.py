@@ -18,6 +18,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import ambient.agent as agent_mod  # noqa: E402
 import ambient.ask as ask_mod  # noqa: E402
 from ambient import act  # noqa: E402
+import ambient.config as _acfg  # noqa: E402
+_acfg.AUTONOMY = "always"      # D55: this suite checks the yes-for-every-action rules; stage 14 checks "when_unsure"
 from ambient.agent import Agent  # noqa: E402
 from ambient.db import Store  # noqa: E402
 from jimmy.memory import Memory  # noqa: E402
@@ -651,6 +653,9 @@ def test_the_llm_client_names_a_fallback_and_takes_a_model():
             {"id": "a", "type": "function", "function": {"name": "done", "arguments": "{}"}}]}}]})
     llm = LLM(key="k", transport=httpx.MockTransport(handler))
     other = llm.tool_fallback()
+    if other is None and jcfg.GEMINI:
+        print("ok  the LLM client (gemini): no second Gemini model; the NVIDIA backup takes slow steps (stage 14)")
+        return
     assert other and other != (llm.tools_model or llm.model), (other, llm.tools_model, llm.model)
     llm.chat_tools([{"role": "user", "content": "x"}], [])
     llm.chat_tools([{"role": "user", "content": "x"}], [], model=other)

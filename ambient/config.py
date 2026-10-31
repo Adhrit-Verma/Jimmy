@@ -295,6 +295,18 @@ VERIFY_ACTIONS = True
 # model call between them while each control still matches and each check passes.
 SPECULATIVE_ACTIONS = True
 
+# --- asking only when unsure (D55: the human's amendment of non-negotiable 1, 2026-10-31) ----
+# "I don't want to say yes every time; ask me when you're not sure." "when_unsure": an action
+# that is reversible (policy.REVERSIBLE) and whose control Jimmy is sure of (policy.sure) runs
+# without a yes, shown first with AUTO_GRACE_S to say "stop"; a plan whose steps name nothing
+# risky starts on its own and asks at the first step it isn't sure of. "always": every action
+# waits for a yes, as in D42-D53.
+AUTONOMY = "when_unsure"
+AUTO_GRACE_S = 1.2           # the cursor on the control, "Pressing “Search”… say stop", then it's done
+AUTO_MIN_FIT = 0.75          # sure only if the user's words hold at least this share of the control's name
+AUTO_MARGIN = 0.25           # ...and no other control fits within this of it (else: "which one?")
+STEP_SHOW_S = 0.6            # D57: the cursor holds on a control this long before each plan action
+
 # --- voice and webcam, lighter (D50) ------------------------------------------------
 # V1: which voice detector cuts the mic into segments. "webrtc" (D2's, 30 ms frames) or
 # "silero" (a small ONNX model, 32 ms frames, fewer false segments in noise, so fewer
@@ -322,7 +334,9 @@ PRESENCE_STILL_MAX_S = 2.0
 # P6: the GPU budget (6 GB shared by Whisper, the cards model and bge-m3). After this many
 # seconds away or paused, ask Ollama to unload its models (the next search reloads bge-m3,
 # ~6 s). 0 = never. Whisper stays loaded: the name must still be heard.
-GPU_RELEASE_AWAY_S = 0
+# D53, measured: the two models hold ~3.2 GB of the 6; unloading takes 2 s; after it, bge-m3
+# is back in 0.4 s and the cards model in 5.3 s (a cold disk after a reboot: 65 s).
+GPU_RELEASE_AWAY_S = 600
 
 # --- the agent, smarter over time (D51) -----------------------------------------------
 # A5: after a screen task ends well, code writes a "recipe" (the app, the request, the
@@ -338,9 +352,13 @@ OCR_FOR_AGENT = True
 # V3: a folder with an end-of-turn model (model.onnx + tokenizer.json, e.g. LiveKit's open
 # turn detector). Asked only about lines the dangling-word rule would hold: at or above
 # TURN_COMPLETE the line goes at once. None = the rule alone (D45). Needs onnxruntime and
-# tokenizers. NOT measured: count held lines and wrongly split requests before using it.
-TURN_DETECTOR: Path | None = None
-TURN_COMPLETE = 0.85
+# tokenizers. D53, measured with LiveKit's v0.4.1-intl (English + Hindi; 396 MB, in
+# models/turn-detector, git-ignored): ~35 ms a line on one thread. Its output is a chance
+# per token and stays small: 15 real cut-off lines 0.0001-0.086 ("Jimmy open" highest),
+# 10 whole ones 0.09-0.50. At 0.1: 8/10 whole lines go at once, 0/15 cut lines (0.85 let
+# none go). Hindi lines never reach it: `dangles` knows English words only.
+TURN_DETECTOR: Path | None = None    # MODELS_DIR / "turn-detector" to switch it on
+TURN_COMPLETE = 0.1
 # V4: "sapi" (Windows' voice, English) or "kokoro" (Kokoro-82M via kokoro-onnx, on the CPU
 # only while speaking, Hindi voices too). Kokoro falls back to SAPI if it can't load.
 # NOT judged by ear yet.

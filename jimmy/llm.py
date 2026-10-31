@@ -18,7 +18,14 @@ from . import config
 
 
 class LLMError(RuntimeError):
-    pass
+    def __init__(self, msg: str = "", status: int | None = None):
+        super().__init__(msg)
+        self.status = status               # D54: the HTTP status, when there was one
+
+
+# D54: Gemini 3 checks that a tool call it made comes back with its thought signature; a
+# call it didn't make (answered by the backup) carries Google's documented stand-in.
+DUMMY_SIGNATURE = "skip_thought_signature_validator"
 
 
 # Measured 2026-09-25: empties come in runs; twice-empty broke 3 of ~10 demo answers.
@@ -26,21 +33,53 @@ ATTEMPTS = 3
 EMPTY = "the model returned an empty answer three times; try again"
 
 
-def api_key() -> str | None:
+def api_key(env: str | None = None) -> str | None:
     """The key from the environment, or from the user's registry environment.
 
     `setx` writes HKCU\\Environment but only new processes see it; reading the
     registry too means a key set a minute ago works without restarting the app.
+    `env` (D54): another provider's variable. Gemini's key may also be GOOGLE_API_KEY.
     """
-    key = os.environ.get(config.API_KEY_ENV)
-    if key:
-        return key.strip()
-    try:
-        import winreg
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as k:
-            return (winreg.QueryValueEx(k, config.API_KEY_ENV)[0] or "").strip() or None
-    except OSError:
-        return None
+    names = [env or config.API_KEY_ENV]
+    if names[0] == "GEMINI_API_KEY":
+        names.append("GOOGLE_API_KEY")
+    for name in names:
+        key = os.environ.get(name)
+        if key:
+            return key.strip()
+    for name in names:
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as k:
+                key = (winreg.QueryValueEx(k, name)[0] or "").strip()
+            if key:
+                return key
+        except OSError:
+            continue
+    return None
+
+
+def endpoint_for(model: str) -> str:
+    """D54: the provider a model id belongs to: "gemini-…" Google, "gpt-…" OpenAI, "org/…" NVIDIA."""
+    m = model.lower()
+    return "gemini" if m.startswith("gemini") else "openai" if m.startswith("gpt-") else "nvidia"
+
+
+def for_model(model: str, like: "LLM | None" = None, **kw) -> "LLM":
+    """D54: a client for one model, on its own provider's endpoint and key. `like`: a client
+    whose key and transport to reuse when it's on the same provider (and in tests)."""
+    url, env = config.ENDPOINTS[endpoint_for(model)]
+    if like is not None and (like.base_url == url.rstrip("/") or like._transport is not None):
+        return LLM(key=like.key, model=model, base_url=like.base_url, transport=like._transport, **kw)
+    return LLM(key=api_key(env), model=model, base_url=url, **kw)
+
+
+def _pacific_midnight_in(now: float | None = None) -> float:
+    """Seconds until the next midnight Pacific, when Google's daily quotas reset. This
+    Python has no tz database (no tzdata on Windows), so Pacific is taken as UTC-8: exact
+    in winter, an hour late in summer, never early."""
+    now = time.time() if now is None else now
+    return 86_400 - ((now - 8 * 3600) % 86_400)
 
 
 class ThinkFilter:
@@ -94,12 +133,41 @@ class LLM:
         self.read_timeout_s = read_timeout_s or config.READ_TIMEOUT_S
         self.base_url = base_url.rstrip("/")
         self.openai = "api.openai.com" in self.base_url
+        self.gemini = "generativelanguage.googleapis.com" in self.base_url
         self._transport = transport
         self._client: httpx.Client | None = None
+        # D54: the default client on a free tier gets the other provider as its backup.
+        self.backup: LLM | None = None
+        self._down_until = 0.0
+        if default and config.BACKUP_PROVIDER and transport is None:   # a test's client never reaches out
+            url, env = config.ENDPOINTS[config.BACKUP_PROVIDER]
+            b = LLM(key=api_key(env), model=config.NVIDIA_MODEL, base_url=url)
+            b.tools_model, b.fallbacks = config.NVIDIA_TOOLS_MODEL, [config.NVIDIA_TOOLS_MODEL]
+            self.backup = b if b.key else None
 
     @property
     def configured(self) -> bool:
-        return bool(self.key)
+        return bool(self.key) or bool(self.backup and self.backup.key)
+
+    def _route(self) -> "LLM | None":
+        """D54: the backup, while this provider is down or has no key; else None (this one)."""
+        if self.backup is None:
+            return None
+        return self.backup if not self.key or time.time() < self._down_until else None
+
+    def _trip(self, exc: LLMError) -> bool:
+        """D54: this provider failed a call: the backup takes over until it could answer
+        again (a daily quota: the next midnight Pacific). False without a backup."""
+        if self.backup is None:
+            return False
+        text = str(exc)
+        daily = exc.status == 429 and any(w in text.lower() for w in ("perday", "per day", "daily"))
+        wait = (_pacific_midnight_in() if daily else 3600 if exc.status in (401, 403)
+                else config.BACKUP_RETRY_S)
+        self._down_until = time.time() + wait
+        print(f"[jimmy] {self.model}: {text[:120]!r}; {self.backup.model} answers for the next "
+              f"{wait / 60:.0f} min", file=sys.stderr, flush=True)
+        return True
 
     def _http(self) -> httpx.Client:
         if self._client is None:
@@ -124,6 +192,13 @@ class LLM:
     def _body(self, messages, stream, max_tokens, temperature, thinking=None) -> dict:
         # Both spellings of the switch: NVIDIA's chat templates differ by model family.
         think = config.THINKING if thinking is None else thinking
+        messages = self._wire(messages)
+        if self.gemini:
+            # D54: Gemini 3 thinks at least "low", wants its own temperature, and may count
+            # thinking against max_tokens: room is left so an answer isn't cut to nothing.
+            return {"model": self.model, "messages": messages, "stream": stream,
+                    "max_tokens": max_tokens + config.GEMINI_THINK_ROOM,
+                    "reasoning_effort": "medium" if think else config.GEMINI_REASONING}
         if self.openai:
             # D44: OpenAI's reasoning models take an effort, count reasoning inside
             # max_completion_tokens (so thinking gets headroom), and set temperature themselves.
@@ -134,6 +209,29 @@ class LLM:
                 "max_tokens": max_tokens, "temperature": temperature,
                 "chat_template_kwargs": {"enable_thinking": think, "thinking": think}}
 
+    def _wire(self, messages: list[dict]) -> list[dict]:
+        """D54: tool calls as this endpoint wants them. Gemini: each keeps its thought
+        signature, and one Gemini didn't make gets the stand-in. Others: Google's
+        `extra_content` is dropped (a strict endpoint may refuse an unknown field)."""
+        if not any(m.get("tool_calls") for m in messages):
+            return messages
+        out = []
+        for m in messages:
+            if not m.get("tool_calls"):
+                out.append(m)
+                continue
+            calls = []
+            for c in m["tool_calls"]:
+                c = dict(c)
+                if self.gemini:
+                    if not ((c.get("extra_content") or {}).get("google") or {}).get("thought_signature"):
+                        c["extra_content"] = {"google": {"thought_signature": DUMMY_SIGNATURE}}
+                else:
+                    c.pop("extra_content", None)
+                calls.append(c)
+            out.append({**m, "tool_calls": calls})
+        return out
+
     @staticmethod
     def _fail(resp: httpx.Response) -> LLMError:
         try:
@@ -142,7 +240,7 @@ class LLM:
             detail = ""
         hint = {401: f" (is {config.API_KEY_ENV} correct?)", 403: " (key lacks access to this model?)",
                 404: " (model id wrong? JIMMY_MODEL)", 410: " (model retired: set JIMMY_MODEL)", 429: " (rate limited)"}.get(resp.status_code, "")
-        return LLMError(f"LLM HTTP {resp.status_code}{hint}: {detail}")
+        return LLMError(f"LLM HTTP {resp.status_code}{hint}: {detail}", resp.status_code)
 
     def _gone(self, resp: httpx.Response, body: dict) -> bool:
         """D43: a retired model (404/410) gives way to the next one, for the rest of
@@ -191,8 +289,15 @@ class LLM:
     def chat(self, messages: list[dict], *, max_tokens: int = config.MAX_TOKENS,
              temperature: float = config.TEMPERATURE, thinking: bool | None = None) -> str:
         """The whole answer at once. `thinking` overrides config.THINKING for this call."""
+        if (b := self._route()) is not None:
+            return b.chat(messages, max_tokens=max_tokens, temperature=temperature, thinking=thinking)
         self._require_key()
-        return self._once(self._body(messages, False, max_tokens, temperature, thinking))
+        try:
+            return self._once(self._body(messages, False, max_tokens, temperature, thinking))
+        except LLMError as exc:
+            if not self._trip(exc):
+                raise
+            return self.backup.chat(messages, max_tokens=max_tokens, temperature=temperature, thinking=thinking)
 
     def tool_fallback(self) -> str | None:
         """D45: the second model an agent step asks when the first is too slow: the
@@ -204,6 +309,8 @@ class LLM:
         """D51 (A8): every model an agent step may fall back to, in order: the second
         cloud model, then a local one ("local:<name>") when LOCAL_TOOLS_MODEL is set."""
         out = [m for m in (self.tool_fallback(),) if m]
+        if self.backup is not None:                   # D54: a slow Gemini step also asks NVIDIA
+            out.append("backup:" + (self.backup.tools_model or self.backup.model))
         if config.LOCAL_TOOLS_MODEL and self.base_url == config.BASE_URL.rstrip("/"):
             out.append("local:" + config.LOCAL_TOOLS_MODEL)
         return out
@@ -218,7 +325,20 @@ class LLM:
             name = model.removeprefix("local:")       # D51: the step on local Ollama
             local = _LOCAL_TOOLS.get(name) or _LOCAL_TOOLS.setdefault(name, local_llm(name))
             return local.chat_tools(messages, tools, max_tokens=max_tokens, temperature=temperature, model=name)
+        if model and model.startswith("backup:") and self.backup is not None:
+            return self.backup.chat_tools(messages, tools, max_tokens=max_tokens, temperature=temperature,
+                                          model=model.removeprefix("backup:"))
+        if (b := self._route()) is not None:
+            return b.chat_tools(messages, tools, max_tokens=max_tokens, temperature=temperature)
         self._require_key()
+        try:
+            return self._tools_once(messages, tools, max_tokens, temperature, model)
+        except LLMError as exc:
+            if not self._trip(exc):
+                raise
+            return self.backup.chat_tools(messages, tools, max_tokens=max_tokens, temperature=temperature)
+
+    def _tools_once(self, messages, tools, max_tokens, temperature, model) -> dict:
         body = {**self._body(messages, False, max_tokens, temperature, False), "tools": tools, "tool_choice": "auto",
                 "model": model or self.tools_model or self.model}
         for attempt in range(self.attempts):
@@ -248,8 +368,27 @@ class LLM:
                     temperature: float = config.TEMPERATURE) -> Iterator[str]:
         """The answer token by token. A plain function, not a generator, so a
         missing key raises here rather than on first iteration."""
+        if (b := self._route()) is not None:
+            return b.chat_stream(messages, max_tokens=max_tokens, temperature=temperature)
         self._require_key()
-        return self._stream(self._body(messages, True, max_tokens, temperature))
+        pieces = self._stream(self._body(messages, True, max_tokens, temperature))
+        if self.backup is None:
+            return pieces
+        return self._or_backup(pieces, lambda: self.backup.chat_stream(messages, max_tokens=max_tokens,
+                                                                          temperature=temperature))
+
+    def _or_backup(self, pieces: Iterator[str], other) -> Iterator[str]:
+        """D54: a stream that fails before its first word goes to the backup; one that has
+        started speaking never switches mid-sentence."""
+        sent = False
+        try:
+            for piece in pieces:
+                sent = True
+                yield piece
+        except LLMError as exc:
+            if sent or not self._trip(exc):
+                raise
+            yield from other()
 
     def _once(self, body: dict) -> str:
         for attempt in range(self.attempts):

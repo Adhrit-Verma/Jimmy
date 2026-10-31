@@ -27,11 +27,20 @@ AMBIENT_DB = DATA_DIR / "ambient.db"   # read-only from here; the ambient layer 
 # --- the one LLM client (D14) -------------------------------------------------
 # D44: which cloud. "nvidia" is free (NIM) and is the default; "openai" is paid
 # (GPT-6 Luna: $0.10 in / $0.50 out per 1M, ~Rs 270-455 a month at our usage).
+# D54: "gemini" is Gemini 3.8 Flash on Google's free tier, through its OpenAI-compatible
+# endpoint. Free-tier limits aren't published (20 or 1,500 requests a day, by different
+# sources) and free-tier input may be read by Google's reviewers: see BACKUP_PROVIDER and
+# GEMINI_SCREENSHOTS below, and docs/PLAN-2026-10-31.md.
 PROVIDER = os.environ.get("JIMMY_PROVIDER") or "nvidia"
 OPENAI = PROVIDER == "openai"
-API_KEY_ENV = "OPENAI_API_KEY" if OPENAI else "NVIDIA_API_KEY"
-BASE_URL = os.environ.get("JIMMY_LLM_BASE_URL") or (
-    "https://api.openai.com/v1" if OPENAI else "https://integrate.api.nvidia.com/v1")
+GEMINI = PROVIDER == "gemini"
+# Each endpoint and the environment variable its key lives in. A model goes to the
+# endpoint its id names (llm.endpoint_for): "gemini-…" Google, "gpt-…" OpenAI, "org/…" NVIDIA.
+ENDPOINTS = {"nvidia": ("https://integrate.api.nvidia.com/v1", "NVIDIA_API_KEY"),
+             "openai": ("https://api.openai.com/v1", "OPENAI_API_KEY"),
+             "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai", "GEMINI_API_KEY")}
+API_KEY_ENV = ENDPOINTS.get(PROVIDER, ENDPOINTS["nvidia"])[1]
+BASE_URL = os.environ.get("JIMMY_LLM_BASE_URL") or ENDPOINTS.get(PROVIDER, ENDPOINTS["nvidia"])[0]
 # OpenAI's reasoning, when a call asks for thinking (cards). Tool calls on Chat
 # Completions need "none" (gpt-6-luna's model page), so the agent never reasons.
 REASONING_EFFORT = os.environ.get("JIMMY_REASONING") or "low"
@@ -42,10 +51,26 @@ REASONING_EFFORT = os.environ.get("JIMMY_REASONING") or "low"
 # 1.4 s, so it drives the agent. nemotron-3.5-lightning took 45-66 s and wrote
 # garbage. The endpoint's public model list is NOT what an account can use: several
 # listed models return 404 or time out. Measure before switching.
-MODEL = os.environ.get("JIMMY_MODEL") or ("gpt-6-luna" if OPENAI else "nvidia/nemotron-3-ultra-550b-a55b")
-TOOLS_MODEL = os.environ.get("JIMMY_TOOLS_MODEL") or (MODEL if OPENAI else "openai/gpt-oss-20b")
+NVIDIA_MODEL, NVIDIA_TOOLS_MODEL = "nvidia/nemotron-3-ultra-550b-a55b", "openai/gpt-oss-20b"
+MODEL = os.environ.get("JIMMY_MODEL") or {"openai": "gpt-6-luna", "gemini": "gemini-3.8-flash"}.get(
+    PROVIDER, NVIDIA_MODEL)
+TOOLS_MODEL = os.environ.get("JIMMY_TOOLS_MODEL") or (MODEL if OPENAI or GEMINI else NVIDIA_TOOLS_MODEL)
 # A retired model (404/410) moves the chat to the next of these instead of failing.
-MODEL_FALLBACKS = ("gpt-5.4-nano",) if OPENAI else ("openai/gpt-oss-20b",)
+MODEL_FALLBACKS = {"openai": ("gpt-5.4-nano",), "gemini": ()}.get(PROVIDER, (NVIDIA_TOOLS_MODEL,))
+# D54: a free tier runs out, and Google's had an outage or two. With this provider's key
+# also set, a call Gemini can't answer (quota 429, 5xx, timeout, empty, a bad key) goes
+# to NVIDIA's models in the same call, and Jimmy stays there until the quota could be
+# back: the next midnight Pacific for a daily quota, BACKUP_RETRY_S for anything else.
+BACKUP_PROVIDER = "nvidia" if GEMINI else None
+BACKUP_RETRY_S = 60
+# D54: Gemini 3.8 Flash can't stop thinking ("minimal" is an error); "low" is the least.
+# A call that asks for thinking (cards) gets "medium". Thinking may not count against
+# max_tokens, but room is left in case it does.
+GEMINI_REASONING = os.environ.get("JIMMY_GEMINI_REASONING") or "low"
+GEMINI_THINK_ROOM = 2048
+# D54: screenshots ("look at my screen") to Gemini's free tier, where reviewers may read
+# them? Off: pictures go to NVIDIA's vision models, text to Gemini. The human decides.
+GEMINI_SCREENSHOTS = os.environ.get("JIMMY_GEMINI_SCREENSHOTS", "") == "1"
 # Thinking off: ~1 s to first word. On: ~2.5 s, same answer quality on recall
 # questions. Turn it on per call for heavy syntheses, not for chat.
 THINKING = False
@@ -56,7 +81,7 @@ THINKING = False
 # Gemma 4, Kimi K3, GLM-5.3 and llama-3.2-90b-vision timed out; others 404.
 # Tried in order, once each; then the answer falls back to the window's text alone.
 VISION_MODELS = tuple(filter(None, (os.environ.get("JIMMY_VISION_MODEL"),
-                                    *((MODEL,) if OPENAI else (
+                                    *((MODEL,) if OPENAI or (GEMINI and GEMINI_SCREENSHOTS) else (
                                         "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
                                         "meta/llama-3.2-11b-vision-instruct")))))
 VISION_READ_TIMEOUT_S = 20.0
@@ -108,9 +133,9 @@ EMBED_MODEL = os.environ.get("JIMMY_EMBED_MODEL") or "bge-m3"
 # after that waited ~6 s for bge-m3 (664 MB) to load. An hour, asked on each call.
 EMBED_KEEP_ALIVE = "60m"
 # D50 (P6): run bge-m3 on the CPU (Ollama's num_gpu 0), leaving the GPU to Whisper and the
-# cards model. Slower per call; NOT measured: check search time and nvidia-smi before using.
-# Changing it makes Ollama reload the model once.
-EMBED_ON_CPU = os.environ.get("JIMMY_EMBED_ON_CPU", "") == "1"
+# cards model. D53, measured: 0.40 s a query on the CPU vs 0.26 s on the GPU, and its
+# ~0.7 GB of VRAM stays free. Changing it makes Ollama reload the model once.
+EMBED_ON_CPU = os.environ.get("JIMMY_EMBED_ON_CPU", "1") == "1"
 # D38: httpx closes an idle connection after 5 s by default, so the "one warm
 # connection" (D15) was cold for nearly every real question. Keep it two minutes.
 KEEPALIVE_S = 120

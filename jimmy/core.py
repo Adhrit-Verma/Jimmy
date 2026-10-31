@@ -11,7 +11,7 @@ import time
 from typing import Callable, Iterator, NamedTuple, Protocol
 
 from . import config
-from .llm import LLM, LLMError, embed, unload_local
+from .llm import LLM, LLMError, embed, for_model, unload_local
 from .memory import Memory
 
 
@@ -170,8 +170,8 @@ class Jimmy:
         msg = [{"role": "user", "content": [{"type": "text", "text": prompt},
                                             {"type": "image_url", "image_url": {"url": image}}]}]
         for model in config.VISION_MODELS:
-            vision = LLM(key=self.llm.key, model=model, base_url=self.llm.base_url,
-                         transport=self.llm._transport, attempts=1, read_timeout_s=config.VISION_READ_TIMEOUT_S)
+            # D54: each vision model on its own provider (NVIDIA's while Gemini answers)
+            vision = for_model(model, like=self.llm, attempts=1, read_timeout_s=config.VISION_READ_TIMEOUT_S)
             try:
                 return vision.chat(msg, max_tokens=250, temperature=0.0)
             except LLMError as exc:
@@ -189,9 +189,8 @@ class Jimmy:
         seen = [*rest[:-1], {"role": "user", "content": [{"type": "text", "text": text},
                                                          {"type": "image_url", "image_url": {"url": image}}]}]
         for model in config.VISION_MODELS:
-            vision = LLM(key=self.llm.key, model=model, base_url=self.llm.base_url,
-                         transport=self.llm._transport, attempts=1,
-                         read_timeout_s=config.VISION_READ_TIMEOUT_S)
+            # D54: each vision model on its own provider (NVIDIA's while Gemini answers)
+            vision = for_model(model, like=self.llm, attempts=1, read_timeout_s=config.VISION_READ_TIMEOUT_S)
             sent = False
             try:
                 for piece in vision.chat_stream(seen):

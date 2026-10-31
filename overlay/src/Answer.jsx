@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { useThumb } from "./Timeline.jsx";
 import { AppBars, Axis, CountUp, Ribbon, colorOf, short } from "./Insights.jsx";
+import Template from "./Templates.jsx";
 
 // D25/D27/D31: a question answered where you are. Four shapes:
 //   chat   — just the reply;
@@ -23,6 +24,7 @@ const spring = { type: "spring", stiffness: 380, damping: 34 };
 const MODES = {
   recall: [History, "From your history"], screen: [MonitorSmartphone, "Your screen"],
   chat: [MessageCircle, "Chat"], stats: [BarChart3, "Your time"], clarify: [HelpCircle, "Quick check"],
+  ask: [HelpCircle, "Quick check"],   // D56: Jimmy asks (which one? yes?); D28's clarify keeps its two buttons
   draft: [PenLine, "Draft"], event: [CalendarPlus, "Calendar"],
 };
 
@@ -260,6 +262,7 @@ function Reply({ answer, onClose, onFollowUp, onCopied }) {
   const n = answer.evidence?.length || 0;
   const [ModeIcon, modeLabel] = MODES[answer.mode] || MODES.recall;
   const foot = answer.mode === "clarify" ? "Just say it, or pick one"
+    : answer.mode === "ask" ? (answer.ui ? "Say it, or tap" : "Just say it")
     : answer.mode === "draft" ? (answer.status === "done" ? "Copied to your clipboard; nothing was sent" : "")
     : answer.mode === "event" ? (answer.event ? "Say yes, or use the button" : "")
     : answer.mode === "stats" ? "Estimated from captures"
@@ -320,6 +323,7 @@ function Reply({ answer, onClose, onFollowUp, onCopied }) {
             </motion.p>
           )}
           {answer.event && answer.status === "done" && <EventCard ev={answer.event} />}
+          {answer.ui && answer.status !== "searching" && <Template ui={answer.ui} />}
           {answer.mode === "clarify" && answer.status === "done" && (
             // D28: Jimmy asked back. Answer by voice, or pick one.
             <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
@@ -352,7 +356,7 @@ function Reply({ answer, onClose, onFollowUp, onCopied }) {
             <History size={12} /> Timeline
           </FootButton>
         )}
-        {!busy && answer.mode !== "clarify" && (
+        {!busy && answer.mode !== "clarify" && answer.mode !== "ask" && (
           <FootButton onClick={onFollowUp} title="Ask a follow-up (it remembers this conversation)">
             <CornerDownRight size={12} /> Follow up
           </FootButton>
