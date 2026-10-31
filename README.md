@@ -80,8 +80,9 @@
   <tr>
     <td width="33%" valign="top">
       <h3>🤖 It does things</h3>
-      <i>"Search YouTube for CarryMinati"</i>: a short plan, one <i>"yes"</i>, then its own
-      cursor types and presses, checking each step worked.
+      <i>"Search YouTube for CarryMinati"</i>: a short plan, played back live as its own
+      cursor types and presses, checking each step worked. When it's sure, no <i>"yes"</i>
+      needed; when it isn't, it asks <i>"which one?"</i>.
     </td>
     <td width="33%" valign="top">
       <h3>🔒 Rules in code, not in a prompt</h3>
@@ -180,7 +181,7 @@ enough and the pill says so; *"Jimmy, I'm not on a call"* if you aren't.
 <tr>
   <td><b>Hands</b></td>
   <td><i>"click Sign in"</i> · <i>"the blue link"</i> · <i>"search YouTube for CarryMinati"</i> · <i>"close this tab"</i> · <i>"open Chrome"</i> · <i>"close Discord"</i></td>
-  <td>A task gets a short plan and one <i>"yes"</i>; Jimmy's own cursor then does the steps back to back, checking after each one that it worked (the box holds the text, the page changed), and stops at the first surprise. Anything that can't be undone, or a site you didn't name, asks again. Through Windows' accessibility, never your mouse. It understands controls by name, and by look ("the yellow icon") by looking at the screen.</td>
+  <td>When Jimmy is sure (you named the control, nothing else fits as well) and the action can be undone, it shows its cursor there, says <i>"Pressing Images… say stop"</i>, and does it. A task gets a short plan, shown as a live card that ticks each step; a plan with nothing risky in it starts on its own. Not sure which control you meant? <i>"Which one: Search (box) or Search (button)?"</i>, as buttons or by voice (<i>"the second one"</i>). Anything that can't be undone (send, delete, buy, close), or a site you didn't name, still asks. Each step is checked (the box holds the text, the page changed), and it stops at the first surprise. Through Windows' accessibility, never your mouse. It understands controls by name, and by look ("the yellow icon") by looking at the screen.</td>
 </tr>
 <tr>
   <td><b>About Jimmy</b></td>
@@ -317,6 +318,18 @@ two lines in `.env`:
 OPENAI_API_KEY=sk-your-key-here
 JIMMY_PROVIDER=openai
 ```
+
+Or Google's **Gemini 3.8 Flash, free**: make a key at [aistudio.google.com](https://aistudio.google.com/apikey)
+and put these in `.env` next to your NVIDIA key (NVIDIA answers whenever Gemini's free quota
+runs out or it's down, so Jimmy never goes quiet):
+
+```
+GEMINI_API_KEY=your-key-here
+JIMMY_PROVIDER=gemini
+```
+
+Google may let reviewers read what's sent on its free tier. Screenshots ("look at my
+screen") stay with NVIDIA unless you add `JIMMY_GEMINI_SCREENSHOTS=1`.
 
 Without a key, Jimmy still works offline. Each answer shows what retrieval *found*, which is
 exactly what would have been sent to the model.
@@ -689,6 +702,7 @@ The performance pass (D38) was checked for **equivalence on a frozen copy of the
 | + · Hands and eyes | Understanding in context, your lists by voice and in a Memory tab, seeing the screen, a virtual cursor (one action per yes) | ✅ |
 | + · Agent | One loop that sees its state, your wiki, your lists and the screen; multi-step tasks on one yes; a decision log; 95 % on 130 real commands (was 71 %) | ✅ |
 | + · Lighter and safer | Efficiency mode, a slower idle tick, cached UI Automation; fewer tools per step, every action checked, a policy layer in code, a plan's steps run back to back; OCR via Windows; read-only MCP recall. Voice, GPU and memory upgrades built behind flags, to be measured | ✅ |
+| + · Smarter, quicker hands | Gemini 3.8 Flash on the free tier (NVIDIA answers when it can't); acts on its own when sure, asks "which one?" when not; answers with cards (steps, choices, tables, checklists, charts); plans played back live | ✅ |
 
 What's next is measuring those flagged upgrades on the laptop, one at a time (see
 [`TIMELINE.md`](TIMELINE.md)). Other ideas are in [`SCOPE.md`](SCOPE.md) →
@@ -712,6 +726,7 @@ mid-size, so a picture alone (canvases, video) is described less exactly than a 
 .\.venv\Scripts\python.exe tests\test_stage11.py   # 10 · the agent: plans, risky steps, typing guard, trace, wiki
 .\.venv\Scripts\python.exe tests\test_stage12.py   # 28 · the 2026-10-05 session's misses, and pause
 .\.venv\Scripts\python.exe tests\test_stage13.py   # 24 · footprint, tool retrieval, checks, policy, the flagged upgrades
+.\.venv\Scripts\python.exe tests\test_stage14.py   # 15 · Gemini + backup, ask when unsure, answer cards, live steps
 .\.venv\Scripts\python.exe tests\eval_agent.py     #  live: 130 real commands, rules + agent (95 %)
 .\.venv\Scripts\python.exe tests\eval_trajectory.py  #  live: 8 whole tasks on invented screens
 .\.venv\Scripts\python.exe tests\test_face.py      #  6 · remember my face

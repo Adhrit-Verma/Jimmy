@@ -35,7 +35,11 @@ a slower idle tick, cached UI Automation), fewer tools per step, every action ch
 evals, a policy layer in code, a plan's actions run without a model call each; and, behind flags
 that stay off until measured on the laptop, Silero VAD, a wake word while paused, a still webcam,
 a GPU budget, recipes, Windows OCR, a local fallback, OTel traces, MCP recall, a turn detector,
-Kokoro, int8 vectors and small thumbnails. "Jimmy, …" → an
+Kokoro, int8 vectors and small thumbnails (D53 measured them: the GPU budget and bge-m3 on the CPU
+are on). **D54–D57 (`docs/PLAN-2026-10-31.md`): Gemini 3.8 Flash on the free tier with an NVIDIA
+backup that can't run out; ask only when unsure (the human's amendment of non-negotiable 1);
+Intelligent UI (fixed answer templates: steps, choice, confirm, list, table, checklist, chart);
+plans played back live.** "Jimmy, …" → an
 evidence panel and a spoken answer, with no typing needed. Stage 3 (trigger gate) passed its 5-check
 list, blind-judged (D19–D22). Stage 4 is the Electron overlay (D23). Stage 5 is hybrid
 keyword + meaning recall and a timeline window (D24). Remaining work lives in
@@ -97,6 +101,7 @@ cd C:\Code\Jimmy
 cd overlay; npm install; npm run build   # once, and after any change under overlay/src
 .\node_modules\electron\dist\electron.exe . --demo                      # see the UI, no Python
 .\node_modules\electron\dist\electron.exe . --demo --snapshot shot.png   # render to a PNG and quit
+.\node_modules\electron\dist\electron.exe . --demo --demo-ui table --snapshot shot.png   # D56: one template on invented data
 .\.venv\Scripts\python.exe tests\test_stage4.py   # 5 checks: API, pause, window flags, effect bodies
 .\.venv\Scripts\python.exe -m ambient index       # backfill meaning-search vectors (bge-m3)
 .\.venv\Scripts\python.exe -m ambient search "consulting application on Friday"   # keywords + meaning
@@ -112,6 +117,8 @@ cd overlay; npm install; npm run build   # once, and after any change under over
 .\.venv\Scripts\python.exe tests\test_stage11.py  # 10 checks: the agent loop, plan/risky approval, typing guard, trace, calls, wiki, failure mid-task
 .\.venv\Scripts\python.exe tests\test_stage12.py  # 28 checks: the 2026-10-05 session's misses (D45), one per report item; D46 pause
 .\.venv\Scripts\python.exe tests\test_stage13.py  # 24 checks: D47–D52 (footprint, tool retrieval, checks, policy, speculation, flags)
+.\.venv\Scripts\python.exe tests\test_stage14.py  # 15 checks: D54 Gemini + backup, D55 ask when unsure, D56 templates, D57 steps
+.\.venv\Scripts\python.exe -m ambient.ui         # self-check of the template validator (D56)
 .\.venv\Scripts\python.exe tests\test_commands.py # the command matrix: 177 utterances, talk, a drill
 .\.venv\Scripts\python.exe tests\eval_trajectory.py  # live: 8 whole tasks on invented screens (success, calls, tokens)
 .\.venv\Scripts\python.exe tests\eval_agent.py    # live: 130 real commands through rules + agent (95 %); --system d41 = 71 %
@@ -141,8 +148,11 @@ restarting anything), *or* `.env` at the repo root (D44; git-ignored, loaded by
 
 `JIMMY_PROVIDER=openai` (env or `.env`) switches the cloud to OpenAI: `OPENAI_API_KEY`,
 `gpt-6-luna` for chat, tools and vision, `reasoning_effort` instead of NVIDIA's template
-switch (D44). Default is `nvidia`. Tests must pass under both: run stage 2, 10 and 11 with
-`JIMMY_PROVIDER=openai` after touching `jimmy/llm.py` or `jimmy/config.py`.
+switch (D44). `JIMMY_PROVIDER=gemini` (D54): `GEMINI_API_KEY` (or `GOOGLE_API_KEY`),
+`gemini-3.8-flash` for chat and tools, NVIDIA as its backup (needs `NVIDIA_API_KEY` too),
+screenshots to NVIDIA unless `JIMMY_GEMINI_SCREENSHOTS=1`. Default is `nvidia`. Tests must
+pass under all three: run stage 2 and 10–14 with each `JIMMY_PROVIDER` after touching
+`jimmy/llm.py` or `jimmy/config.py`.
 
 `cv2` prints `net_impl_backend ... Targets are not supported` on import. It is
 harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
@@ -187,6 +197,10 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `ambient/agent.py` | D42: the agent. Context (`<you>`, `<lists>`, `<status>`, `<open>`, `<rejected>`, `<screen>`, `<conversation>`: stable first, D47), 54 native tools (D48: `CORE` + `GROUPS` by `select_tools`, `more_tools`), the loop, plan/risky approval, code guards (`name_check`, `said_by_user`; D45 `name_fits`, CAPTCHA, identify-people, `clean_tool_name`), the timed step with fallbacks (D45; D51 local), `_verify` (D48 ✓/✗), `_speculate` (D49), recipes (D51), `first_decision` for the eval. |
 | `ambient/policy.py` | D49: what the agent may do, decided in code: `check()` → refuse / stop / ask / allow for every proposed screen action. |
 | `ambient/power.py` | D47: efficiency mode (EcoQoS) for background threads, battery, CPU busy, user idle. No-ops off Windows. |
+| `ambient/ui.py` | D56: Intelligent UI, the Python side: `validate` (the trust boundary: known templates, capped sizes, text only), builders for code's cards, `REPLY_UI` (the model's `ui` argument). |
+| `overlay/src/Templates.jsx` | D56/D57: the cards (Steps, Choice, Confirm, List, Table, Checklist, Chart) and the live `StepsFloat`; every button says words through "ask". |
+| `tests/test_stage14.py` | D54–D57 check: Gemini's request and signatures, the backup, sure/unsure, "which one?", plans that start on their own, cards through the Asker. |
+| `docs/PLAN-2026-10-31.md` | the research and plan behind D54–D57 (Gemini's free tier and its limits; Intelligent UI). |
 | `ambient/logs.py` | D45: tees `ambient run`'s console into `data/logs/jimmy.log`, rotating, with captured text cut to lengths (`redact`). |
 | `jimmy/wiki.py` | D42: the user wiki in Open Knowledge Format: code pages (goals, memories, reminders, habits), model pages (projects, people, interests), index, verify. `data/okf/`. |
 | `tests/test_stage11.py` | D42 check: the agent with a scripted model, through the Asker, traces, calls by name, the wiki. |
@@ -225,7 +239,11 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 From `AMBIENT_LAYER.md`'s non-negotiables. Each is an *absent code path*, not a
 setting that defaults to off.
 
-1. **No action executes without explicit user approval.** Stage 3+, but design for it now.
+1. **No action executes without explicit user approval** — amended by the human on
+   2026-10-31 (D55): a reversible action Jimmy is *sure* of (`policy.sure`: the user named
+   that control, nothing else fits as well) runs without a yes, shown first with a moment
+   to say "stop". Anything irreversible or uncertain still asks. `AUTONOMY = "always"`
+   restores the old rule.
 2. **There is no `faces` table and no `people` table.** `test_store_roundtrip_and_fts`
    asserts their absence. If you find yourself adding one, you have lost the design.
 3. **Face vectors never leave RAM.** `FaceStage` refuses to pickle, on purpose.
@@ -261,9 +279,10 @@ setting that defaults to off.
 11. **Jimmy proposes; you approve** (D32). Focus, page, draft, calendar event:
    each waits for your yes, and drafts/events go no further than your
    clipboard or your calendar app's own confirm.
-12. **Jimmy acts on another app only through UI Automation patterns, after a yes**
-   (D35 scroll, D41, D42). Each action is shown by Jimmy's cursor; one yes approves a
-   plan's steps, anything risky asks again on its own, a lone action asks each time.
+12. **Jimmy acts on another app only through UI Automation patterns** (D35 scroll, D41,
+   D42), after a yes, or (D55) on its own when `policy.sure` holds and `policy.check` says
+   *allow*. Each action is shown by Jimmy's cursor; one yes approves a plan's steps (a plan
+   naming nothing risky starts without one, D55), anything risky asks again on its own.
    No mouse events; the one key is Enter (`submit`), sent only after UI Automation
    focused that box and the focus was checked. Never in excluded windows, never into
    a password box, never text the user didn't say. D45: "click" on a box with only
@@ -316,7 +335,16 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   are understood via one model call that also returns the English.
 - **Ollama 0.32.13 is installed** with qwen2.5:3b / 7b / 14b. **qwen2.5:3b decides
   cards** (D20): ~1 s per question, 3.3 GB VRAM, ~10 s cold load (idle unload
-  after ~5 min). 7B was slower and worse; 14B doesn't fit in VRAM.
+  after ~5 min). 7B was slower and worse; 14B doesn't fit in VRAM. Also pulled (D53):
+  qwen3:4b, `qwen3-4b-8k` (a Modelfile at 8k context: 3.9 GB, 3.7 s a tool step, but 38/130
+  empty answers from thinking) and `qwen3:4b-instruct-2507` (not measured yet).
+- **D53, measured:** Ollama's two models hold ~3.2 GB; unloading takes 2 s, then bge-m3 is
+  back in 0.4 s and the cards model in 5.3 s (65 s from a cold disk). bge-m3 on the CPU:
+  0.40 s a query (GPU 0.26 s). Kokoro (`models/`, git-ignored): load 2.4 s, a 4 s sentence
+  in 1.4 s on the CPU. LiveKit's turn detector (`models/turn-detector`, v0.4.1-intl): ~35 ms
+  a line; its output is a small probability (cut lines ≤ 0.086, whole ≥ 0.09).
+- **This laptop is often on battery**: `power.constrained()` is then true and D47 halves the
+  optional loops (webcam, indexing).
 - **bge-m3 (Ollama)**: 1024-d vectors; warm load 5.8 s. Via 127.0.0.1 with a kept
   connection: ~0.4–0.5 s per call (Ollama's fixed cost), 32 chunks in 1.1 s; hybrid
   search 0.5 s (D38; the old "32 chunks ≈ 4 s" included the localhost delay).
@@ -508,3 +536,18 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
 - Our own recording process shows up in Windows' mic-in-use registry. Anything
   asking "is someone else on the mic" must skip `sys.executable` /
   `sys._base_executable`, as `audio.other_app_using_mic` does.
+- **A test's LLM client must never reach the network** (D54). A default client gets a real
+  NVIDIA backup from your real key; any `transport=` (a test) means no backup. A client
+  built without one in a test, under `JIMMY_PROVIDER=gemini`, once called NVIDIA for real.
+- **Gemini 3 needs its thought signatures back** (D54): pass the model's tool calls back
+  exactly as received (`extra_content` included); `LLM._wire` adds Google's stand-in for a
+  call Gemini didn't make and strips it for other endpoints.
+- **Suites 11–13 pin `AUTONOMY = "always"`** (D55): they prove the yes-for-everything rules.
+  New autonomy tests go in stage 14, which sets `AUTO_GRACE_S = STEP_SHOW_S = 0`.
+- **"Search for X" is the timeline's** (a fast rule filters Jimmy's own history); a test of
+  a screen search plan must say "type X in the search box and press enter".
+- **On battery the webcam loop runs at half rate** (D47 `power.constrained`): a test that
+  times the presence thread must pin `pres.power.constrained` (stage 9 does).
+- **Ollama loads qwen3 at its full context** (256k: 37.5 GB asked, D53). A local model for
+  this laptop needs a Modelfile with `num_ctx` (`qwen3-4b-8k` is one), and a thinking model
+  spends its whole `max_tokens` thinking: use an instruct (non-thinking) variant.

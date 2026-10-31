@@ -44,7 +44,7 @@ the product and deserves to be built against real captured data.
 
 | Module | Responsibility | Notable choice |
 |---|---|---|
-| `jimmy/llm.py` | the only LLM client | one reused httpx client (warm connection); streams; strips `<think>`; 3 attempts, never retries mid-stream |
+| `jimmy/llm.py` | the only LLM client | one reused httpx client (warm connection); streams; strips `<think>`; 3 attempts, never retries mid-stream. D54: three providers (NVIDIA, OpenAI, Gemini), a model goes to its own provider by id (`for_model`); on Gemini's free tier the default client carries an NVIDIA `backup` that answers in the same call when Gemini can't, until its quota is back |
 | `jimmy/memory.py` | remembered facts + chat turns | its own SQLite file so capture retention can never prune memory; `fts_query` quotes every term |
 | `jimmy/core.py` | `Jimmy.ask`, prompt, plugin seam | a plugin is just `name` + `context()` + `tools`; no discovery, since there is one |
 | `ambient/plugin.py` | captures → snippets | turns "yesterday", "on Tuesday", "last 20 min" into a time window; never creates the capture DB |
@@ -103,7 +103,8 @@ every screen reader charges.
 | `insights.py` | where the day went (D31) | estimated from frame times, gap-capped; no model, no new capture |
 | `proactive.py` | cards Jimmy writes itself (D32) | resume, focus offer, reminders, deadlines, recap; acts only on Jimmy |
 | `agent.py` | the agent (D42) | one loop with native tool calls: sees Jimmy's status, the user wiki's index, their lists and the window's numbered controls; acts, looks again; plan once + risky steps; code guards on ids, typed text and names |
-| `policy.py` | what the agent may do (D49) | every proposed screen action → refuse / stop / ask / allow, in code, whichever model proposed it; the guards that were in `Agent._act` live here |
+| `policy.py` | what the agent may do (D49) | every proposed screen action → refuse / stop / ask / allow, in code, whichever model proposed it; the guards that were in `Agent._act` live here. D55 `sure`: an *allow* that is reversible and names one control clearly runs without a yes; otherwise "which one?" or a yes |
+| `ui.py` | Intelligent UI (D56) | an answer may carry one card from a fixed registry; `validate` is the trust boundary (known template, capped, text only); code fills steps / choice / confirm / list, the model only table / checklist / chart through `reply`. The overlay side is `overlay/src/Templates.jsx`; its buttons speak through "ask" |
 | `power.py` | the footprint (D47) | EcoQoS + below-normal priority for background threads; battery, CPU busy and user idle as cheap Win32 reads; no-ops off Windows |
 | `act.py` | the virtual cursor's hands (D41) | UI Automation controls of the window in front, matched by name, driven by their own patterns after a yes; no mouse or key events; apps opened by Start-menu shortcut; D45: other top-level windows (list, switch, minimize/maximize/restore through `WindowPattern`), shell popups never count as a window |
 | `logs.py` | the console, kept (D45) | `ambient run` tees stdout/stderr to `data/logs/jimmy.log` (rotating); quoted text, card lines and gate reasons are cut to their length, keys scrubbed |

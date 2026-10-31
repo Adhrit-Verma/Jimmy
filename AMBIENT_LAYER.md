@@ -30,6 +30,16 @@ throughput.
    cursor and done only on the user's yes, through accessibility patterns, never
    in excluded windows or password boxes. D42, the human's call: a task's plan is
    approved once; anything irreversible inside it still asks on its own.)*
+   *Amended by the human on 2026-10-31 (D55): "I don't want to say yes every time; ask
+   me when you're not sure."* An action that can be undone (a click on a control that
+   isn't risky, switching or minimizing a window, typing the user's own words into a
+   search or address box and pressing Enter there) runs **without a yes when Jimmy is
+   sure**: the user named that control and no other fits as well. It is shown first,
+   with a moment to say "stop". Anything that can't be undone (send, delete, buy,
+   close, Enter in a chat box, a site the user didn't name), and anything Jimmy isn't
+   sure of, still asks; "which one?" is asked with the likely choices. The old rule is
+   one setting away (`AUTONOMY = "always"`). Proposals about the user's own data and
+   calendar (non-negotiable 11 in CLAUDE.md) are unchanged.
 2. **Face stage never persists, enrols or names.** See "Stage 1b" below. These are
    absent code paths, not settings that default to off.
    *Amended by the human on 2026-10-02 (D37), one exception:* **the owner's own

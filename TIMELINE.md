@@ -214,6 +214,21 @@ call, an unmeasured lip veto, no visible calibration, a flickering eye, a stale
 timeline after a forget, scroll in Claude). Checks: `tests\test_stage9.py` (14),
 matrix (154), eval 41/41.
 
+## Gemini, asking when unsure, Intelligent UI · **built 2026-10-31 (D54–D57)**
+
+`docs/PLAN-2026-10-31.md`. Gemini 3.8 Flash on the free tier with an NVIDIA backup in
+the same call (D54); reversible actions Jimmy is sure of run without a yes, "which one?"
+when it isn't (D55, the human's amendment of non-negotiable 1); answers with fixed
+templates (D56); plans played back live (D57). Checks: `tests\test_stage14.py` (15); all
+suites under `nvidia`, `openai` and `gemini`. **Open:** `GEMINI_API_KEY` → `eval_agent.py`,
+`eval_trajectory.py` and first-word latency with `JIMMY_PROVIDER=gemini`, and the free
+tier's real daily limit; then a session on the laptop with autonomy on.
+
+**D53 (2026-10-07):** D50–D52's flags measured: the GPU budget and bge-m3 on the CPU are
+on; int8 vectors, small thumbnails, recipes and the local fallback stay off (numbers in
+D53); the turn detector's crash fixed and its threshold set; Silero and the still webcam
+not measured yet.
+
 ## The research roadmap · **built 2026-10-07 (D47–D52), not measured yet**
 
 All five phases of `docs/RESEARCH-AGENT-2026-10.md`: the footprint (D47), fewer tools,

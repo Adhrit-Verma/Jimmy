@@ -2246,3 +2246,124 @@ D45 lists (DPAPI ×2, the mutex, two Windows-path checks), unchanged. `test_stag
 24 checks. Not done here: anything needing Windows, the GPU, the webcam, a mic, the key or
 the optional packages (onnxruntime, openwakeword, winocr, kokoro-onnx, tokenizers). Every
 new knob that could change results is off, with what to measure next to it in `config.py`.
+
+
+---
+
+### D53 — D50–D52's flags measured on the laptop
+
+**2026-10-07.** The human asked for each flagged item to be checked on this machine. All
+optional packages fall back cleanly when missing (Silero, the wake word, the turn
+detector and Kokoro each print one line and go back to the old behaviour). Measured:
+
+| Item | Result | Decision |
+|---|---|---|
+| int8 vectors (P7) | top-10 overlap 98.2 % (worst query 90 %), top-5 94.5 %, max score change 0.0027, on the 1,258 real vectors and 22 queries | **off**: under D52's own 99 % bar, and all vectors are 5 MB |
+| small thumbnails (P8) | 71 % of frames had no new text; 79 KB → 16 KB; 59 % of thumbnail storage | **off**: "look at my screen" sends the newest thumbnail, which would be the 480 px one exactly on a video page. Keep each window's newest frame full size first |
+| GPU budget (P6) | Ollama's two models hold ~3.2 GB; unload 2 s; back: bge-m3 0.4 s, cards model 5.3 s (65 s from a cold disk) | **on**, `GPU_RELEASE_AWAY_S = 600` |
+| bge-m3 on the CPU | 0.40 s a query vs 0.26 s on the GPU; its VRAM stays free | **on** by default (`JIMMY_EMBED_ON_CPU=0` turns it off) |
+| OTel file (A10) | stdlib only; no heard/said text in the file | off: useful only with a trace viewer |
+| recipes (A5) | 8 whole tasks, twice each: second run 18 model calls with recipes vs 16 without; 7/8 vs 6/8 succeeded (within run-to-run noise) | **off**: no measurable gain |
+| turn detector (V3) | LiveKit's v0.4.1-intl (English + Hindi, 396 MB) exports `prob` per token, which `complete` read as logits: **it would have crashed**. Fixed. ~35 ms a line. Cut lines 0.0001–0.086, whole lines 0.09–0.50: at 0.1, 8/10 whole lines go at once, 0/15 cut lines | `TURN_COMPLETE = 0.1` (0.85 let nothing go); the detector stays off until the human decides |
+| Kokoro (V4) | load 2.4 s; a 4.1 s sentence takes 1.4 s to make on the CPU (SAPI starts at once); Hindi voices work | off until the human picks by ear |
+| local fallback (A8) | `qwen3:4b` at its default context asked Ollama for **37.5 GB** and failed. At 8k context (`qwen3-4b-8k`): 3.9 GB, 3.7 s a step; on the 130 commands **38 empty answers** (it thinks ~280 tokens even with thinking off and runs out), 90/92 right when it answered, median 6.5 s | **off**. `qwen3:4b-instruct-2507` (no thinking) is pulled, not yet measured |
+| Silero (V1), webcam still-skip (P5) | not measured: the live mic + camera test ran in the human's own window and its totals weren't read back | off |
+
+Also found: a stage-13 Kokoro test assumed `kokoro-onnx` was never installed, and the
+GPU-budget test assumed the GPU default; both now set what they test.
+
+---
+
+### D54 — Gemini 3.8 Flash on the free tier, with a backup that can't run out
+
+**2026-10-31.** The human asked for Gemini 3.8 Flash, free. Research in
+`docs/PLAN-2026-10-31.md`: OpenAI-compatible endpoint, tools, images, streaming and
+structured output all work; free of charge on the free tier; **thinking can't be turned
+off** (low is the least); **free-tier limits aren't published** (20 or 1,500 a day,
+depending on the source; reset at midnight Pacific; per project); **free-tier input may
+be read by Google's reviewers**; Gemini 3 **rejects a tool conversation whose earlier
+calls lost their thought signatures**.
+
+- `JIMMY_PROVIDER=gemini`: `GEMINI_API_KEY` (or `GOOGLE_API_KEY`), `gemini-3.8-flash`
+  for chat and tools. Request: `reasoning_effort: "low"` ("medium" when a call asks for
+  thinking), no temperature, `max_tokens` + 2,048 for thinking.
+- **The backup:** with `NVIDIA_API_KEY` also set, any Gemini failure (429, 5xx, timeout,
+  empty, a bad key) is answered by NVIDIA *in the same call*, and Jimmy stays on NVIDIA
+  until it could work again: midnight Pacific for a daily quota (UTC-8: this Python has no
+  tz database), an hour for a bad key, a minute for anything else. A stream that has
+  started speaking never switches. A slow Gemini agent step also asks NVIDIA (D45's race).
+- **Signatures:** tool calls go back as received; a call Gemini didn't make (answered by
+  the backup) gets Google's documented stand-in; `extra_content` is stripped for others.
+- **Screenshots stay with NVIDIA** unless `JIMMY_GEMINI_SCREENSHOTS=1`: models go to
+  their own provider's endpoint and key by id (`llm.for_model`). `jimmy doctor` prints
+  the backup and the free-tier note.
+- **A test's client never gets a real backup** (any `transport` means a test): one did,
+  and a stage-2 test reached the real NVIDIA endpoint before this rule.
+- Chat style: one or two sentences, the way a friend would say it, in the user's language.
+
+Not measured yet: the key isn't set. When it is: `eval_agent.py` and
+`eval_trajectory.py` with `JIMMY_PROVIDER=gemini`, first-word latency, and how many
+requests a day the free tier really gives.
+
+---
+
+### D55 — Ask only when unsure (the human's amendment of non-negotiable 1)
+
+**2026-10-31.** "I don't want to say yes every time; it should ask me when it's not
+sure." `AUTONOMY = "when_unsure"` (default) or `"always"` (D42–D53's behaviour).
+
+An action runs without a yes only if `policy.check` allows it (not risky, no password
+box, no CAPTCHA, no injected name, the control still has the name the model gave) **and**
+`policy.sure` holds:
+- a click: the user's words hold ≥ 75 % of the control's name (`fit`, the reverse of
+  `act.score`: the user must have named *this* control), and no other control (a box
+  counts: clicking it focuses it) fits within 0.25 of it;
+- typing or Enter: only in a search or address box (Enter in a chat box sends);
+- switch / minimize / maximize / restore a window the user named; a site they named.
+
+It is shown first (the cursor, "Pressing “Images”… say stop") for `AUTO_GRACE_S` (1.2 s);
+"stop" in that moment does nothing. A lone action ends with itself. **A plan** whose steps
+name nothing risky (no send, delete, buy, close, sign out, forget) starts without a yes,
+and each of its actions must still be sure; the first that isn't asks. Not sure *which*
+control: **"Which one: “Search (box)” or “Search (button)”?"**, answered by an ordinal
+("the second one"; Hindi pehla / doosra too), a name, or yes (the one the cursor shows).
+
+Tests: suites 11–13 pin `AUTONOMY = "always"` (they prove the yes-for-everything rules
+still hold); stage 14 tests "when_unsure".
+
+---
+
+### D56 — Intelligent UI: answers with fixed templates
+
+**2026-10-31.** The human asked for ChatGPT's "Smart UI", officially **Intelligent UI**
+(GPT-6, 2026-10-07): the model answers with text, visuals and interactive pieces when they
+help, plain text otherwise. Jimmy's version: an answer may carry one card from a fixed
+registry (`overlay/src/Templates.jsx`), validated in `ambient/ui.py` (known template,
+capped sizes, strings cut, numbers checked; React renders text, never markup):
+
+- **code fills** `steps` (a plan, live), `choice` ("which one?"), `confirm` (any yes/no:
+  two buttons), `list`;
+- **the model fills** `table`, `checklist`, `chart` through `reply`'s optional `ui`,
+  told: only when plain text would be worse. It can't use code's templates.
+
+OpenAI's rules for in-chat UI adopted: a card earns its place; at most two actions; no
+scrolling inside a card; nothing long or sensitive. **Every button says words through
+"ask"**, so a tap and a voice reply take the same path. Agent questions now use their own
+`ask` mode: in `clarify` mode they had shown D28's "On my screen now / Something from
+earlier" buttons under "Press Images? Say yes." (a glitch since D42).
+
+`electron . --demo --demo-ui <template> --snapshot x.png` renders each one on invented data.
+
+---
+
+### D57 — Step playback
+
+**2026-10-31.** A plan is a live card (`steps` events): each step pending, running
+(spinner), done (tick), failed (amber, when D48's check says ✗) or skipped (after a stop).
+Proposed: Start / Cancel. Running: Stop. The cursor rests on each control for
+`STEP_SHOW_S` (0.6 s) before acting. The finished card stays in the answer; Jimmy's own
+features inside a plan (a scroll) count as steps. Shown top right while no answer is open,
+and gone a few seconds after the plan ends.
+
+**Also fixed while testing:** the fake-camera presence test failed on battery, because
+D47 halves the webcam loop's rate there; the test now fixes the power state.
