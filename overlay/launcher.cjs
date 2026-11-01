@@ -439,7 +439,16 @@ async function headless() {
 }
 
 module.exports = function launch() {
-  if (!app.requestSingleInstanceLock()) { app.quit(); return; }
+  if (!app.requestSingleInstanceLock()) {
+    // Another Jimmy.exe is open. A headless run must say so: quitting quietly with 0 looked
+    // like a finished setup on the clean-machine test (a Jimmy left running by the install).
+    if (has("--provision") || has("--self-test")) {
+      logFile = arg("--log", path.join(INSTALL, "setup.log"));
+      log("headless FAILED: another Jimmy.exe is running; close it first");
+      app.exit(2);
+    } else app.quit();
+    return;
+  }
   app.whenReady().then(() => {
     if (has("--provision") || has("--self-test")) return headless();
     logFile = path.join(INSTALL, "setup.log");

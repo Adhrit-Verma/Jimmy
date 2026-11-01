@@ -61,17 +61,24 @@ jobs:
           if ($p.ExitCode -ne 0) { throw "install exit $($p.ExitCode)" }
           if (-not (Test-Path D:\Apps\Jimmy\Jimmy.exe)) { throw "Jimmy.exe not installed" }
           "installed: $((Get-ChildItem D:\Apps\Jimmy -Recurse | Measure-Object Length -Sum).Sum/1MB) MB on D:"
+          # runAfterFinish may start Jimmy after a silent install; its onboarding would hold the
+          # single-instance lock the headless runs below need.
+          Start-Sleep 5
+          $running = Get-Process Jimmy -ErrorAction SilentlyContinue
+          "Jimmy running after install: $(@($running).Count) process(es)"
+          $running | Stop-Process -Force -ErrorAction SilentlyContinue
+          Start-Sleep 2
 
           # 2. first run, headless: Jimmy's own Python, packages, the speech model (Lite, CPU)
           $t = Get-Date
           $p = Start-Process D:\Apps\Jimmy\Jimmy.exe -ArgumentList '--provision','--data','D:\JimmyData','--profile','lite','--gpu','0','--log','D:\provision.log' -Wait -PassThru
           "provision: exit $($p.ExitCode) in $([int]((Get-Date)-$t).TotalSeconds) s"
-          Get-Content D:\provision.log | Select-String '\] (done|failed)|vcrtFrom|verify.*✗|FAILED' | ForEach-Object { $_.Line }
+          Get-Content D:\provision.log -ErrorAction SilentlyContinue | Select-String '\] (done|failed)|vcrtFrom|verify.*✗|FAILED' | ForEach-Object { $_.Line }
           if ($p.ExitCode -ne 0) { Get-Content D:\provision.log -Tail 60; throw "provision failed" }
 
           # 3. self-test: every native piece imports, doctor runs, Jimmy runs 20 s
           $p = Start-Process D:\Apps\Jimmy\Jimmy.exe -ArgumentList '--self-test','--log','D:\selftest.log' -Wait -PassThru
-          Get-Content D:\selftest.log | Select-String 'self-test|"ok": false|msvcp140|cuda|ok  |FAIL' | ForEach-Object { $_.Line }
+          Get-Content D:\selftest.log -ErrorAction SilentlyContinue | Select-String 'self-test|"ok": false|msvcp140|cuda|ok  |FAIL' | ForEach-Object { $_.Line }
           if ($p.ExitCode -ne 0) { Get-Content D:\selftest.log -Tail 80; throw "self-test failed" }
           $vc = Select-String -Path D:\selftest.log -Pattern '"dll": "msvcp140.dll", "path": "([^"]+)"' | Select-Object -First 1
           "C++ runtime loaded from: $($vc.Matches[0].Groups[1].Value)"
