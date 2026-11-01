@@ -2367,3 +2367,48 @@ and gone a few seconds after the plan ends.
 
 **Also fixed while testing:** the fake-camera presence test failed on battery, because
 D47 halves the webcam loop's rate there; the test now fixes the power state.
+
+---
+
+### D58 — Gemini, live: a slow model is a down model
+
+**2026-11-01.** The human added `GEMINI_API_KEY` and asked to test Gemini's voice.
+`jimmy doctor`'s first word took **107 s**. Timed directly (network to Google 0.7 s,
+NVIDIA 0.7 s): on the free tier, `gemini-3.8-flash` timed out at 60 s or answered 503
+"This model is currently experiencing high demand" on 5 of 5 calls (25 s once it
+answered); `gemini-3.7-flash` 503, then 429; `gemini-3.6-flash` 2.6–4.3 s;
+`gemini-3.5-flash-lite` 0.6–3.8 s; `gemini-3.1-flash-lite` 1.2–5.1 s (whole answers).
+
+D54's backup only reacted to errors, and the client retried a stuck model three times
+with a 60 s read timeout: minutes of silence. Now, with a backup:
+- **one try per model**, in a chain: `gemini-3.8-flash` → `gemini-3.5-flash-lite`
+  (`MODEL_FALLBACKS`) → NVIDIA;
+- **a deadline**: the first spoken word within `GEMINI_FIRST_WORD_S` (6 s), a whole answer
+  within `GEMINI_ANSWER_S` (25 s); slow counts as down;
+- **a failed model rests** `BACKUP_RETRY_S` (a minute; a daily quota until midnight
+  Pacific), so every answer doesn't wait out its deadline again.
+Gemini without a backup still tries 3.5 Flash-Lite after 3.8.
+
+The chat style now says to answer general questions from what the model knows and never
+mention "context": Gemini said "I don't have a tip for that in my context" and "Context
+mein mausam…".
+
+Live after the fix, six spoken questions (English and Hindi) through `Jimmy.ask_stream`:
+the first paid 7.6 s (3.8 timing out once), the rest **0.8–1.8 s to the first word**,
+all from 3.5 Flash-Lite, natural, in the asker's language. `tests/test_stage14.py` has
+16 checks (the chain, the deadline, the rest).
+
+**The evals, same day** (`JIMMY_PROVIDER=gemini`; every answered step came from 3.5
+Flash-Lite, 3.8 failing each time it was tried):
+- 130 real commands: **122/130** (124 right tool), median 1.5 s. NVIDIA's gpt-oss had
+  120/130 (D43). Two steps took 186 s: Gemini down *and* the NVIDIA backup hanging with
+  its old 3 × 60 s. **The backup now has limits too:** 2 tries, `GEMINI_ANSWER_S` each.
+- 8 whole tasks: first 4/8, 143 s (two 45 s timeouts; NVIDIA under the same conditions
+  5/8, 167 s). Both models failed "close this tab" alike, and the model wasn't to blame:
+  it chose `Close (tab Gmail)` (the title's tab), Jimmy wasn't sure (the user named no
+  tab) and asked "which one?", and **"yes" pressed the first-ranked candidate, YouTube's**,
+  not the one the cursor showed. Now the model's own pick comes first in a "which one?",
+  where the cursor points and "yes" lands. The agent is also told "this tab" is the one
+  the window title names. After both fixes: **8/8 in 42 s**.
+
+Open: whether `gemini-3.8-flash` recovers (it was the human's choice).

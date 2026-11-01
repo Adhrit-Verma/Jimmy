@@ -117,7 +117,7 @@ cd overlay; npm install; npm run build   # once, and after any change under over
 .\.venv\Scripts\python.exe tests\test_stage11.py  # 10 checks: the agent loop, plan/risky approval, typing guard, trace, calls, wiki, failure mid-task
 .\.venv\Scripts\python.exe tests\test_stage12.py  # 28 checks: the 2026-10-05 session's misses (D45), one per report item; D46 pause
 .\.venv\Scripts\python.exe tests\test_stage13.py  # 24 checks: D47–D52 (footprint, tool retrieval, checks, policy, speculation, flags)
-.\.venv\Scripts\python.exe tests\test_stage14.py  # 15 checks: D54 Gemini + backup, D55 ask when unsure, D56 templates, D57 steps
+.\.venv\Scripts\python.exe tests\test_stage14.py  # 16 checks: D54/D58 Gemini + backup chain, D55 ask when unsure, D56 templates, D57 steps
 .\.venv\Scripts\python.exe -m ambient.ui         # self-check of the template validator (D56)
 .\.venv\Scripts\python.exe tests\test_commands.py # the command matrix: 177 utterances, talk, a drill
 .\.venv\Scripts\python.exe tests\eval_trajectory.py  # live: 8 whole tasks on invented screens (success, calls, tokens)
@@ -362,6 +362,13 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   120/130 real commands, median 1.4 s (terse as a chat voice). `nemotron-3.5-lightning`
   took 45–66 s and wrote garbage (in D17: 159 s). A 404/410 now moves the client to
   the next model (`MODEL_FALLBACKS`) and prints it. Don't switch models without measuring.
+- **Gemini free tier, 2026-11-01 (D58):** `gemini-3.8-flash` timed out or said 503 "high
+  demand" on 5 of 5 calls (doctor: 107 s to a first word); 3.7-flash 503/429; 3.6-flash
+  2.6–4.3 s; **3.5-flash-lite 0.6–3.8 s**; 3.1-flash-lite 1.2–5.1 s. Through Jimmy with the
+  chain (3.8 → 3.5 Flash-Lite → NVIDIA, one try each, 6 s to a first word, a failed model
+  resting a minute): 0.8–1.8 s to the first spoken word. Network to Google: 0.7 s.
+  Evals on Gemini (all from 3.5 Flash-Lite): 130 commands **122/130**, median 1.5 s;
+  8 whole tasks **8/8 in 42 s** (NVIDIA the same day: 5/8, 167 s).
 - **The hosted model sometimes returns 200 with an empty answer** (1 in 5 in the
   benchmark), and on 2026-09-25 came in runs. `LLM` makes 3 attempts, then raises.
   On 2026-10-03, 6 of 59 eval calls in one run.
