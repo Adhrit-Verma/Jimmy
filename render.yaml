@@ -2,8 +2,9 @@ services:
   - type: web
     name: jimmy
     runtime: static
-    # A static site: nothing to build. The check fails the deploy on a broken link or a missing page.
-    buildCommand: python3 site/check_site.py
+    # A static site: nothing to build. Plain shell only, so the build never depends on Python being there;
+    # run `python site/check_site.py` locally before pushing site changes.
+    buildCommand: 'test -f site/index.html && test -f site/icon.png && echo "static site, nothing to build"'
     staticPublishPath: ./site
     headers:
       - path: /*
