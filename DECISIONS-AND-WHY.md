@@ -2412,3 +2412,26 @@ Flash-Lite, 3.8 failing each time it was tried):
   the window title names. After both fixes: **8/8 in 42 s**.
 
 Open: whether `gemini-3.8-flash` recovers (it was the human's choice).
+
+### D59 — The website's Render service, and `requirements.txt` that a Linux host can read
+
+**2026-11-01.** The website (`site/`, a static folder) was first deployed to a Render *Python
+web service*. That runtime ignores `render.yaml` and runs `pip install -r requirements.txt`,
+which is the Windows desktop app's list. It failed on every push, at `PyAudioWPatch`
+(no Linux wheels at all); `webrtcvad-wheels` and `windows-capture` have none either.
+
+What was done, in the order it was tried:
+- The right fix is a **Static Site** (Render's Blueprint from `render.yaml`, or a Static Site
+  with Build Command `echo "no build"` and Publish Directory `./site`). That runs no pip.
+  The human made one; the old service kept failing, because it kept rebuilding on every push.
+- `site/serve.py` (stdlib only, the same four headers as `render.yaml`) lets an existing
+  Python web service serve the site with Build Command `echo "no build"`.
+- **`requirements.txt` now marks the five Windows-only packages** (`comtypes`,
+  `PyAudioWPatch`, `uiautomation`, `webrtcvad-wheels`, `windows-capture`) with
+  `; sys_platform == "win32"`. On Windows the file installs the same set as before; on
+  Linux pip skips them. Checked with pip's resolver for Linux / CPython 3.14: all 27 other
+  pins resolve to wheels. So the old service's build now passes, though it installs ~1 GB of
+  desktop-app packages for nothing: delete or suspend it.
+
+Not done: `render.yaml` can't create or fix a service from the repo; the dashboard can.
+`pip freeze` rewrites the file without markers; CLAUDE.md's traps say to put them back.
