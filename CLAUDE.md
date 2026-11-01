@@ -231,7 +231,7 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `docs/RESEARCH-AGENT-2026-10.md` | research and a measured roadmap for the agent, voice and footprint (2026-10-07). Built as D47–D52; the flagged items still need the measurements it names. |
 | `docs/img/` | README screenshots: the real overlay and model on **invented** pages, never real captures (they hold personal data). |
 | `data/` | the capture DB and blurred thumbnails. Never commit. |
-| `site/` | the public website (static, TableFox design, sky accent), hosted on Render via `render.yaml`. `python site/check_site.py` must print `ok`: one github.com link only (the hero button). Every number on it comes from a D-record; update it when those change. Render must create it as a **Blueprint** (or a Static Site): a hand-made Python web service ignores `render.yaml` and fails on the Windows-only `requirements.txt`. An existing Python web service that must be kept serves it with `site/serve.py` instead (Build Command `echo "no build"`, Start Command `python site/serve.py`; stdlib only, same headers as `render.yaml`, which it must stay in step with). Its screenshots in `site/img/` are copies of `docs/img/`; `*.png` is git-ignored, so new site images need a `!site/...` line in `.gitignore` or they never reach the deploy. |
+| `site/` | the public website (static, TableFox design, sky accent), hosted on Render via `render.yaml`. `python site/check_site.py` must print `ok`: one github.com link only (the hero button). Every number on it comes from a D-record; update it when those change. Render must create it as a **Blueprint** (or a Static Site): a hand-made Python web service ignores `render.yaml` and runs `pip install -r requirements.txt` (since D59 that no longer fails, but it installs ~1 GB of desktop-app packages for nothing: still make it static). An existing Python web service that must be kept serves it with `site/serve.py` instead (Build Command `echo "no build"`, Start Command `python site/serve.py`; stdlib only, same headers as `render.yaml`, which it must stay in step with). Its screenshots in `site/img/` are copies of `docs/img/`; `*.png` is git-ignored, so new site images need a `!site/...` line in `.gitignore` or they never reach the deploy. |
 
 ---
 
@@ -556,6 +556,7 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   a screen search plan must say "type X in the search box and press enter".
 - **On battery the webcam loop runs at half rate** (D47 `power.constrained`): a test that
   times the presence thread must pin `pres.power.constrained` (stage 9 does).
+- **`requirements.txt` carries `; sys_platform == "win32"` on its five Windows-only packages** (comtypes, PyAudioWPatch, uiautomation, webrtcvad-wheels, windows-capture). Without them a Linux host (Render, CI) can't `pip install -r` it: PyAudioWPatch, webrtcvad-wheels and windows-capture have no Linux wheels. `pip freeze > requirements.txt` drops the markers: put them back.
 - **Ollama loads qwen3 at its full context** (256k: 37.5 GB asked, D53). A local model for
   this laptop needs a Modelfile with `num_ctx` (`qwen3-4b-8k` is one), and a thinking model
   spends its whole `max_tokens` thinking: use an instruct (non-thinking) variant.
