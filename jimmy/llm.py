@@ -47,6 +47,11 @@ def api_key(env: str | None = None) -> str | None:
         key = os.environ.get(name)
         if key:
             return key.strip()
+    from . import install                  # D60: keys typed in onboarding, DPAPI-encrypted
+    stored = install.secrets() if install.SECRETS.exists() else {}
+    for name in names:
+        if stored.get(name):
+            return stored[name]
     for name in names:
         try:
             import winreg

@@ -32,3 +32,4 @@ typing_extensions==4.16.0
 uiautomation==2.0.29 ; sys_platform == "win32"
 webrtcvad-wheels==2.0.14 ; sys_platform == "win32"
 windows-capture==2.0.1 ; sys_platform == "win32"
+winocr==0.0.15 ; sys_platform == "win32"

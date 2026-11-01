@@ -1,0 +1,109 @@
+# D61: build Jimmy-Setup.exe on one fresh Windows VM, then install and test it on another.
+# The test VM is an independent system: it has never seen this repo's .venv, Node modules,
+# CUDA toolkit or data. Python, Node and CUDA are taken off PATH before anything runs, so
+# Jimmy must bring everything it needs itself.
+name: installer
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["installer/**", "overlay/**", "ambient/**", "jimmy/**", "requirements.txt", ".github/workflows/installer.yml"]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "24" }
+      - name: Tools for the build
+        run: python -m pip install pillow
+      - name: Overlay packages
+        working-directory: overlay
+        run: npm ci
+      - name: Build the installer
+        env: { CSC_IDENTITY_AUTO_DISCOVERY: "false" }
+        run: python installer/build.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jimmy-setup
+          path: |
+            installer/out/Jimmy-Setup-*.exe
+            installer/out/Jimmy-Setup-*.exe.sha256
+          retention-days: 14
+
+  test-clean-machine:
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: jimmy-setup, path: setup }
+      - name: Install, set up, run, uninstall (dev tools hidden)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # An independent system: nothing of the runner's Python, Node or CUDA on PATH.
+          $env:PATH = "C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0;C:\Program Files\PowerShell\7"
+          foreach ($v in 'CUDA_PATH','PYTHONHOME','PYTHONPATH','VIRTUAL_ENV','pythonLocation','NODE_PATH') { Remove-Item "Env:$v" -ErrorAction SilentlyContinue }
+          $setup = (Get-ChildItem setup\Jimmy-Setup-*.exe | Select-Object -First 1).FullName
+          $want = (Get-Content (Get-ChildItem setup\*.sha256 | Select-Object -First 1)).Split(' ')[0]
+          $got = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLower()
+          if ($got -ne $want) { throw "setup.exe doesn't match its SHA-256" }
+          "setup: $setup ($([math]::Round((Get-Item $setup).Length/1MB)) MB), sha256 ok"
+
+          # 1. install per user, to D: (not C:), silently
+          $p = Start-Process $setup -ArgumentList '/S','/D=D:\Apps\Jimmy' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "install exit $($p.ExitCode)" }
+          if (-not (Test-Path D:\Apps\Jimmy\Jimmy.exe)) { throw "Jimmy.exe not installed" }
+          "installed: $((Get-ChildItem D:\Apps\Jimmy -Recurse | Measure-Object Length -Sum).Sum/1MB) MB on D:"
+
+          # 2. first run, headless: Jimmy's own Python, packages, the speech model (Lite, CPU)
+          $t = Get-Date
+          $p = Start-Process D:\Apps\Jimmy\Jimmy.exe -ArgumentList '--provision','--data','D:\JimmyData','--profile','lite','--gpu','0','--log','D:\provision.log' -Wait -PassThru
+          "provision: exit $($p.ExitCode) in $([int]((Get-Date)-$t).TotalSeconds) s"
+          Get-Content D:\provision.log | Select-String '\] (done|failed)|vcrtFrom|verify.*✗|FAILED' | ForEach-Object { $_.Line }
+          if ($p.ExitCode -ne 0) { Get-Content D:\provision.log -Tail 60; throw "provision failed" }
+
+          # 3. self-test: every native piece imports, doctor runs, Jimmy runs 20 s
+          $p = Start-Process D:\Apps\Jimmy\Jimmy.exe -ArgumentList '--self-test','--log','D:\selftest.log' -Wait -PassThru
+          Get-Content D:\selftest.log | Select-String 'self-test|"ok": false|msvcp140|cuda|ok  |FAIL' | ForEach-Object { $_.Line }
+          if ($p.ExitCode -ne 0) { Get-Content D:\selftest.log -Tail 80; throw "self-test failed" }
+          $vc = Select-String -Path D:\selftest.log -Pattern '"dll": "msvcp140.dll", "path": "([^"]+)"' | Select-Object -First 1
+          "C++ runtime loaded from: $($vc.Matches[0].Groups[1].Value)"
+          if ($vc -and $vc.Matches[0].Groups[1].Value -notlike 'D:\JimmyData\runtime\*') { throw "msvcp140 came from outside Jimmy's own Python" }
+
+          # 3b. an update over the top keeps the setup (Jimmy's Python, the pointer, the data)
+          $p = Start-Process $setup -ArgumentList '/S','/D=D:\Apps\Jimmy' -Wait -PassThru
+          "update: exit $($p.ExitCode); runtime kept: $(Test-Path D:\JimmyData\runtime\ready.json); pointer kept: $(Test-Path $env:APPDATA\Jimmy\location.json)"
+          if (-not (Test-Path D:\JimmyData\runtime\ready.json) -or -not (Test-Path $env:APPDATA\Jimmy\location.json)) { throw "an update undid the setup" }
+
+          # 4. what landed on C:
+          "on C: (APPDATA\Jimmy):"; Get-ChildItem "$env:APPDATA\Jimmy" | ForEach-Object { "  $($_.Name) $($_.Length) B" }
+          $c = (Get-ChildItem "$env:APPDATA\Jimmy" -Recurse -File | Measure-Object Length -Sum).Sum
+          if ($c -gt 64KB) { throw "more than 64 KB on C: in APPDATA\Jimmy ($c B)" }
+          foreach ($d in "$env:LOCALAPPDATA\Jimmy", "$env:USERPROFILE\.cache\huggingface", "$env:USERPROFILE\.ollama") {
+            if (Test-Path $d) { "found on C: $d ($((Get-ChildItem $d -Recurse -File | Measure-Object Length -Sum).Sum/1MB) MB)" }
+          }
+          "data on D: $([math]::Round((Get-ChildItem D:\JimmyData -Recurse -File | Measure-Object Length -Sum).Sum/1MB)) MB, runtime $([math]::Round((Get-ChildItem D:\JimmyData\runtime -Recurse -File | Measure-Object Length -Sum).Sum/1MB)) MB"
+
+          # 5. uninstall silently: the app goes, the data stays (a silent uninstall never deletes it)
+          $p = Start-Process 'D:\Apps\Jimmy\Uninstall Jimmy.exe' -ArgumentList '/S' -Wait -PassThru
+          Start-Sleep 8
+          "uninstall exit $($p.ExitCode); app folder left: $(Test-Path D:\Apps\Jimmy\Jimmy.exe); runtime left: $(Test-Path D:\JimmyData\runtime); data kept: $(Test-Path D:\JimmyData\settings.json); C: pointer left: $(Test-Path $env:APPDATA\Jimmy)"
+          if (Test-Path D:\Apps\Jimmy\Jimmy.exe) { throw "uninstall left Jimmy.exe" }
+          if (Test-Path "$env:APPDATA\Jimmy") { throw "uninstall left APPDATA\Jimmy" }
+          if (Test-Path D:\JimmyData\runtime) { throw "uninstall left Jimmy's Python" }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: clean-machine-logs
+          path: |
+            D:\provision.log
+            D:\selftest.log
+            D:\JimmyData\logs\jimmy.log
+          retention-days: 14

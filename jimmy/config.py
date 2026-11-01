@@ -4,7 +4,11 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from . import install as _install
+
 ROOT = Path(__file__).resolve().parents[1]
+_install.prepare_environment()         # D60: an installed Jimmy's caches off C:; CUDA DLLs from pip
+_SETTINGS = _install.settings()
 
 # D44: KEY=value lines from .env at the repo root (git-ignored) fill in whatever the
 # process environment doesn't already set: the API keys, JIMMY_PROVIDER, JIMMY_MODEL.
@@ -15,7 +19,7 @@ try:
             os.environ.setdefault(_k.strip(), _v.strip().strip('"').strip("'"))
 except OSError:
     pass
-DATA_DIR = Path(os.environ.get("JIMMY_DATA") or ROOT / "data")
+DATA_DIR = _install.DATA                # D60: JIMMY_DATA, an installed copy's chosen folder, or <repo>/data
 MEMORY_DB = DATA_DIR / "jimmy.db"
 # D51 (A10): each request's trace also goes to this file as OpenTelemetry GenAI spans
 # (OTLP JSON, one line a request) for local tools: Jaeger, Phoenix, an OTel collector's
@@ -31,7 +35,7 @@ AMBIENT_DB = DATA_DIR / "ambient.db"   # read-only from here; the ambient layer 
 # endpoint. Free-tier limits aren't published (20 or 1,500 requests a day, by different
 # sources) and free-tier input may be read by Google's reviewers: see BACKUP_PROVIDER and
 # GEMINI_SCREENSHOTS below, and docs/PLAN-2026-10-31.md.
-PROVIDER = os.environ.get("JIMMY_PROVIDER") or "nvidia"
+PROVIDER = os.environ.get("JIMMY_PROVIDER") or _SETTINGS.get("provider") or "nvidia"   # D60: onboarding's choice
 OPENAI = PROVIDER == "openai"
 GEMINI = PROVIDER == "gemini"
 # Each endpoint and the environment variable its key lives in. A model goes to the

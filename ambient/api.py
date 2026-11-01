@@ -115,7 +115,9 @@ class OverlayAPI:
                     st = api.hooks["state"]()
                     _by(api.hooks["resume"], by="hotkey") if st.get("paused") else _by(api.hooks["pause"], 120, by="hotkey")
                 elif api.hooks.get(f"post_{route}"):      # D25: ask, quit, stop-voice
-                    api.hooks[f"post_{route}"](body)
+                    result = api.hooks[f"post_{route}"](body)
+                    if route.startswith(("settings", "storage")) and isinstance(result, dict):
+                        return self._json(result)          # D60: Settings shows what changed
                 else:
                     return self.send_error(404)
                 state = api.hooks["state"]()

@@ -843,6 +843,8 @@ class ContextBus:
         def go():
             power.background()
             try:
+                from . import storage
+                storage.enforce(self.store)          # D60: the user's retention and size cap first
                 before, after = self.store.compact()
                 mem.set_setting("last_compact", now_ms())
                 print(f"[db] compacted while you were away: {before / 1e6:.1f} -> {after / 1e6:.1f} MB")
@@ -851,6 +853,49 @@ class ContextBus:
             finally:
                 self._compacting = False
         threading.Thread(target=go, daemon=True, name="compact").start()
+
+    # --- storage the user controls (D60) ----------------------------------
+    def _enforce_storage(self) -> None:
+        from . import storage
+        power.background()
+        try:
+            storage.enforce(self.store)
+        except Exception as exc:
+            print(f"[storage] {type(exc).__name__}: {exc}")
+
+    def _storage_view(self) -> dict:
+        from jimmy import install
+        from . import storage
+        return {**storage.usage(), "settings": install.settings(), "installed": install.INSTALLED}
+
+    def _change_settings(self, body: dict) -> dict:
+        """Save what Settings changed. Limits apply now; the profile, webcam and voice at the
+        next start (they decide what loads)."""
+        from jimmy import install
+        from . import storage
+        changes = body.get("changes") if isinstance(body.get("changes"), dict) else {}
+        saved = install.save_settings(changes)
+        if "retention_days" in changes:
+            config.RETENTION_DAYS = int(saved["retention_days"])
+        if "storage_cap_gb" in changes:
+            config.STORAGE_CAP_GB = float(saved["storage_cap_gb"])
+        if {"retention_days", "storage_cap_gb"} & set(changes):
+            threading.Thread(target=self._enforce_storage, daemon=True, name="storage").start()
+        restart = bool({"profile", "webcam", "voice", "local_ai", "whisper_model", "whisper_device",
+                        "provider"} & set(changes))
+        print(f"[settings] changed {sorted(changes)}" + ("; applies after a restart" if restart else ""))
+        if self._api:
+            self._api.publish({"type": "settings_changed", "restart": restart})
+        return {"settings": saved, "restart": restart, "usage": storage.usage()}
+
+    def _storage_clear(self, what: str) -> dict:
+        from . import storage
+        try:
+            freed = storage.clear(what, self.store)
+        except ValueError:
+            return {"error": "unknown"}
+        print(f"[storage] cleared {what}: {freed / 1e6:.1f} MB")
+        return {"freed": freed, "usage": storage.usage()}
 
     # --- overlay (Stage 4) ------------------------------------------------
     def overlay_state(self) -> dict:
@@ -913,7 +958,10 @@ class ContextBus:
         from .api import OverlayAPI
         root = config.ROOT / "overlay"
         exe = root / "node_modules" / "electron" / "dist" / "electron.exe"
-        if not (root / "dist" / "index.html").exists() or not exe.exists():
+        packaged = os.environ.get("JIMMY_OVERLAY_EXE")      # D61: the installed Jimmy.exe carries its own page
+        if packaged and Path(packaged).exists():
+            exe, root = Path(packaged), Path(packaged).parent
+        elif not (root / "dist" / "index.html").exists() or not exe.exists():
             print("[overlay] not built: cd overlay && npm install && npm run build")
             return
         from jimmy import wiki
@@ -954,6 +1002,10 @@ class ContextBus:
                                     {"type": "toast", "text": self._asker.accept(), "icon": "yes"}),
                                 # D41: the Memory tab: reminders, goals, memories, editable
                                 "get_memory": lambda p: memory_lists(mem),
+                                # D60: Settings -> Storage & performance
+                                "get_storage": lambda p: self._storage_view(),
+                                "post_settings": lambda b: self._change_settings(b),
+                                "post_storage_clear": lambda b: self._storage_clear(str(b.get("what", ""))),
                                 "post_memory": lambda b: self._edit_memory(mem, b),
                                 **timeline_hooks(self.store)}).start()
         self._asker = Asker(self.store, self._api.publish,
@@ -1045,7 +1097,7 @@ class ContextBus:
         # Piped: a GUI program's console output goes nowhere on Windows unless it is,
         # and page errors must reach this terminal (D26).
         self._overlay_proc = subprocess.Popen(
-            [str(exe), str(root)], env=env, cwd=str(root), stdout=subprocess.PIPE,
+            [str(exe)] + ([] if packaged else [str(root)]), env=env, cwd=str(root), stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
 
         def relay(stream):
@@ -1152,7 +1204,10 @@ class ContextBus:
                 self._start_overlay()
             except Exception as exc:  # the overlay is optional; capture must go on
                 print(f"[overlay] disabled: {type(exc).__name__}: {exc}")
-        threading.Thread(target=self._index_loop, daemon=True, name="indexer").start()
+        if config.RETENTION_DAYS or config.STORAGE_CAP_GB:      # D60: the user's limits, at startup too
+            threading.Thread(target=self._enforce_storage, daemon=True, name="storage").start()
+        if config.INDEX_EVERY_S:            # D60: 0 without local AI (no Ollama to embed with)
+            threading.Thread(target=self._index_loop, daemon=True, name="indexer").start()
         if self.demo and self._api:
             from . import demo
             script = None if self.demo == "default" else Path(self.demo).read_text(encoding="utf-8")

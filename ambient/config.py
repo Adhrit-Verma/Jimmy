@@ -10,7 +10,8 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA_DIR = Path(os.environ.get("JIMMY_AMBIENT_DATA") or ROOT / "data")
+from jimmy import install as _install  # noqa: E402  (D60: one data folder for both halves)
+DATA_DIR = Path(os.environ.get("JIMMY_AMBIENT_DATA") or _install.DATA)
 MODELS_DIR = Path(os.environ.get("JIMMY_AMBIENT_MODELS") or ROOT / "models")
 DB_PATH = DATA_DIR / "ambient.db"
 THUMB_DIR = DATA_DIR / "thumbs"
@@ -377,3 +378,28 @@ VECTOR_INT8 = False
 # too little UI text to rely on (OCR reads the thumbnail), stays full size.
 SMALL_THUMBS_UNCHANGED_TEXT = False
 THUMB_SMALL_WIDTH = 480
+
+# --- the user's own choices (D60) ---------------------------------------------------------
+# An installed Jimmy keeps what the user picked in onboarding and Settings in
+# <data>/settings.json (jimmy/install.py). Applied over the defaults above, last, so
+# everything in this file stays the reference. A development checkout has no settings.json
+# and nothing here changes it.
+if _install.SETTINGS.exists():
+    _S = _install.settings()
+    PRESENCE = bool(_S["webcam"])
+    GPU_RELEASE_AWAY_S = float(_S["gpu_release_away_s"])
+    VOICE_ENGINE = str(_S["voice"]) or VOICE_ENGINE
+    if _S["whisper_model"]:
+        WHISPER_MODEL = str(_S["whisper_model"])
+    if _S["whisper_device"]:
+        WHISPER_DEVICE = str(_S["whisper_device"])
+        if WHISPER_DEVICE == "cpu":
+            WHISPER_FALLBACK_MODEL = "base"          # CPU-only PCs: the lighter multilingual model
+    if not _S["local_ai"]:
+        INDEX_EVERY_S = 0                            # no Ollama: keyword search only, no indexer
+        GPU_RELEASE_AWAY_S = 0
+    RETENTION_DAYS = int(_S["retention_days"])
+    STORAGE_CAP_GB = float(_S["storage_cap_gb"])
+else:
+    RETENTION_DAYS = 0                               # 0 = keep everything (the developer's copy)
+    STORAGE_CAP_GB = 0.0

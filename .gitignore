@@ -26,3 +26,9 @@ models/voices-v1.0.bin
 models/turn-detector/
 models/silero_vad.onnx
 models/jimmy.onnx
+
+# D60: installer build outputs (installer/build.py)
+installer/stage/
+installer/out/
+installer/cache/
+installer/dev-install/

@@ -10,6 +10,10 @@ const { app, BrowserWindow, clipboard, screen, shell, ipcMain, globalShortcut } 
 const fs = require("fs");
 const path = require("path");
 
+// D61: an installed Jimmy keeps Chromium's caches beside itself (the drive the user chose),
+// in both modes (launcher and overlay), never in %APPDATA% on C:.
+if (app.isPackaged) app.setPath("userData", path.join(path.dirname(process.execPath), "userdata"));
+
 const API = process.env.JIMMY_OVERLAY_URL;
 const TOKEN = process.env.JIMMY_OVERLAY_TOKEN;
 const DEMO = process.argv.includes("--demo");
@@ -23,6 +27,15 @@ const INSIGHTS_HOTKEY = "Control+Alt+I";
 const CURTAIN_HOTKEY = "Control+Alt+L";   // D34: the privacy curtain, by hand
 const OPEN_TIMELINE = process.argv.includes("--timeline");
 
+// D61: the installed Jimmy.exe, started by the user (Start menu, desktop, sign-in), is the
+// launcher: the onboarding the first time, then it starts Jimmy's Python and quits. Started
+// by that Python with the API in its environment, it's the overlay, as before.
+const SETUP_FLAGS = ["--onboarding", "--provision", "--self-test"];
+if (!API && !DEMO && !SNAPSHOT && !OPEN_TIMELINE && (app.isPackaged || process.argv.some((a) => SETUP_FLAGS.includes(a)))) {
+  require("./launcher.cjs")();
+  return;
+}
+
 let win = null;
 let timeline = null;
 // D33: voice navigation ("next", "scroll down") goes to whichever Jimmy surface you
@@ -35,7 +48,7 @@ let quitting = false;
 // frameless with its own drag bar, same page bundle at #timeline. D31: the same
 // window has an Insights view (#insights), and can open at a moment (?ts=).
 function openTimeline(view, params) {
-  view = ["insights", "memory"].includes(view) ? view : "timeline";
+  view = ["insights", "memory", "settings"].includes(view) ? view : "timeline";
   const p = params || {};
   const deep = {};                                   // only what the page understands
   if (Number.isFinite(Number(p.ts)) && p.ts) deep.ts = String(Number(p.ts));
@@ -67,6 +80,12 @@ function openTimeline(view, params) {
   const qs = new URLSearchParams(deep).toString();
   timeline.loadFile(path.join(__dirname, "dist", "index.html"), { hash: qs ? `${view}?${qs}` : view });
   timeline.once("ready-to-show", () => timeline.show());
+  // Its page errors reach the log too, like the overlay's (D26); a blank Settings tab said nothing (D60).
+  timeline.webContents.on("console-message", (e, ...args) => {
+    const level = e.level ?? args[0];
+    const message = e.message ?? args[1];
+    if (level === "error" || level === "warning" || level >= 2) console.error(`[timeline page] ${message}`);
+  });
   timeline.on("focus", () => { target = "timeline"; });
   timeline.on("close", (e) => {
     if (quitting) return;
@@ -137,7 +156,7 @@ async function call(route, body) {
   });
   if (!res.ok) throw new Error(`${route}: HTTP ${res.status}`);
   const state = await res.json();
-  send({ type: "state", ...state });
+  if (!/^(settings|storage)/.test(route)) send({ type: "state", ...state });   // D60: Settings' replies aren't state
   return state;
 }
 
@@ -281,6 +300,19 @@ app.whenReady().then(() => {
 
   ipcMain.on("pointer-over-ui", (_e, over) => win.setIgnoreMouseEvents(!over, { forward: true }));
   ipcMain.handle("api", (_e, route, body) => call(route, body));
+  // D60: Settings. Start with Windows (HKCU Run, the packaged exe only), the data folder,
+  // and the onboarding again (change the profile, repair).
+  ipcMain.handle("login-item", (_e, on) => {
+    if (!app.isPackaged) return null;
+    if (typeof on === "boolean") app.setLoginItemSettings({ openAtLogin: on, path: process.execPath });
+    return app.getLoginItemSettings({ path: process.execPath }).openAtLogin;
+  });
+  ipcMain.on("open-data", (_e, dir) => { if (typeof dir === "string" && fs.existsSync(dir)) shell.openPath(dir); });
+  ipcMain.on("run-setup", () => {
+    if (!app.isPackaged) return;
+    require("child_process").spawn(process.execPath, ["--onboarding"], { detached: true, stdio: "ignore",
+      env: Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("JIMMY_OVERLAY"))) }).unref();
+  });
   ipcMain.handle("get", (_e, route, params) => get(route, params));
   ipcMain.on("open-timeline", (_e, view, params) => openTimeline(view, params));
   ipcMain.on("copy", (_e, text) => clipboard.writeText(String(text).slice(0, 20_000)));
@@ -307,7 +339,8 @@ app.whenReady().then(() => {
   globalShortcut.register(CURTAIN_HOTKEY, () => call("curtain", { on: !curtain }).catch(() => {}));
 
   if (OPEN_TIMELINE) {
-    const t = openTimeline(process.argv.includes("--insights") ? "insights" : process.argv.includes("--memory") ? "memory" : "timeline");
+    const t = openTimeline(process.argv.includes("--insights") ? "insights" : process.argv.includes("--memory") ? "memory"
+      : process.argv.includes("--settings") ? "settings" : "timeline");
     if (SNAPSHOT) {
       t.webContents.once("did-finish-load", () => setTimeout(async () => {
         const img = await t.webContents.capturePage();

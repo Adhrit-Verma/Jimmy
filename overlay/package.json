@@ -1,7 +1,7 @@
 {
   "name": "jimmy-overlay",
   "version": "1.0.0",
-  "description": "",
+  "description": "Jimmy, the ambient assistant for Windows",
   "main": "main.cjs",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -10,14 +10,15 @@
     "demo": "vite build && electron . --demo"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Adhrit Verma",
+  "license": "MIT",
   "type": "module",
   "private": "true",
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^6.1.1",
     "electron": "^44.4.5",
+    "electron-builder": "^26.18.0",
     "tailwindcss": "^4.3.3",
     "vite": "^8.3.1"
   },
@@ -26,5 +27,65 @@
     "motion": "^13.4.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
+  },
+  "build": {
+    "appId": "dev.jimmy.ambient",
+    "productName": "Jimmy",
+    "copyright": "Copyright © 2026 Adhrit Verma",
+    "directories": {
+      "output": "../installer/out",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "launcher.cjs",
+      "setup-preload.cjs",
+      "dist/**",
+      "build/icon.ico",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../installer/stage/jimmy",
+        "to": "jimmy"
+      },
+      {
+        "from": "../installer/stage/tools",
+        "to": "tools"
+      }
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "Jimmy-Setup-${version}.${ext}",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Jimmy",
+      "uninstallDisplayName": "Jimmy",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "installerSidebar": "build/installerSidebar.bmp",
+      "uninstallerSidebar": "build/uninstallerSidebar.bmp",
+      "include": "build/installer.nsh",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
+    }
   }
 }

@@ -17,4 +17,7 @@ contextBridge.exposeInMainWorld("jimmy", {
   releaseFocus: () => ipcRenderer.send("release-focus"),
   copy: (text) => ipcRenderer.send("copy", String(text)),
   openUrl: (url) => ipcRenderer.send("open-url", String(url)),
+  loginItem: (on) => ipcRenderer.invoke("login-item", on),           // D60: Settings
+  openData: (dir) => ipcRenderer.send("open-data", String(dir)),
+  runSetup: () => ipcRenderer.send("run-setup"),
 });
