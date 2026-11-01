@@ -16,6 +16,8 @@ overlay/node_modules/
 overlay/dist/
 *.png
 !docs/img/*.png
+!site/icon.png
+!site/img/*.png
 Raya (Slowed).mp3
 
 # D53: optional models, downloaded on this machine (see ambient/config.py); too big to commit
