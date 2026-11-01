@@ -135,8 +135,43 @@ def test_d54_backup_on_outage_tools_and_streams():
         raise AssertionError("a stream that has spoken must not switch mid-sentence")
     g2._stream = real
     assert got == ["Hel"]
-    assert g.tool_fallbacks()[0] == "backup:" + jc.NVIDIA_TOOLS_MODEL, "a slow Gemini step also asks NVIDIA"
+    assert "backup:" + jc.NVIDIA_TOOLS_MODEL in g.tool_fallbacks(), "a slow Gemini step also asks NVIDIA"
     print("ok  D54: an outage moves tool steps and streams to NVIDIA; never mid-sentence; slow steps ask it too")
+
+
+def test_d54_overloaded_or_slow_gemini_gives_way():
+    """2026-11-01, live: gemini-3.8-flash on the free tier timed out or said 503 on 5 of 5
+    calls, and doctor's first word took 107 s. 3.5 Flash-Lite answered in 0.6-3.8 s."""
+    asked = []
+
+    def gem(req):
+        body = json.loads(req.content)
+        asked.append((body["model"], body.get("stream", False)))
+        if body["model"] == "gemini-3.8-flash":
+            return httpx.Response(503, json={"error": {"message": "This model is currently experiencing high demand"}})
+        return _sse("from ", "lite") if body.get("stream") else _ok("from lite")
+
+    def nv(req):
+        return _ok("from nvidia")
+    g, _ = _pair(gem, nv)
+    g.fallbacks = ["gemini-3.5-flash-lite"]
+    assert g.chat([{"role": "user", "content": "hi"}]) == "from lite", "Gemini's own second model first"
+    assert asked == [("gemini-3.8-flash", False), ("gemini-3.5-flash-lite", False)], "one try each, no retries"
+    assert g._down_until == 0, "still on Gemini"
+    asked.clear()
+    assert "".join(g.chat_stream([{"role": "user", "content": "hi"}])) == "from lite"
+    assert asked == [("gemini-3.5-flash-lite", True)], "3.8 rests a minute: no 6 s wait before every answer"
+
+    def slow(req):
+        raise httpx.ReadTimeout("no first word in time", request=req)
+    g2, _ = _pair(slow, nv)
+    g2.fallbacks = ["gemini-3.5-flash-lite"]
+    t0 = time.time()
+    assert g2.chat([{"role": "user", "content": "hi"}]) == "from nvidia", "both slow: NVIDIA, not silence"
+    assert time.time() - t0 < 5, "no 60 s waits, no retries of a stuck model"
+    assert g2._deadline(True)["timeout"].read == jc.GEMINI_FIRST_WORD_S
+    assert LLM(key="n", model=jc.NVIDIA_MODEL, base_url=NVIDIA_URL)._deadline(True) == {}, "no backup: its own timeout"
+    print("ok  D54: an overloaded Gemini model gives way to 3.5 Flash-Lite, then NVIDIA; slow counts as down")
 
 
 def test_d54_models_go_to_their_own_provider():
@@ -280,19 +315,22 @@ def test_d55_stop_in_the_grace_window():
 def test_d55_unsure_asks_which_one_by_voice_or_button():
     two = [T("Search", "EditControl", (0, 0, 90, 20), frozenset({"value"}), hwnd=1),
            T("Search", "ButtonControl", (100, 0, 140, 20), frozenset({"invoke"}), hwnd=1)]
-    for answer, want in (("the second one", "ButtonControl"), ("search button", "ButtonControl"),
-                         ("yes", "EditControl")):
-        did = []
-        ag = Agent(Script(call("click", id=2, name="Search")), env(did, two))
+    # The model picked the button (id 2): it comes first, the cursor shows it, "yes" means it (D58).
+    for answer, want in (("the second one", "EditControl"), ("search button", "ButtonControl"),
+                         ("yes", "ButtonControl")):
+        did, kinds = [], []
+        e = env(did, two)
+        e["perform"] = lambda t, text: kinds.append(t.kind) or f"Done: {t.name}."      # which Search it was
+        ag = Agent(Script(call("click", id=2, name="Search")), e)
         out = ag.start("click search")
-        assert out.kind == "await" and out.data["choices"] == ["Search (box)", "Search (button)"], out
+        assert out.kind == "await" and out.data["choices"] == ["Search (button)", "Search (box)"], out
         assert ag.waiting_for_answer(), "the reply goes to the agent, not to 'nothing to confirm'"
         done = ag.answer(None, answer)
-        assert done.kind == "done" and ("perform", "Search", None) in did, (answer, done)
+        assert done.kind == "done" and kinds == [want], (answer, kinds)
     ag = Agent(Script(call("click", id=2, name="Search")), env([], two))
     ag.start("click search")
     assert ag.answer(None, "neither").data.get("cancelled")
-    print("ok  D55: not sure which: 'Search (box) or Search (button)?'; an ordinal, a name or yes picks one")
+    print("ok  D55: not sure which: the model's pick first, then the others; an ordinal, a name or yes (its pick)")
 
 
 def test_d55_d57_a_safe_plan_starts_and_is_played_back():
@@ -372,7 +410,7 @@ def test_d56_cards_through_the_asker():
         a, say, spoken, did = _asker(call("click", id=2, name="Search"), screen=two)
         ev = say("Jimmy, click search")
         card = _cards(ev)[-1]
-        assert card["template"] == "choice" and card["data"]["options"] == ["Search (box)", "Search (button)"], card
+        assert card["template"] == "choice" and card["data"]["options"] == ["Search (button)", "Search (box)"], card
         start = [e for e in ev if e["type"] == "answer_start"][-1]
         assert start["mode"] == "ask", "Jimmy's question: not D28's 'screen or earlier?' buttons"
         say("Search (button)")                                  # a tap sends the label, like saying it

@@ -699,8 +699,8 @@ def test_d51_a_local_model_is_the_last_fallback():
     try:
         cloud = jllm.LLM(key="k", transport=httpx.MockTransport(handler))
         fb = cloud.tool_fallbacks()
-        # the cloud's second model (none on Gemini: its backup is NVIDIA, D54), then the local one
-        assert fb[-1] == "local:qwen3:4b" and len(fb) == (1 if jcfg.GEMINI else 2), fb
+        # the cloud's second model (Gemini: 3.5 Flash-Lite, D54), then the local one
+        assert fb[-1] == "local:qwen3:4b" and len(fb) == 2, fb
         jllm._LOCAL_TOOLS["qwen3:4b"] = jllm.LLM(key="ollama", model="qwen3:4b", base_url=jcfg.LOCAL_BASE_URL,
                                                  transport=httpx.MockTransport(handler))
         msg = cloud.chat_tools([{"role": "user", "content": "hi"}], [], model="local:qwen3:4b")

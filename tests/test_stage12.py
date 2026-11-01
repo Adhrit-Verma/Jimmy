@@ -504,7 +504,7 @@ def test_p2_3_one_question_per_request():
     assert ag.start("close roam tab").say == "Which tab?"
     out = ag.answer(None, "the one which is right now")
     assert out.say == "Closing the current tab." and "already asked once" in llm.seen[2][-1]["content"]
-    assert "\"the current tab\" in a browser is the selected tab" in agent_mod.SYSTEM
+    assert "in a browser is the selected tab" in agent_mod.SYSTEM and "the window title names" in agent_mod.SYSTEM
     print("ok  P2-3: at most one ask_user per request; then the best guess (still confirmed)")
 
 

@@ -56,13 +56,21 @@ MODEL = os.environ.get("JIMMY_MODEL") or {"openai": "gpt-6-luna", "gemini": "gem
     PROVIDER, NVIDIA_MODEL)
 TOOLS_MODEL = os.environ.get("JIMMY_TOOLS_MODEL") or (MODEL if OPENAI or GEMINI else NVIDIA_TOOLS_MODEL)
 # A retired model (404/410) moves the chat to the next of these instead of failing.
-MODEL_FALLBACKS = {"openai": ("gpt-5.4-nano",), "gemini": ()}.get(PROVIDER, (NVIDIA_TOOLS_MODEL,))
+MODEL_FALLBACKS = {"openai": ("gpt-5.4-nano",), "gemini": ("gemini-3.5-flash-lite",)}.get(PROVIDER, (NVIDIA_TOOLS_MODEL,))
 # D54: a free tier runs out, and Google's had an outage or two. With this provider's key
 # also set, a call Gemini can't answer (quota 429, 5xx, timeout, empty, a bad key) goes
 # to NVIDIA's models in the same call, and Jimmy stays there until the quota could be
 # back: the next midnight Pacific for a daily quota, BACKUP_RETRY_S for anything else.
 BACKUP_PROVIDER = "nvidia" if GEMINI else None
 BACKUP_RETRY_S = 60
+# D54, measured 2026-11-01 on the free tier: gemini-3.8-flash timed out (60 s) or said 503
+# "high demand" on 5 of 5 calls (and 25-107 s when it answered); 3.7-flash 503/429;
+# 3.6-flash 2.6-4.3 s; 3.5-flash-lite 0.6-3.8 s; 3.1-flash-lite 1.2-5.1 s (whole answers).
+# So with a backup: one try per model, 3.5 Flash-Lite before NVIDIA (MODEL_FALLBACKS), and
+# a model that's only slow gives way: the first spoken word within GEMINI_FIRST_WORD_S, a
+# whole answer within GEMINI_ANSWER_S. An agent step already races its fallbacks (D45).
+GEMINI_FIRST_WORD_S = 6.0
+GEMINI_ANSWER_S = 25.0
 # D54: Gemini 3.8 Flash can't stop thinking ("minimal" is an error); "low" is the least.
 # A call that asks for thinking (cards) gets "medium". Thinking may not count against
 # max_tokens, but room is left in case it does.

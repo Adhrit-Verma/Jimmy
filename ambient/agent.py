@@ -61,8 +61,9 @@ For each request pick exactly one tool for the next step. Rules:
   Position words ("top left", "the third link", "top right icon") -> use the @x,y
   (% across, % down) each control in <screen> has. If the control isn't listed,
   `find_controls`. "Close <app>" -> close_app; a tab's close button is named
-  "Close (tab …)", and "the current tab" in a browser is the selected tab: its own
-  "Close (tab …)" button; "Close window" closes the whole app. Pass each control's
+  "Close (tab …)", and "the current tab" ("this tab") in a browser is the selected tab,
+  the one the window title names: its own "Close (tab …)" button; "Close window" closes
+  the whole app. Pass each control's
   name with its number: if the screen changed, the numbers did too.
 - Other windows: which apps or windows are open or running -> `list_windows`, then
   reply. Switching to an app -> focus_window. Minimize, maximize or restore an app
@@ -837,6 +838,9 @@ class Agent:
             if ok:
                 return self._auto(t, call_id, name, args, target)
             if name == "click" and len(cands) >= 2:
+                # The model's own pick first: the cursor shows it, and "yes" means it (D58: "close
+                # this tab" -> the model chose Gmail, the title's tab; "yes" pressed YouTube's).
+                cands = [target] + [c for c in cands if c is not target] if target is not None else cands
                 return self._choose(t, call_id, name, args, cands)
         # Risky, not sure, or AUTONOMY "always": its own yes.
         t.pending = {"kind": "risky" if risky else "act", "call_id": call_id, "name": name, "args": args,

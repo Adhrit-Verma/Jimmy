@@ -139,9 +139,13 @@ class LLM:
         # D54: the default client on a free tier gets the other provider as its backup.
         self.backup: LLM | None = None
         self._down_until = 0.0
+        self._model_down: dict[str, float] = {}   # D54: a model that just failed rests (BACKUP_RETRY_S)
         if default and config.BACKUP_PROVIDER and transport is None:   # a test's client never reaches out
             url, env = config.ENDPOINTS[config.BACKUP_PROVIDER]
-            b = LLM(key=api_key(env), model=config.NVIDIA_MODEL, base_url=url)
+            # D58: the backup has limits too. On 2026-11-01 gpt-oss hung while Gemini was down
+            # and, with 3 tries of 60 s, one eval step took 186 s.
+            b = LLM(key=api_key(env), model=config.NVIDIA_MODEL, base_url=url, attempts=2,
+                    read_timeout_s=config.GEMINI_ANSWER_S)
             b.tools_model, b.fallbacks = config.NVIDIA_TOOLS_MODEL, [config.NVIDIA_TOOLS_MODEL]
             self.backup = b if b.key else None
 
@@ -282,6 +286,61 @@ class LLM:
         return {k: v for k, v in (("prompt", u.get("prompt_tokens")), ("cached", cached),
                                   ("out", u.get("completion_tokens"))) if v is not None}
 
+    def _chain(self, first: str | None = None) -> list[str]:
+        """D54: this provider's models to try in turn before the backup, one try each: the
+        one asked for, then the fallbacks (Gemini 3.8 overloaded -> 3.5 Flash-Lite).
+        Gemini without a backup too (an overloaded model is usual on its free tier); other
+        providers without one: just the one (D43's 404/410 fallbacks work as before)."""
+        first = first or self.model
+        models = list(dict.fromkeys([first, *self.fallbacks])) if self.backup is not None or self.gemini else [first]
+        if self.backup is None:
+            return models                              # nobody else to ask: try them all
+        # A model that just failed rests, so each request doesn't wait out its deadline
+        # again (2026-11-01: 6 s on an overloaded 3.8 before every answer from 3.5).
+        now = time.time()
+        return [m for m in models if self._model_down.get(m, 0) <= now]
+
+    def _failed(self, model: str, exc: LLMError) -> None:
+        if self.backup is not None:
+            daily = exc.status == 429 and any(w in str(exc).lower() for w in ("perday", "per day", "daily"))
+            self._model_down[model] = time.time() + (_pacific_midnight_in() if daily else config.BACKUP_RETRY_S)
+            print(f"[jimmy] {model} failed ({str(exc)[:80]!r}); trying the next", file=sys.stderr, flush=True)
+
+    def _tries(self) -> int:
+        """With a backup a failing model isn't retried; the next one is asked (D54)."""
+        return 1 if self.backup is not None else self.attempts
+
+    def _deadline(self, stream: bool) -> dict:
+        """D54: with a backup, a model that is only slow gives way too. On 2026-11-01 the
+        free tier's gemini-3.8-flash took 25-107 s or timed out; Jimmy must not go silent
+        that long. The first word within GEMINI_FIRST_WORD_S; a whole answer within
+        GEMINI_ANSWER_S. Without a backup, the client's own timeout."""
+        if self.backup is None:
+            return {}
+        return {"timeout": httpx.Timeout(config.GEMINI_FIRST_WORD_S if stream else config.GEMINI_ANSWER_S,
+                                         connect=config.CONNECT_TIMEOUT_S)}
+
+    def _first_that_speaks(self, tries: list, other) -> Iterator[str]:
+        """D54: each way to answer in turn; the first that says a word keeps the floor and
+        never switches mid-sentence; if none does, the backup (`other`) answers."""
+        last = None
+        for model, make in tries:
+            sent = False
+            try:
+                for piece in make():
+                    sent = True
+                    yield piece
+                return
+            except LLMError as exc:
+                if sent:
+                    raise
+                last = exc
+                self._failed(model, exc)
+        last = last or LLMError("every model of this provider is resting", 503)
+        if not self._trip(last):
+            raise last
+        yield from other()
+
     def _require_key(self) -> None:
         if not self.configured:
             raise LLMError(f"no API key: set {config.API_KEY_ENV}")
@@ -292,12 +351,17 @@ class LLM:
         if (b := self._route()) is not None:
             return b.chat(messages, max_tokens=max_tokens, temperature=temperature, thinking=thinking)
         self._require_key()
-        try:
-            return self._once(self._body(messages, False, max_tokens, temperature, thinking))
-        except LLMError as exc:
-            if not self._trip(exc):
-                raise
-            return self.backup.chat(messages, max_tokens=max_tokens, temperature=temperature, thinking=thinking)
+        body, last = self._body(messages, False, max_tokens, temperature, thinking), None
+        for m in self._chain():
+            try:
+                return self._once({**body, "model": m})
+            except LLMError as exc:
+                last = exc
+                self._failed(m, exc)
+        last = last or LLMError("every model of this provider is resting", 503)
+        if not self._trip(last):
+            raise last
+        return self.backup.chat(messages, max_tokens=max_tokens, temperature=temperature, thinking=thinking)
 
     def tool_fallback(self) -> str | None:
         """D45: the second model an agent step asks when the first is too slow: the
@@ -331,25 +395,30 @@ class LLM:
         if (b := self._route()) is not None:
             return b.chat_tools(messages, tools, max_tokens=max_tokens, temperature=temperature)
         self._require_key()
-        try:
-            return self._tools_once(messages, tools, max_tokens, temperature, model)
-        except LLMError as exc:
-            if not self._trip(exc):
-                raise
-            return self.backup.chat_tools(messages, tools, max_tokens=max_tokens, temperature=temperature)
+        last = None
+        for m in self._chain(model or self.tools_model or self.model):
+            try:
+                return self._tools_once(messages, tools, max_tokens, temperature, m)
+            except LLMError as exc:
+                last = exc
+                self._failed(m, exc)
+        last = last or LLMError("every model of this provider is resting", 503)
+        if not self._trip(last):
+            raise last
+        return self.backup.chat_tools(messages, tools, max_tokens=max_tokens, temperature=temperature)
 
     def _tools_once(self, messages, tools, max_tokens, temperature, model) -> dict:
         body = {**self._body(messages, False, max_tokens, temperature, False), "tools": tools, "tool_choice": "auto",
                 "model": model or self.tools_model or self.model}
-        for attempt in range(self.attempts):
+        for attempt in range(self._tries()):
             try:
-                resp = self._http().post("/chat/completions", json=body)
+                resp = self._http().post("/chat/completions", json=body, **self._deadline(False))
             except httpx.HTTPError as exc:
-                if attempt == self.attempts - 1:
+                if attempt == self._tries() - 1:
                     raise LLMError(f"LLM unreachable: {type(exc).__name__}: {exc}") from exc
                 time.sleep(config.RETRY_WAIT_S)
                 continue
-            if resp.status_code in config.RETRY_STATUSES and attempt < self.attempts - 1:
+            if resp.status_code in config.RETRY_STATUSES and attempt < self._tries() - 1:
                 time.sleep(config.RETRY_WAIT_S)
                 continue
             if self._gone(resp, body):
@@ -371,35 +440,23 @@ class LLM:
         if (b := self._route()) is not None:
             return b.chat_stream(messages, max_tokens=max_tokens, temperature=temperature)
         self._require_key()
-        pieces = self._stream(self._body(messages, True, max_tokens, temperature))
+        body = self._body(messages, True, max_tokens, temperature)
         if self.backup is None:
-            return pieces
-        return self._or_backup(pieces, lambda: self.backup.chat_stream(messages, max_tokens=max_tokens,
-                                                                          temperature=temperature))
-
-    def _or_backup(self, pieces: Iterator[str], other) -> Iterator[str]:
-        """D54: a stream that fails before its first word goes to the backup; one that has
-        started speaking never switches mid-sentence."""
-        sent = False
-        try:
-            for piece in pieces:
-                sent = True
-                yield piece
-        except LLMError as exc:
-            if sent or not self._trip(exc):
-                raise
-            yield from other()
+            return self._stream(body)
+        tries = [(m, lambda m=m: self._stream({**body, "model": m})) for m in self._chain()]
+        return self._first_that_speaks(tries, lambda: self.backup.chat_stream(messages, max_tokens=max_tokens,
+                                                                                temperature=temperature))
 
     def _once(self, body: dict) -> str:
-        for attempt in range(self.attempts):
+        for attempt in range(self._tries()):
             try:
-                resp = self._http().post("/chat/completions", json=body)
+                resp = self._http().post("/chat/completions", json=body, **self._deadline(False))
             except httpx.HTTPError as exc:
-                if attempt == self.attempts - 1:
+                if attempt == self._tries() - 1:
                     raise LLMError(f"LLM unreachable: {type(exc).__name__}: {exc}") from exc
                 time.sleep(config.RETRY_WAIT_S)
                 continue
-            if resp.status_code in config.RETRY_STATUSES and attempt < self.attempts - 1:
+            if resp.status_code in config.RETRY_STATUSES and attempt < self._tries() - 1:
                 time.sleep(config.RETRY_WAIT_S)
                 continue
             if self._gone(resp, body):
@@ -411,7 +468,7 @@ class LLM:
             answer = (f.feed(msg.get("content") or "") + f.flush()).strip()
             if answer:
                 return answer
-            if attempt == self.attempts - 1:
+            if attempt == self._tries() - 1:
                 raise LLMError(EMPTY)
             # Measured: ~1 in 5 calls to the hosted model came back 200 and empty.
         raise LLMError("LLM retry exhausted")
@@ -419,10 +476,10 @@ class LLM:
     def _stream(self, body: dict) -> Iterator[str]:
         f = ThinkFilter()
         sent = False  # once text has reached the user, a retry would repeat it
-        for attempt in range(self.attempts):
+        for attempt in range(self._tries()):
             try:
-                with self._http().stream("POST", "/chat/completions", json=body) as resp:
-                    if resp.status_code in config.RETRY_STATUSES and attempt < self.attempts - 1:
+                with self._http().stream("POST", "/chat/completions", json=body, **self._deadline(True)) as resp:
+                    if resp.status_code in config.RETRY_STATUSES and attempt < self._tries() - 1:
                         time.sleep(config.RETRY_WAIT_S)
                         continue
                     if self._gone(resp, body):
@@ -450,11 +507,11 @@ class LLM:
                         yield tail
                     if sent:
                         return
-                    if attempt == self.attempts - 1:
+                    if attempt == self._tries() - 1:
                         raise LLMError(EMPTY)
                     # An empty answer: nothing reached the screen, so retrying is safe.
             except httpx.HTTPError as exc:
-                if attempt == self.attempts - 1 or sent:
+                if attempt == self._tries() - 1 or sent:
                     raise LLMError(f"LLM stream broke: {type(exc).__name__}: {exc}") from exc
                 time.sleep(config.RETRY_WAIT_S)
         raise LLMError("LLM retry exhausted")
