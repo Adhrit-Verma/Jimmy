@@ -75,7 +75,10 @@ function log(line) {
   const s = `${new Date().toISOString()} ${line}`;
   if (logFile) {
     try {
-      fs.mkdirSync(path.dirname(logFile), { recursive: true });
+      // Only when missing: a recursive mkdir of a drive root (a log at D:\x.log) can throw EPERM
+      // on Windows, and then the clean-machine test's logs were never written.
+      const dir = path.dirname(logFile);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       fs.appendFileSync(logFile, s + "\n");
     } catch { /* a log must never stop the setup */ }
   }
@@ -214,7 +217,7 @@ async function provision(opts, emit) {
   const fail = (step, msg) => { emit({ step, state: "failed", error: msg }); throw new Error(`${step}: ${msg}`); };
   const say = (step, extra) => emit({ step, ...extra });
   for (const d of [data, path.join(data, "cache"), path.join(data, "models"), path.join(data, "logs"), RUNTIME]) {
-    fs.mkdirSync(d, { recursive: true });
+    if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
   }
   log(`provision: data=${data} profile=${opts.profile} whisper=${whisper} gpu=${gpu} localAi=${localAi}`);
 
