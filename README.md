@@ -281,6 +281,33 @@ Fellowship", "Alex Rivera"), so no personal data appears.</sub>
 
 ---
 
+## 💿 Install on any Windows PC
+
+<p align="center"><img src="docs/img/jimmy-mark.png" width="96" alt="Jimmy's mark: a pill with listening bars"></p>
+
+For Windows 10 (22H2) or 11, 64-bit. No Python, Node, CUDA or admin rights needed.
+
+1. **Download** `Jimmy-Setup-<version>.exe` (about 170 MB) and its `.sha256`. Check it in PowerShell:
+   `(Get-FileHash .\Jimmy-Setup-1.0.0.exe).Hash` must equal the `.sha256` file's value.
+2. **Run it.** The setup isn't code-signed yet, so Windows shows *"Windows protected your PC"*:
+   click **More info → Run anyway**. Pick a folder on any drive.
+3. **Jimmy opens its own setup**: it checks your PC, asks where to keep your data (any drive)
+   and how much of the PC it may use (**Lite** ~2.5 GB, **Balanced** ~4.5 GB, **Full** ~11 GB with
+   local AI), takes a free Gemini or NVIDIA key (optional), then downloads its own Python and a
+   speech model. NVIDIA GPUs get fast GPU speech; other PCs use the processor.
+
+**What goes where.** Jimmy itself goes in the folder you pick in the setup. Your data, Jimmy's Python
+and its models go in the folder you pick on first start. **On C: only** a 55-byte file that
+remembers where your data is, the shortcuts and the uninstall entry. Nothing in Windows' own folders.
+
+**Afterwards**: Settings (Ctrl+Alt+T, then the Settings tab) shows what Jimmy uses and lets you set
+how many days to keep, a size cap, the profile, clean-ups and start with Windows. **Uninstalling**
+(Windows Settings → Apps) removes Jimmy and its Python and asks before deleting your data.
+
+Building the setup yourself: `python installer/build.py` (needs Node and internet) writes
+`installer/out/Jimmy-Setup-<version>.exe`. Each push to `installer/`, `overlay/`, `ambient/` or
+`jimmy/` builds it on a fresh GitHub Windows VM and tests it on another (`.github/workflows/installer.yml`).
+
 ## 🚀 Quick start
 
 **You need:** Windows 11, an NVIDIA GPU (built on a 6 GB RTX 4050), **Python 3.12**

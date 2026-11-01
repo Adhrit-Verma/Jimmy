@@ -39,7 +39,10 @@ Kokoro, int8 vectors and small thumbnails (D53 measured them: the GPU budget and
 are on). **D54–D57 (`docs/PLAN-2026-10-31.md`): Gemini 3.8 Flash on the free tier with an NVIDIA
 backup that can't run out; ask only when unsure (the human's amendment of non-negotiable 1);
 Intelligent UI (fixed answer templates: steps, choice, confirm, list, table, checklist, chart);
-plans played back live.** "Jimmy, …" → an
+plans played back live.** **D60–D62 (`docs/PLAN-2026-11-01-installer.md`): `Jimmy-Setup.exe`** —
+a per-user installer for any Windows 10/11 x64 PC (no admin, any drive), an onboarding in Jimmy's
+design that installs Jimmy's own Python and models into the data folder the user picks, Settings
+for storage/limits/profile, and Jimmy's mark. "Jimmy, …" → an
 evidence panel and a spoken answer, with no typing needed. Stage 3 (trigger gate) passed its 5-check
 list, blind-judged (D19–D22). Stage 4 is the Electron overlay (D23). Stage 5 is hybrid
 keyword + meaning recall and a timeline window (D24). Remaining work lives in
@@ -119,6 +122,9 @@ cd overlay; npm install; npm run build   # once, and after any change under over
 .\.venv\Scripts\python.exe tests\test_stage13.py  # 24 checks: D47–D52 (footprint, tool retrieval, checks, policy, speculation, flags)
 .\.venv\Scripts\python.exe tests\test_stage14.py  # 16 checks: D54/D58 Gemini + backup chain, D55 ask when unsure, D56 templates, D57 steps
 .\.venv\Scripts\python.exe -m ambient.ui         # self-check of the template validator (D56)
+.\.venv\Scripts\python.exe tests\test_stage15.py  # 6 checks: D60-D61 data folder/pointer, settings, DPAPI keys, storage limits, Settings API, setup pieces
+.\.venv\Scripts\python.exe installer\build.py     # D61: installer\out\Jimmy-Setup-<v>.exe (+ .sha256); needs Node + internet
+.\.venv\Scripts\python.exe installer\art.py       # D62: the icon and the installer's images from Jimmy's mark
 .\.venv\Scripts\python.exe tests\test_commands.py # the command matrix: 177 utterances, talk, a drill
 .\.venv\Scripts\python.exe tests\eval_trajectory.py  # live: 8 whole tasks on invented screens (success, calls, tokens)
 .\.venv\Scripts\python.exe tests\eval_agent.py    # live: 130 real commands through rules + agent (95 %); --system d41 = 71 %
@@ -132,6 +138,15 @@ cd overlay; npm install; npm run build   # once, and after any change under over
 ```
 
 Only one `ambient run` at a time (D35): a second one exits with a message.
+
+**The installed app (D61).** `Jimmy.exe` (Start menu) is the launcher: the onboarding the first
+time, then it updates packages if the lock changed and starts `pythonw -m ambient run` from
+`<data>\runtime\venv`, which starts `Jimmy.exe` again as the overlay (`JIMMY_OVERLAY_EXE`).
+Flags: `--onboarding` (again), `--provision --data D --profile lite|balanced|full [--gpu 0|1]
+[--local-ai 0|1] --log F` and `--self-test --log F` (headless, for the clean-machine test),
+`--onboarding --shot x.png --step N` (render a step). Test an install locally on a `subst`
+drive with PATH cut to Windows' folders and `CUDA_PATH` removed; `installer/dev-install` is the
+dev launcher's stand-in install folder.
 `ambient run` keeps its console in `data/logs/jimmy.log` (D45: 5 × 2 MB, rotating), with quoted
 text, card lines and the gate's reasons cut to their length and key-shaped strings scrubbed.
 
@@ -201,6 +216,18 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `overlay/src/Templates.jsx` | D56/D57: the cards (Steps, Choice, Confirm, List, Table, Checklist, Chart) and the live `StepsFloat`; every button says words through "ask". |
 | `tests/test_stage14.py` | D54–D57 check: Gemini's request and signatures, the backup, sure/unsure, "which one?", plans that start on their own, cards through the Asker. |
 | `docs/PLAN-2026-10-31.md` | the research and plan behind D54–D57 (Gemini's free tier and its limits; Intelligent UI). |
+| `jimmy/install.py` | D60: an installed copy: the "installed" marker, the data-folder pointer, `settings.json`, DPAPI-encrypted keys, caches off C:, CUDA DLL folders from pip. Stdlib only; imported first. |
+| `ambient/storage.py` | D60: what Jimmy uses per part, the user's retention and size cap (whole old days, never today), clearing caches. |
+| `ambient/setup.py` | D61: what the onboarding asks of Jimmy's Python: `verify` (every native import, where the C++ runtime loaded from), `models` (Whisper download with progress), `keys`/`settings` (on stdin). JSON lines. |
+| `installer/` | D61/D62: `build.py` (uv, hash-locked requirements, staged code, app-local C++ runtime, electron-builder), `art.py` (icon and NSIS images). `stage/`, `out/`, `cache/`, `dev-install/` are build outputs, git-ignored. |
+| `overlay/launcher.cjs` | D61: the installed Jimmy.exe's launcher, the onboarding's main process, the provisioner (uv, packages, models, Ollama), headless `--provision`/`--self-test`. |
+| `overlay/setup-preload.cjs` | D61: the onboarding page's only bridge. |
+| `overlay/src/Onboarding.jsx` | D61/D62: the first run, eight steps, in Jimmy's design. |
+| `overlay/src/Logo.jsx` | D62: Jimmy's mark, animated (the pill and its listening bars). |
+| `overlay/src/Settings.jsx` | D60: Settings → storage, limits, profile, clean-up, start with Windows (the timeline window's 4th tab). |
+| `overlay/build/` | D61: `installer.nsh` (welcome text, what stays on C:, update-safe uninstall), the icon and NSIS images. |
+| `.github/workflows/installer.yml` | D61: builds the setup on a fresh Windows VM and tests it on another (install to D:, setup, self-test, update, C: footprint, uninstall). |
+| `tests/test_stage15.py` | D60–D61 check. |
 | `ambient/logs.py` | D45: tees `ambient run`'s console into `data/logs/jimmy.log`, rotating, with captured text cut to lengths (`redact`). |
 | `jimmy/wiki.py` | D42: the user wiki in Open Knowledge Format: code pages (goals, memories, reminders, habits), model pages (projects, people, interests), index, verify. `data/okf/`. |
 | `tests/test_stage11.py` | D42 check: the agent with a scripted model, through the Asker, traces, calls by name, the wiki. |
@@ -556,7 +583,21 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   a screen search plan must say "type X in the search box and press enter".
 - **On battery the webcam loop runs at half rate** (D47 `power.constrained`): a test that
   times the presence thread must pin `pres.power.constrained` (stage 9 does).
-- **`requirements.txt` carries `; sys_platform == "win32"` on its five Windows-only packages** (comtypes, PyAudioWPatch, uiautomation, webrtcvad-wheels, windows-capture). Without them a Linux host (Render, CI) can't `pip install -r` it: PyAudioWPatch, webrtcvad-wheels and windows-capture have no Linux wheels. `pip freeze > requirements.txt` drops the markers: put them back.
+- **`requirements.txt` carries `; sys_platform == "win32"` on its Windows-only packages** (comtypes, PyAudioWPatch, uiautomation, webrtcvad-wheels, windows-capture, winocr). Without them a Linux host (Render, CI) can't `pip install -r` it: PyAudioWPatch, webrtcvad-wheels and windows-capture have no Linux wheels. `pip freeze > requirements.txt` drops the markers: put them back.
+- **A dev checkout never follows `%APPDATA%\Jimmy\location.json`** (D60): only code carrying
+  `jimmy-installed.json` does. Testing an install on this PC leaves that pointer behind; the
+  repo's `data\` is unaffected, by design.
+- **Nothing Jimmy downloads may live in the install folder** (D61): installing over an older
+  version runs its uninstaller and electron-builder's update wipes `$INSTDIR`. Jimmy's Python
+  is in `<data>\runtime`; the uninstaller's clean-up is inside `${ifNot} ${isUpdated}`.
+- **A changed `requirements.txt` needs `installer/build.py`** to relock (hashes) and a new
+  setup; installed copies update their packages at the next start (`ready.json`'s `lock`).
+- **The app-local C++ runtime goes next to the base interpreter** (`<data>\runtime\python\cpython-…`),
+  not the venv: a venv's python.exe launches the base one, whose folder Windows searches first.
+- **Windows tools write JSON with a BOM** (PowerShell `Set-Content -Encoding utf8`); the
+  launcher strips it before `JSON.parse`.
+- **A test's `OverlayAPI` must be `.start()`ed and `.stop()`ped**: `server.shutdown()` on one
+  that never served waits forever.
 - **Ollama loads qwen3 at its full context** (256k: 37.5 GB asked, D53). A local model for
   this laptop needs a Modelfile with `num_ctx` (`qwen3-4b-8k` is one), and a thinking model
   spends its whole `max_tokens` thinking: use an instruct (non-thinking) variant.

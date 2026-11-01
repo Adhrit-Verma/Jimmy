@@ -326,6 +326,16 @@ strip thumbnails (`/thumb?w=`), and deep links: `open_view` events and
    "hearing"; hear() → "heard" (taken / why not)
 ```
 
+## Installed copy (D60–D61)
+
+`Jimmy.exe` (Electron, `overlay/`) is the only thing installed. Its `launcher.cjs` owns the
+first run: checks, the onboarding window, then `uv` (shipped beside it) installs Python
+3.12 and the hash-locked packages into `<data>\runtime`. After that it starts
+`pythonw -m ambient run` with `JIMMY_OVERLAY_EXE` pointing back at itself, so the Python
+side starts the overlay as it does in a checkout. `jimmy/install.py` decides the data folder
+(a marker file says "installed"; `%APPDATA%\Jimmy\location.json` says where) and points every
+cache (Hugging Face, Ollama, uv) inside it; a dev checkout keeps `data/`.
+
 ## Boundaries for later stages
 
 - **Stage 3 continues** with TIP (web search provider) and ACTION (an approval

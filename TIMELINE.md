@@ -214,6 +214,16 @@ call, an unmeasured lip veto, no visible calibration, a flickering eye, a stale
 timeline after a forget, scroll in Claude). Checks: `tests\test_stage9.py` (14),
 matrix (154), eval 41/41.
 
+## Installer · **built 2026-11-01 (D60–D62)**
+
+`docs/PLAN-2026-11-01-installer.md`. `Jimmy-Setup.exe` (`python installer/build.py`): per
+user, no admin, any drive; first start downloads Jimmy's own Python and packages (hashes
+pinned) into a data folder the user picks, which also holds every cache (D60–D61). Settings
+→ storage, limits, profiles; onboarding with Jimmy's mark (D62). Checks: `tests\test_stage15.py`
+(6); a local clean-PATH test on a second drive (install, provision, self-test, update,
+uninstall; C: keeps 67 bytes); `.github/workflows/installer.yml` repeats it on a fresh VM.
+**Open:** a real second PC, and code signing (SmartScreen warns until then).
+
 ## Gemini, asking when unsure, Intelligent UI · **built 2026-10-31 (D54–D57)**
 
 `docs/PLAN-2026-10-31.md`. Gemini 3.8 Flash on the free tier with an NVIDIA backup in

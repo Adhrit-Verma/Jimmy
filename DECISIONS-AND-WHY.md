@@ -2435,3 +2435,93 @@ What was done, in the order it was tried:
 
 Not done: `render.yaml` can't create or fix a service from the repo; the dashboard can.
 `pip freeze` rewrites the file without markers; CLAUDE.md's traps say to put them back.
+
+---
+
+### D60 — An installed Jimmy: one data folder anywhere, the user's settings, storage they control
+
+**2026-11-01.** The human asked for Jimmy to install on other PCs, not tied to C:, with the
+user in control of cache, RAM and storage. `docs/PLAN-2026-11-01-installer.md` has the research.
+
+- **Where data lives** (`jimmy/install.py`, stdlib only, imported first by `jimmy/config.py`):
+  `JIMMY_DATA`, else, for an *installed* copy only, `%APPDATA%\Jimmy\location.json` (the one
+  small file on C:), else `<repo>\data`. "Installed" means the code carries
+  `jimmy-installed.json` (the build adds it). A development checkout never follows the
+  pointer, so testing an install on this PC can't move the developer's data (a test checks
+  both). `ambient/config.py` takes the same folder.
+- **Off C:**: an installed copy points `HF_HOME`, `OLLAMA_MODELS` and `UV_CACHE_DIR` at the data
+  folder; Electron's own cache goes beside Jimmy.exe (`userData`), in both of its modes.
+- **Settings** (`<data>\settings.json`): profile, Whisper model/device, webcam, local AI, voice,
+  provider, retention days, storage cap, GPU release. Applied last in `ambient/config.py`, only
+  if the file exists (a dev checkout is unchanged). No local AI → no indexer (`INDEX_EVERY_S=0`).
+- **Keys** typed in onboarding: DPAPI-encrypted in `<data>\secrets.bin`, read by `api_key`
+  after the environment. Passed to Python on stdin, never argv (argv shows in process lists).
+- **Storage** (`ambient/storage.py`): `usage()` per part; `enforce()` deletes whole old days
+  through `Store.forget` (text, speech, vectors and thumbnails together) to keep the
+  retention and the cap, never today; `clear()` empties the download cache, old logs or the
+  meaning index. Run at startup and with the idle compaction. API: `GET /storage`,
+  `POST /settings`, `POST /storage_clear` (POSTs for settings/storage now return their result).
+- **Settings tab** in the timeline window (Ctrl+Alt+T, then 4): usage bar, the data folder, the
+  limits (applied at once), the profile and switches (at the next start), clean-up buttons,
+  start with Windows, run setup again.
+- **CUDA from pip**: `cuda_dirs()` registers `site-packages/nvidia/*/bin` (both
+  `os.add_dll_directory` and `PATH`) before ctranslate2 loads.
+- `winocr` (Windows' own OCR) joins the requirements: `ambient doctor`'s only FAIL on a clean
+  install was "no OCR engine".
+
+### D61 — Jimmy-Setup.exe: per user, any drive, its own Python, tested on a clean machine
+
+**Build** (`python installer/build.py`, needs Node + internet): pinned `uv` 0.13.6 (SHA-256
+checked) ships inside Jimmy; the requirements are locked with hashes for Windows x64 /
+Python 3.12 (`requirements.lock`, and `requirements-gpu.lock` with `nvidia-cublas-cu12`); the
+code is staged with its "installed" marker; the Visual C++ runtime DLLs (≥ 14.40, checked)
+are carried app-locally; electron-builder makes an NSIS installer (172 MB).
+
+**Install** (`overlay/build/installer.nsh`): assisted, **per user** (no admin, no UAC), the folder
+on any drive, a welcome and folder page that say what stays on C:. **First start**
+(`overlay/launcher.cjs`, the onboarding's main process): `uv` installs Python 3.12.10 into
+`<data>\runtime`, the C++ runtime is copied next to the interpreter (found before System32's
+copy: onnxruntime fails on old ones), a venv gets the packages with `--require-hashes`,
+then `ambient.setup` saves the settings and keys, imports every native piece, and downloads the
+speech model with progress; Full adds Ollama's standalone zip (SHA-256 checked) and its models.
+The pointer is written last: until then the onboarding comes back.
+
+**Found by testing, fixed:**
+- Installing over an older version runs its uninstaller first, and electron-builder's update
+  wipes the install folder: the first upgrade test lost Jimmy's Python and the pointer. Now
+  Jimmy's Python lives in the data folder, and the uninstaller's clean-up runs only when
+  `${isUpdated}` is false.
+- An update that changes the packages: `ready.json` keeps a fingerprint of the lock files; at
+  the next start the launcher installs what changed (3 s in the test) before Jimmy runs.
+- The setup log grew one line per progress tick; a test API server that was never started
+  hung `shutdown()`; Windows tools write JSON with a byte-order mark (now tolerated).
+
+**Measured, this PC with its developer tools hidden** (PATH cut to Windows' folders,
+`CUDA_PATH` removed), installed to a `subst` drive J:: install 20 s; first start (Lite, CPU)
+71–436 s depending on what was already downloaded; self-test: every native module loads,
+`msvcp140.dll` from `J:\JimmyData\runtime\python\…`, both doctors pass, Jimmy runs 20 s; an
+update keeps the setup; started like a user it runs `pythonw` from the data folder and the
+overlay from J: (`[overlay] up`, `connected`, `mic: listening`); on C: only `location.json`
+(55 B) and `data-path.txt` (12 B); a silent uninstall removes the app, its Python, the
+pointer, the shortcuts and the uninstall entry, and keeps the captures.
+
+**The independent system**: this PC is Windows 11 Home (no Sandbox, no Hyper-V), so
+`.github/workflows/installer.yml` builds the setup on one fresh GitHub Windows VM and tests it
+on another, installing to D: with Python, Node and CUDA off PATH, then setup, self-test, an
+update, what's on C:, and uninstall. It runs once the code is on GitHub.
+
+**Not signed**: SmartScreen warns until it is. Azure Artifact Signing takes individuals only in
+the USA and Canada; from India an OV certificate (~$150–300/yr). electron-builder signs once
+`CSC_LINK`/`CSC_KEY_PASSWORD` (or Azure) are set; the README tells users how to check the
+published SHA-256 meanwhile.
+
+### D62 — Jimmy's mark and its onboarding
+
+The mark is Jimmy's own pill with its listening bars in the overlay's sky accent on its
+near-black surface (`installer/art.py` draws the icon and the NSIS images;
+`overlay/src/Logo.jsx` animates it: still, listening, working, done). The onboarding
+(`overlay/src/Onboarding.jsx`, eight steps: hello, your PC, where, how much, brain, privacy,
+installing, say hi) reads the PC live (Windows, 64-bit, RAM, NVIDIA GPU and driver, mic and
+camera and Windows' privacy switches for them), recommends a profile, tests keys, shows each
+install step's progress and offers start with Windows. `--onboarding --shot x.png --step N`
+renders any step for review.
