@@ -1,0 +1,128 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Security · Jimmy</title>
+<meta name="description" content="What Jimmy stores, what it never stores, exactly what leaves your PC, how it decides what it may do on your screen, and what is not done yet.">
+<link rel="icon" href="/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/site.css">
+</head><body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top"><div class="wrap">
+  <a class="brand" href="/" aria-label="Jimmy home"><img src="/icon.png" alt="" width="32" height="32">Jimmy</a>
+  <nav class="nav" aria-label="Primary"><a href="/#how">How it works</a><a href="/docs/">Docs</a><a href="/security/" aria-current="page">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a></nav>
+  <a class="btn btn-primary" href="/docs/#install">Get started</a>
+</div></header>
+
+<main id="main">
+<div class="page-head"><div class="wrap">
+  <p class="eyebrow">Security</p>
+  <h1>What Jimmy keeps, and what it never does</h1>
+  <p class="lede">Software that watches your screen and listens to your room is a real decision. Here is exactly what it stores, what leaves your PC, how it decides what it may do, and what is not done yet.</p>
+</div></div>
+
+<div class="wrap doc-layout">
+<nav class="toc" aria-label="On this page">
+  <a href="#stored">Stored and never stored</a><a href="#faces">Faces</a><a href="#surfaces">Excluded windows and the mic</a><a href="#webcam">The webcam</a>
+  <a href="#leaves">What leaves your PC</a><a href="#actions">Actions on your screen</a><a href="#untrusted">Text on screen is data</a><a href="#local">The local connection</a><a href="#honest">What is not done yet</a>
+</nav>
+
+<div class="prose">
+<section id="stored">
+  <h2>Stored and never stored</h2>
+  <p>Everything Jimmy stores is in the <code>data</code> folder inside the Jimmy folder on your PC. These rules are <strong>absent code paths</strong>, not settings that happen to be off.</p>
+  <div class="tscroll"><table class="dtable"><thead><tr><th>Stored on your PC</th><th>Never stored</th></tr></thead><tbody>
+    <tr><td>Window app and title</td><td>Any unblurred screen frame</td></tr>
+    <tr><td>Window text, and OCR text if you install OCR</td><td>Anything from an excluded window</td></tr>
+    <tr><td>Blurred screenshots</td><td>Raw audio: only the transcript survives</td></tr>
+    <tr><td>Transcribed speech</td><td>Face embeddings of anyone but you, or any face image</td></tr>
+    <tr><td>How many faces were in a frame</td><td>Face identity, names, links across days</td></tr>
+    <tr><td>Your own face template, only after <em>"remember my face"</em>, encrypted with Windows DPAPI so only your Windows account on this PC can read it</td><td>A faces table or a people table. Neither exists, and a test asserts it</td></tr>
+  </tbody></table></div>
+</section>
+
+<section id="faces">
+  <h2>Faces</h2>
+  <ul>
+    <li><strong>Blurred before anything is written.</strong> The clean frame exists only inside one capture tick, in memory. The code only ever passes the blurred frame to the function that saves a screenshot.</li>
+    <li><strong>Checked against the detector, not by eye.</strong> An early blur fooled the eye but not the face detector. The strength was set by sweeping it against the detector after the JPEG round-trip, and a test re-runs detection on the saved file and requires zero hits.</li>
+    <li><strong>Found at full size.</strong> Faces are looked for at the full 1280-pixel screenshot size, so small ones are caught too.</li>
+  </ul>
+</section>
+
+<section id="surfaces">
+  <h2>Excluded windows and the mic</h2>
+  <ul>
+    <li><strong>Never captured:</strong> password managers, banking and payment sites, private or incognito browser windows, and Jimmy's own windows. This list shipped before the first run. Add your own in <a href="/docs/#exclusions">data\exclusions.txt</a>.</li>
+    <li><strong>The mic pauses on sensitive screens</strong>, so a one-time code read aloud never reaches a transcript. The exception: if another app such as Teams or Zoom is using the mic, recording continues so a meeting isn't lost.</li>
+    <li><strong>System audio is never captured.</strong> The other side of a call is a consent problem, not a feature flag.</li>
+    <li><strong>While paused, the mic listens only for the name.</strong> Nothing is stored until you say <em>"Jimmy, resume"</em>.</li>
+    <li><strong>Your own commands are not captured speech.</strong> What you say to Jimmy is stored as a command and kept out of search, so a question can't answer itself.</li>
+  </ul>
+</section>
+
+<section id="webcam">
+  <h2>The webcam</h2>
+  <p>The webcam exists for the privacy curtain: when you leave, capture and listening stop. By default it only finds a face and follows where you sit. After you say <em>"remember my face"</em>, it compares a new face with your encrypted template once, not on every frame. Every other face's vector exists for one comparison and is dropped.</p>
+  <p>For your face only, it notes whether you're looking at the screen and whether your lips are moving, as yes/no values kept in memory for two minutes, so you can ask without saying the name. No webcam frame is ever kept. <em>"Forget my face"</em> deletes the template.</p>
+</section>
+
+<section id="leaves">
+  <h2>What leaves your PC</h2>
+  <p>Capture, storage, search, card decisions and meaning search all run on your PC. With a model key set, these go to the provider you chose (NVIDIA, Google or OpenAI), under that provider's own privacy policy:</p>
+  <ul>
+    <li><strong>The evidence shown with an answer</strong>, at most 6,000 characters, with your question.</li>
+    <li><strong>The rare card candidate</strong> that the cloud double-checks before a RECALL card. Set <code>JIMMY_RECALL_VERIFY=none</code> to keep cards fully local.</li>
+    <li><strong>For a question about your screen</strong>, or a task that needs a look: that window's latest picture, with faces already blurred and never from an excluded window. Set <code>VISION_SCREEN = False</code> for text-only screen answers.</li>
+    <li><strong>The names of the window's buttons and boxes</strong> while Jimmy works out what you asked it to do.</li>
+    <li><strong>Once a day, what it needs to keep your wiki</strong> (what Jimmy knows about you): your lists, your questions to it, and window titles.</li>
+  </ul>
+  <p>Without a key, none of this is sent. If you connect the <a href="/docs/#mcp">MCP server</a>, what its recall tool returns goes to that assistant. During setup, packages and models download from their usual sources (Python packages, npm, Ollama's library and Hugging Face for Whisper). Jimmy has no telemetry and no account, and its author receives nothing.</p>
+  <div class="callout"><p>On Google's free tier, Google may let human reviewers read what is sent. That is why screenshots stay with NVIDIA unless you choose otherwise.</p></div>
+</section>
+
+<section id="actions">
+  <h2>Actions on your screen</h2>
+  <p>Jimmy acts on other apps only through Windows' accessibility interface (UI Automation), never by moving your mouse. Its own cursor shows each action before it happens. Every proposed action passes a <strong>policy layer in code</strong>, whatever model proposed it, which returns one of four answers:</p>
+  <div class="tscroll"><table class="dtable"><thead><tr><th>Answer</th><th>For</th></tr></thead><tbody>
+    <tr><td>Refuse</td><td>Typing into a password box, typing words you didn't say, a control that has changed since you saw it, one you already said no to, a non-web address</td></tr>
+    <tr><td>Stop</td><td>A CAPTCHA. Jimmy never solves one</td></tr>
+    <tr><td>Ask</td><td>Anything that can't be undone (send, delete, buy, submit, close), a site you didn't name, a button whose name reads like an instruction</td></tr>
+    <tr><td>Allow</td><td>A reversible action on a control you named, when nothing else fits as well. It is shown first, with a moment to say "stop"</td></tr>
+  </tbody></table></div>
+  <p>The one key Jimmy ever sends is Enter, and only after UI Automation focused that box and the focus was checked. It never acts in excluded windows. After each action, code checks that it worked (the box holds the text, the page changed) and stops at the first surprise.</p>
+</section>
+
+<section id="untrusted">
+  <h2>Text on screen is data, not instructions</h2>
+  <p>A web page saying "ignore previous instructions" is exactly the kind of thing that gets captured. Captured text reaches the model only inside a context block, below a rule to ignore any instructions found there. The rules for actions don't depend on the model obeying that: they live in the policy layer above. Cards are written by code from words in your own data, never by a model.</p>
+</section>
+
+<section id="local">
+  <h2>The local connection</h2>
+  <p>The Python program and the overlay talk over a small web interface bound to <code>127.0.0.1</code>, on a port Windows picks, so it can't be reached from other machines. Every request needs a random token made fresh for each run. Only one Jimmy can run at a time.</p>
+</section>
+
+<section id="honest">
+  <h2>What is not done yet</h2>
+  <p>We would rather you know:</p>
+  <ul>
+    <li>Jimmy has <strong>not had an independent security audit</strong>. The code and every design decision are public for anyone to review.</li>
+    <li><strong>Captures are not encrypted on disk.</strong> Anyone or any program with access to your Windows account can read the <code>data</code> folder.</li>
+    <li><strong>Model keys are plain text</strong> in <code>.env</code> or your user environment. An encrypted key store is being built with the installer.</li>
+    <li><strong>There is no automatic retention limit.</strong> Captures stay until you forget a span or delete the folder.</li>
+    <li><strong>The face-matching threshold</strong> is OpenCV's reference value, not yet tuned on real webcam footage.</li>
+    <li><strong>A face embedding is biometric data</strong> under India's DPDP Act even if it is never stored. This design shrinks that exposure a lot; it does not take it to zero.</li>
+    <li><strong>The mic hears the room.</strong> Anyone speaking near it is transcribed. Tell the people around you that Jimmy is running.</li>
+  </ul>
+</section>
+</div>
+</div>
+</main>
+
+<footer><div class="wrap foot">
+  <a class="foot-brand" href="/"><img src="/icon.png" alt="" width="32" height="32">Jimmy</a>
+  <nav aria-label="Footer"><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a></nav>
+  <p>Jimmy · an always-on assistant for Windows 11 that stays quiet until you ask · MIT licensed</p>
+</div></footer>
+</body></html>

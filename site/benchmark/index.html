@@ -1,0 +1,131 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Benchmark · Jimmy</title>
+<meta name="description" content="Every number Jimmy claims, measured on one Windows laptop: capture, speech, search, the card gate, the agent on 130 real commands, and the weak spots.">
+<link rel="icon" href="/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/site.css">
+</head><body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top"><div class="wrap">
+  <a class="brand" href="/" aria-label="Jimmy home"><img src="/icon.png" alt="" width="32" height="32">Jimmy</a>
+  <nav class="nav" aria-label="Primary"><a href="/#how">How it works</a><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/" aria-current="page">Benchmark</a><a href="/changelog/">Changelog</a></nav>
+  <a class="btn btn-primary" href="/docs/#install">Get started</a>
+</div></header>
+
+<main id="main">
+<div class="page-head"><div class="wrap">
+  <p class="eyebrow">Benchmark</p>
+  <h1>What we measured, and how</h1>
+  <p class="lede">Every number here was measured on the development laptop and written down in the project's decision records (D1, D2, …) with the method behind it. Your results will vary with your hardware, your screen and your network.</p>
+</div></div>
+
+<div class="wrap doc-layout">
+<nav class="toc" aria-label="On this page">
+  <a href="#machine">The machine</a><a href="#capture">Capture and speech</a><a href="#search">Search and answers</a><a href="#gate">The card gate</a><a href="#agent">The agent</a><a href="#storage">Storage</a><a href="#weak">Weak spots</a><a href="#repeat">Run them yourself</a>
+</nav>
+
+<div class="prose">
+<section id="machine">
+  <h2>The machine</h2>
+  <p>A laptop with an AMD Ryzen 7 7840HS, an NVIDIA RTX 4050 Laptop GPU with 6 GB of memory (CUDA 12.4), Windows 11 and Python 3.12. It often runs on battery, where Jimmy halves its optional background work.</p>
+</section>
+
+<section id="capture">
+  <h2>Capture and speech</h2>
+  <div class="tscroll"><table class="dtable stack"><thead><tr><th>What</th><th class="num">Measured</th><th>How</th></tr></thead><tbody>
+    <tr><td>Screen frame grab (DXGI)</td><td class="num">7–14 ms</td><td>1920×1080 frames pulled from Windows' desktop duplication.</td></tr>
+    <tr><td>Window text (UI Automation)</td><td class="num">~230 ms</td><td>A live Electron window: 317 nodes, about 4,800 characters. Capped at 0.6 s; a busier window hit 655 nodes and stopped at the cap.</td></tr>
+    <tr><td>Browser text, before and after waking accessibility</td><td class="num">24 → 317 nodes</td><td>Chromium hides its interface from screen readers until one asks. Jimmy sends the standard signal once per window (D3).</td></tr>
+    <tr><td>Speech to text (Whisper large-v3-turbo)</td><td class="num">4 s in 0.6 s</td><td>About 1 GB of GPU memory, English and Hindi only (D36).</td></tr>
+    <tr><td>Change gate</td><td class="num">~49 % skipped</td><td>A 160×90 grey image; capture when ≥ 0.25 % of pixels move. A one-message chat scroll moves 2–15 %, a cursor blink 0.01 %. The old 64-bit hash missed 7 of 8 scrolls (D18).</td></tr>
+    <tr><td>Face detection</td><td class="num">20 ms</td><td>YuNet at 640 px on one CPU thread, against 65 ms on OpenCV's default 16 threads (D38).</td></tr>
+  </tbody></table></div>
+</section>
+
+<section id="search">
+  <h2>Search and answers</h2>
+  <div class="tscroll"><table class="dtable stack"><thead><tr><th>What</th><th class="num">Measured</th><th>How</th></tr></thead><tbody>
+    <tr><td>Hybrid search (keywords + meaning)</td><td class="num">0.5 s</td><td>Was 2.8 s. Most of the gap was Windows trying IPv6 for "localhost" first, about 2.4 s per new connection; every local call now uses 127.0.0.1 with kept-open connections (D38).</td></tr>
+    <tr><td>Same results after that speed-up</td><td class="num">43 of 43</td><td>Read paths compared before and after on a frozen copy of the real database (D38).</td></tr>
+    <tr><td>First spoken word, Gemini chain</td><td class="num">0.8–1.8 s</td><td>Six spoken questions in English and Hindi, all answered by Gemini 3.5 Flash-Lite after 3.8 Flash failed. The first took 7.6 s while 3.8 timed out (D58).</td></tr>
+    <tr><td>First word, NVIDIA chat model</td><td class="num">1.0–1.4 s</td><td>nemotron-3-ultra; a whole answer in 2.0–2.5 s (D43).</td></tr>
+    <tr><td>Recall answers in the stage 3 check</td><td class="num">8 / 8</td><td>Correct, with nothing invented, on recorded history (D22).</td></tr>
+  </tbody></table></div>
+</section>
+
+<section id="gate">
+  <h2>The card gate</h2>
+  <p>The goal is few cards, each one defensible. Stage 3 was closed on recorded real history against a checklist fixed before evaluating (D22).</p>
+  <div class="tscroll"><table class="dtable stack"><thead><tr><th>What</th><th class="num">Measured</th><th>How</th></tr></thead><tbody>
+    <tr><td>Replay of 1.18 h of real history</td><td class="num">5 → 1 card</td><td>Local rules found 5 candidates; the local model (qwen2.5:3b) let one through. The bar was ≤ 10 cards in any hour.</td></tr>
+    <tr><td>Card-decision precision</td><td class="num">0.83</td><td>Against the consensus of two blind AI judges. The bar was 0.80.</td></tr>
+    <tr><td>Card decision time</td><td class="num">~1 s</td><td>One yes/no question to qwen2.5:3b on the GPU, 3.3 GB of memory (D20). A 7B model was slower and worse.</td></tr>
+  </tbody></table></div>
+</section>
+
+<section id="agent">
+  <h2>The agent</h2>
+  <p>130 real commands, frozen from the owner's own sessions, are run through the real pipeline (fast rules first, then the agent), and the first decision is scored. Eight whole tasks run on invented screens that change after each action.</p>
+  <div class="tscroll"><table class="dtable stack"><thead><tr><th>System</th><th class="num">130 commands</th><th>Notes</th></tr></thead><tbody>
+    <tr><td>Before the agent (D41)</td><td class="num">71 %</td><td>Rules plus a single tool pick.</td></tr>
+    <tr><td>Agent (D42)</td><td class="num">124 / 130 (95 %)</td><td>Median 0.8 s per decision; two runs gave 124 and 125.</td></tr>
+    <tr><td>NVIDIA gpt-oss-20b (D43)</td><td class="num">120 / 130</td><td>Median 1.4 s per step.</td></tr>
+    <tr><td>Gemini chain (D58)</td><td class="num">122 / 130</td><td>124 picked the right tool; median 1.5 s.</td></tr>
+  </tbody></table></div>
+  <p><strong>Whole tasks:</strong> on 2026-11-01 Gemini first managed 4 of 8 in 143 s and NVIDIA 5 of 8 in 167 s, under the same conditions. Both failed "close this tab" the same way, and the cause was Jimmy, not the model: "yes" pressed a different tab from the one the cursor showed. After that fix and a second one, Gemini did <strong>8 of 8 in 42 s</strong>.</p>
+  <p><strong>Tools per step:</strong> 19 core tools, about 1,400 tokens, instead of all 54 at about 3,300 (D48). A two-step screen task takes 2 model calls instead of 4 (D49).</p>
+</section>
+
+<section id="storage">
+  <h2>Storage</h2>
+  <p>Screenshots are 1280 px wide so they're readable when opened full size, about 80–88 KB each. That is roughly 30–85 MB per active hour, or 90–250 GB a year at 8 hours a day (D38). The text database is small beside the images.</p>
+</section>
+
+<section id="weak">
+  <h2>Weak spots</h2>
+  <ul>
+    <li><strong>Gemini 3.8 Flash on the free tier</strong> timed out or answered "high demand" on 5 of 5 calls when measured; Jimmy now treats slow as down and moves on within 6 seconds.</li>
+    <li><strong>The hosted NVIDIA model sometimes returns an empty answer</strong>, once 1 in 5 in a benchmark and in runs on bad days. Jimmy retries, then falls back.</li>
+    <li><strong>RECALL cards are proven only synthetically.</strong> The recorded data had no real repeat of an earlier page to find.</li>
+    <li><strong>Hindi accuracy on real speech</strong> has not been measured.</li>
+    <li><strong>A "full working day"</strong> has not been captured end to end in one run; the longest recorded run was 66 minutes.</li>
+    <li><strong>One machine.</strong> None of this has been measured on a second PC yet.</li>
+  </ul>
+</section>
+
+<section id="repeat">
+  <h2>Run them yourself</h2>
+  <p>From the Jimmy folder. The checks need no network; the evaluations call your model provider.</p>
+  <div class="code"><pre>.\.venv\Scripts\python.exe tests\test_stage1.py      # capture, blur, store
+.\.venv\Scripts\python.exe tests\test_stage3.py      # the card gate
+.\.venv\Scripts\python.exe -m ambient replay         # cards over your own history
+.\.venv\Scripts\python.exe tests\eval_agent.py       # 130 real commands (live)
+.\.venv\Scripts\python.exe tests\eval_trajectory.py  # 8 whole tasks (live)</pre></div>
+</section>
+</div>
+</div>
+</main>
+
+<footer><div class="wrap foot">
+  <a class="foot-brand" href="/"><img src="/icon.png" alt="" width="32" height="32">Jimmy</a>
+  <nav aria-label="Footer"><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a></nav>
+  <p>Jimmy · an always-on assistant for Windows 11 that stays quiet until you ask · MIT licensed</p>
+</div></footer>
+
+<script>
+document.querySelectorAll('.code').forEach(function (block) {
+  if (!navigator.clipboard) return;
+  var button = document.createElement('button');
+  button.type = 'button'; button.className = 'copy'; button.textContent = 'Copy';
+  button.addEventListener('click', function () {
+    navigator.clipboard.writeText(block.querySelector('pre').innerText).then(function () {
+      button.textContent = 'Copied';
+      setTimeout(function () { button.textContent = 'Copy'; }, 1500);
+    });
+  });
+  block.appendChild(button);
+});
+</script>
+</body></html>

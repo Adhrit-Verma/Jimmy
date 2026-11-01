@@ -1,0 +1,245 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Docs · Jimmy</title>
+<meta name="description" content="Install Jimmy on Windows 11 from source, add a model key or run offline, and learn what you can say to it.">
+<link rel="icon" href="/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/site.css">
+</head><body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top"><div class="wrap">
+  <a class="brand" href="/" aria-label="Jimmy home"><img src="/icon.png" alt="" width="32" height="32">Jimmy</a>
+  <nav class="nav" aria-label="Primary"><a href="/#how">How it works</a><a href="/docs/" aria-current="page">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a></nav>
+  <a class="btn btn-primary" href="#install">Get started</a>
+</div></header>
+
+<main id="main">
+<div class="page-head"><div class="wrap">
+  <p class="eyebrow">Documentation</p>
+  <h1>Set up Jimmy</h1>
+  <p class="lede">Install Jimmy from source on Windows 11, choose a model provider or run offline, and start talking to it. Most of the time goes into downloads.</p>
+</div></div>
+
+<div class="wrap doc-layout">
+<nav class="toc" aria-label="On this page">
+  <p>Start</p>
+  <a href="#overview">Overview</a><a href="#needs">What you need</a>
+  <p>Install</p>
+  <a href="#install">Get the code</a><a href="#packages">Packages and overlay</a><a href="#models">Local models</a><a href="#key">Model key</a><a href="#run">Check and run</a>
+  <p>Use</p>
+  <a href="#talk">What you can say</a><a href="#controls">Everyday controls</a><a href="#exclusions">Exclusions</a><a href="#cli">Command line</a><a href="#mcp">Other assistants (MCP)</a>
+  <p>Reference</p>
+  <a href="#extras">Optional extras</a><a href="#troubleshooting">Troubleshooting</a><a href="#limits">Current limits</a>
+</nav>
+
+<div class="prose">
+<section id="overview">
+  <h2>Overview</h2>
+  <p>Jimmy runs in the background on your PC. It reads the text of the window in front of you, transcribes speech near your mic, and keeps both as one searchable history with a blurred screenshot for each moment. When you say <em>"Jimmy, …"</em>, it searches that history, shows you what it found, and answers out loud.</p>
+  <p>Jimmy has two halves:</p>
+  <ul>
+    <li><strong>A Python program</strong> (<code>ambient</code> and <code>jimmy</code>) that captures, stores, searches and talks to a language model.</li>
+    <li><strong>An overlay</strong>: a small pill at the top of your screen, plus cards and answers, built with Electron. The Python program starts it for you.</li>
+  </ul>
+  <div class="callout"><p>A one-click Windows installer is being built but is not released yet. For now, install from source with the steps below.</p></div>
+</section>
+
+<section id="needs">
+  <h2>What you need</h2>
+  <table class="dtable"><thead><tr><th>Item</th><th>Why</th></tr></thead><tbody>
+    <tr><td>Windows 11</td><td>Screen capture and window text use Windows-only interfaces (DXGI and UI Automation).</td></tr>
+    <tr><td>An NVIDIA GPU</td><td>Speech recognition (Whisper) runs on it. Jimmy was built on an RTX 4050 with 6 GB of memory, which is enough.</td></tr>
+    <tr><td><a href="https://www.python.org/downloads/" rel="noopener">Python 3.12</a></td><td>Not 3.13 or 3.14: the machine-learning packages Jimmy uses don't install there yet.</td></tr>
+    <tr><td><a href="https://nodejs.org/" rel="noopener">Node.js</a> (LTS)</td><td>To build the overlay once.</td></tr>
+    <tr><td><a href="https://ollama.com/" rel="noopener">Ollama</a></td><td>Runs two small local models: one decides cards, one powers search by meaning.</td></tr>
+    <tr><td>A mic, and optionally a webcam</td><td>The webcam is only for the privacy curtain (it draws itself when you walk away).</td></tr>
+  </tbody></table>
+  <p>The packages and models take several gigabytes. Captures then take roughly 30–85 MB per active hour.</p>
+</section>
+
+<section id="install">
+  <h2>Get the code</h2>
+  <p>On the project's GitHub page (the <strong>View on GitHub</strong> button on the <a href="/">home page</a>), choose <strong>Code → Download ZIP</strong> and unzip it to <code>C:\Jimmy</code>. If you use git, clone it to the same place instead. A short path avoids Windows' path-length problems.</p>
+  <p>Open <strong>PowerShell</strong> and go to that folder. Every command on this page runs from there:</p>
+  <div class="code"><pre>cd C:\Jimmy</pre></div>
+</section>
+
+<section id="packages">
+  <h2>Packages and overlay</h2>
+  <ol><li>Make a Python 3.12 environment and install the packages:</li></ol>
+  <div class="code"><pre>py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt</pre></div>
+  <p>If <code>py -3.12</code> says it can't find Python 3.12, install it from python.org and open a new PowerShell window.</p>
+  <ol start="2"><li>Build the overlay once (and again only if you change its code):</li></ol>
+  <div class="code"><pre>cd overlay; npm install; npm run build; cd ..</pre></div>
+</section>
+
+<section id="models">
+  <h2>Local models</h2>
+  <p>With Ollama installed and running, pull the two models Jimmy uses on your PC:</p>
+  <div class="code"><pre>ollama pull qwen2.5:3b
+ollama pull bge-m3</pre></div>
+  <p><strong>qwen2.5:3b</strong> answers one yes/no question per possible card. <strong>bge-m3</strong> turns text into vectors, so <em>"consulting application"</em> can find a page titled "McKinsey Forward". Whisper's speech model downloads by itself on the first run.</p>
+</section>
+
+<section id="key">
+  <h2>Model key (optional)</h2>
+  <p>Spoken answers come from a cloud model. Pick one provider. Without any key, Jimmy still works: each answer shows what search found instead.</p>
+  <h3>NVIDIA (default, free)</h3>
+  <p>Make a key at <a href="https://build.nvidia.com/settings/api-keys" rel="noopener">build.nvidia.com</a>, then:</p>
+  <div class="code"><pre>setx NVIDIA_API_KEY "nvapi-your-key-here"</pre></div>
+  <h3>Google Gemini (free tier)</h3>
+  <p>Make a key at <a href="https://aistudio.google.com/apikey" rel="noopener">aistudio.google.com</a>. Create a file named <code>.env</code> in the Jimmy folder with these lines, plus your NVIDIA key, which answers whenever Gemini's free quota runs out or it is down:</p>
+  <div class="code"><pre>GEMINI_API_KEY=your-key-here
+JIMMY_PROVIDER=gemini</pre></div>
+  <p>Google may let reviewers read what is sent on its free tier. Screenshots stay with NVIDIA unless you also add <code>JIMMY_GEMINI_SCREENSHOTS=1</code>.</p>
+  <h3>OpenAI (paid)</h3>
+  <div class="code"><pre>OPENAI_API_KEY=sk-your-key-here
+JIMMY_PROVIDER=openai</pre></div>
+  <div class="callout warn"><p>Keep keys in <code>.env</code> or your environment, never in a file you share. Git already ignores <code>.env</code>.</p></div>
+</section>
+
+<section id="run">
+  <h2>Check and run</h2>
+  <div class="code"><pre>.\.venv\Scripts\python.exe -m ambient doctor
+.\.venv\Scripts\python.exe -m ambient run</pre></div>
+  <p><code>doctor</code> checks every part and asks you to speak for 3 seconds to prove the mic hears you. <code>run</code> starts capture and opens the overlay; quit with <strong>Ctrl + C</strong> or the pill's <strong>Quit</strong>. Only one <code>ambient run</code> can go at a time.</p>
+  <p>Just want to see it first? <code>.\.venv\Scripts\python.exe -m ambient run --demo</code> plays a spoken, scripted tour of about 3 minutes that uses real capture, search, model and voice.</p>
+  <p>Two one-time steps make it work better for you: say <strong>"Jimmy, eye calibration"</strong> (about 20 seconds, guided on screen) so you can ask without the name by looking at the screen, and <strong>"Jimmy, remember my face"</strong> so the curtain knows you.</p>
+</section>
+
+<section id="talk">
+  <h2>What you can say</h2>
+  <p>Start with <strong>"Jimmy,"</strong>. After it answers, keep talking for 10 seconds without the name; <em>"thanks"</em> ends it. Say just <em>"Jimmy"</em> to think first: it answers <em>"Yes?"</em> and listens. To type instead, press <strong>Ctrl + Alt + Space</strong>.</p>
+  <div class="tscroll"><table class="dtable stack"><thead><tr><th>Kind</th><th>You say</th><th>Jimmy</th></tr></thead><tbody>
+    <tr><td>The past</td><td><em>what was that fellowship application I saw on Tuesday?</em> · <em>…and when does it close?</em></td><td>Searches that day by keywords and meaning, shows the evidence, answers out loud. Follow-ups work for 3 minutes.</td></tr>
+    <tr><td>Now</td><td><em>what's on my screen?</em></td><td>Reads the window in front and answers from that alone.</td></tr>
+    <tr><td>Unclear</td><td><em>what's this?</em></td><td>Asks whether you mean now or earlier, then waits.</td></tr>
+    <tr><td>Your time</td><td><em>how was my day?</em> · <em>how long was I on YouTube?</em></td><td>Instant, no model: one line written by code, plus a chart.</td></tr>
+    <tr><td>Show me</td><td><em>show me the best match</em> · <em>show me yesterday at 3</em></td><td>Opens the screenshot full size, or the timeline at that moment.</td></tr>
+    <tr><td>Hands-free</td><td><em>next</em> · <em>go back</em> · <em>scroll down</em> · <em>close it</em></td><td>No name needed for 45 seconds after Jimmy shows you something.</td></tr>
+    <tr><td>Reminders</td><td><em>remind me at 5 to call Sam</em> · <em>…when I open Discord</em></td><td>A card and a spoken reminder at that time, or when that app comes up.</td></tr>
+    <tr><td>Timers</td><td><em>set a timer for 10 minutes</em> · <em>how much time is left?</em></td><td>Counts down on the pill, then rings.</td></tr>
+    <tr><td>Forget</td><td><em>delete everything from September</em> · <em>forget the last hour</em></td><td>Says what it would delete and waits for your "yes".</td></tr>
+    <tr><td>Your lists</td><td><em>my new goal is to learn AWS</em> · <em>remember my standup moved to 11</em> · <em>what do you know about me?</em></td><td>Reminders, goals and facts, by voice and in the Memory tab of the timeline window.</td></tr>
+    <tr><td>Hands</td><td><em>search YouTube for CarryMinati</em> · <em>click Sign in</em> · <em>switch to Chrome</em></td><td>A short plan, played back live as its cursor works. Asks <em>"which one?"</em> when unsure, and always asks before anything that can't be undone.</td></tr>
+    <tr><td>Proposals</td><td><em>draft a reply to this</em> · <em>add this to my calendar</em></td><td>A draft goes to your clipboard; an event goes to your calendar app, which asks once more.</td></tr>
+    <tr><td>Control</td><td><em>pause for 30 minutes</em> · <em>focus on the essay</em> · <em>curtain</em></td><td>Does it and confirms in the pill.</td></tr>
+  </tbody></table></div>
+  <p>It understands times like <em>today</em>, <em>yesterday afternoon</em>, <em>between 2 and 3</em>, <em>the last 20 minutes</em> and <em>last Friday</em>. Say <em>"stop"</em> to end a task that's running.</p>
+</section>
+
+<section id="controls">
+  <h2>Everyday controls</h2>
+  <div class="tscroll"><table class="dtable"><thead><tr><th>Action</th><th>How</th></tr></thead><tbody>
+    <tr><td>Ask</td><td>Say <em>"Jimmy, …"</em>, or press <strong>Ctrl + Alt + Space</strong> to type</td></tr>
+    <tr><td>Pause and resume</td><td><strong>Ctrl + Alt + J</strong>, or hover the pill → <strong>Pause 2h</strong>. While paused nothing is stored, but <em>"Jimmy, resume"</em> still works</td></tr>
+    <tr><td>Timeline</td><td><strong>Ctrl + Alt + T</strong>, or hover the pill → <strong>Timeline</strong></td></tr>
+    <tr><td>Insights</td><td><strong>Ctrl + Alt + I</strong>, or hover the pill → <strong>Insights</strong></td></tr>
+    <tr><td>Privacy curtain</td><td>Draws itself when you walk away; by hand, <strong>Ctrl + Alt + L</strong></td></tr>
+    <tr><td>Dismiss a card</td><td>Hover it and click <strong>×</strong>. Jimmy then stays quiet for 30 minutes</td></tr>
+    <tr><td>Quit</td><td>Hover the pill → <strong>Quit</strong>, or <strong>Ctrl + C</strong> in the terminal</td></tr>
+  </tbody></table></div>
+</section>
+
+<section id="exclusions">
+  <h2>Exclusions</h2>
+  <p>Password managers, banking and payment sites, private browser windows and Jimmy's own windows are never captured. To add your own, create <code>data\exclusions.txt</code> in the Jimmy folder with one rule per line, by program, window title or address:</p>
+  <div class="code"><pre>exe:mysecret.exe
+title:payroll
+url:internal\.example\.com</pre></div>
+</section>
+
+<section id="cli">
+  <h2>Command line</h2>
+  <p>Everything here runs with <code>.\.venv\Scripts\python.exe -m …</code> from the Jimmy folder.</p>
+  <div class="tscroll"><table class="dtable"><thead><tr><th>Command</th><th>What it does</th></tr></thead><tbody>
+    <tr><td><code>ambient search "consulting application on Friday"</code></td><td>Search your history by keywords and meaning, inside any time you name</td></tr>
+    <tr><td><code>ambient forget "1 to 15 September"</code></td><td>Shows what would be deleted, then asks</td></tr>
+    <tr><td><code>ambient compact</code></td><td>Gives deleted space back (also runs by itself while you're away)</td></tr>
+    <tr><td><code>ambient index</code></td><td>Builds meaning search for older captures</td></tr>
+    <tr><td><code>ambient stats</code></td><td>How much is stored</td></tr>
+    <tr><td><code>ambient run --no-overlay</code></td><td>Capture with the terminal only</td></tr>
+    <tr><td><code>jimmy chat</code></td><td>Talk to Jimmy in the terminal; <code>/context</code> shows exactly what was sent</td></tr>
+    <tr><td><code>jimmy doctor</code></td><td>Checks the key, model and endpoint</td></tr>
+    <tr><td><code>jimmy trace -n 20</code></td><td>The decision log: what Jimmy heard, decided and did</td></tr>
+    <tr><td><code>jimmy focus "finish the essay"</code></td><td>States an intent, which turns on focus nudges</td></tr>
+  </tbody></table></div>
+</section>
+
+<section id="mcp">
+  <h2>Ask Jimmy from another assistant (MCP)</h2>
+  <p><code>python -m jimmy mcp</code> is a small MCP server (Model Context Protocol, the standard way assistants connect to tools) with exactly one read-only tool, <strong>recall</strong>. Claude Desktop, VS Code and others can ask <em>"what was I reading yesterday?"</em> and get the evidence Jimmy would use, capped at 6,000 characters and marked as data. It can't press, type or change anything. In Claude Desktop's <code>claude_desktop_config.json</code>:</p>
+  <div class="code"><pre>{
+  "mcpServers": {
+    "jimmy": {
+      "command": "C:\\Jimmy\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "jimmy", "mcp"],
+      "env": { "PYTHONPATH": "C:\\Jimmy" }
+    }
+  }
+}</pre></div>
+  <div class="callout"><p>Whatever <code>recall</code> returns goes to that assistant, and from there to its own cloud model.</p></div>
+</section>
+
+<section id="extras">
+  <h2>Optional extras</h2>
+  <p>Jimmy runs without any of these. Each is a setting in <code>ambient\config.py</code>, whose comment says what to measure before leaving it on.</p>
+  <div class="tscroll"><table class="dtable stack"><thead><tr><th>Extra</th><th>Install</th><th>You get</th></tr></thead><tbody>
+    <tr><td>Windows OCR</td><td><code>pip install winocr</code></td><td>Text from canvas apps, games and video. Turns on by itself.</td></tr>
+    <tr><td>Natural voice</td><td><code>pip install kokoro-onnx</code> + model files</td><td>A Kokoro voice instead of Windows', with Hindi voices (<code>VOICE_ENGINE = "kokoro"</code>)</td></tr>
+    <tr><td>Silero VAD</td><td><code>pip install onnxruntime silero-vad</code></td><td>Fewer false speech segments in a noisy room (<code>VAD_ENGINE = "silero"</code>)</td></tr>
+    <tr><td>Local fallback</td><td><code>ollama pull qwen3:4b</code></td><td>Agent steps keep working when the cloud is down (<code>JIMMY_LOCAL_TOOLS=qwen3:4b</code>)</td></tr>
+  </tbody></table></div>
+</section>
+
+<section id="troubleshooting">
+  <h2>Troubleshooting</h2>
+  <div class="tscroll"><table class="dtable"><thead><tr><th>You see</th><th>What to do</th></tr></thead><tbody>
+    <tr><td>pip fails building packages</td><td>Check that the environment is Python 3.12: <code>.\.venv\Scripts\python.exe --version</code>. Delete <code>.venv</code> and make it again with <code>py -3.12</code>.</td></tr>
+    <tr><td>Jimmy is already running (another `ambient run`)</td><td>Quit the other one first, from its pill or its terminal.</td></tr>
+    <tr><td>The mic test hears near-silence</td><td>Windows' noise suppression can make a quiet room read as zero. Speak during <code>doctor</code>. To use another mic, set <code>MIC_DEVICE</code> in <code>ambient\config.py</code> to part of its name.</td></tr>
+    <tr><td>The overlay never appears</td><td>If <code>overlay\node_modules\electron\dist\electron.exe</code> is missing, run <code>node node_modules/electron/install.js</code> inside <code>overlay</code>.</td></tr>
+    <tr><td>Answers list search results instead of speaking</td><td>No key was found. Run <code>jimmy doctor</code>; after <code>setx</code>, the key works without restarting.</td></tr>
+    <tr><td>Asking without the name stops working</td><td>Another app (Discord, Teams, Zoom) is holding the mic, which Jimmy treats as a call. Say <em>"Jimmy, I'm not on a call"</em>.</td></tr>
+    <tr><td><code>net_impl_backend ... Targets are not supported</code></td><td>Harmless noise from OpenCV on import. Ignore it.</td></tr>
+  </tbody></table></div>
+</section>
+
+<section id="limits">
+  <h2>Current limits</h2>
+  <ul>
+    <li><strong>Windows 11 and an NVIDIA GPU only</strong>, and built and measured on one laptop.</li>
+    <li><strong>No installer yet.</strong> Setup is from source.</li>
+    <li><strong>No automatic retention limit.</strong> Captures grow by roughly 30–85 MB per active hour until you forget a span.</li>
+    <li><strong>Hindi accuracy is not measured</strong> on real speech yet.</li>
+    <li><strong>Canvas apps and video</strong> give no text unless you install Windows OCR, and the vision models a free key can reach describe pictures less exactly than a window's text.</li>
+    <li><strong>Gemini 3.8 Flash on the free tier</strong> was often unavailable when measured; Jimmy falls back to 3.5 Flash-Lite and then NVIDIA.</li>
+  </ul>
+</section>
+</div>
+</div>
+</main>
+
+<footer><div class="wrap foot">
+  <a class="foot-brand" href="/"><img src="/icon.png" alt="" width="32" height="32">Jimmy</a>
+  <nav aria-label="Footer"><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a></nav>
+  <p>Jimmy · an always-on assistant for Windows 11 that stays quiet until you ask · MIT licensed</p>
+</div></footer>
+
+<script>
+document.querySelectorAll('.code').forEach(function (block) {
+  if (!navigator.clipboard) return;
+  var button = document.createElement('button');
+  button.type = 'button'; button.className = 'copy'; button.textContent = 'Copy';
+  button.addEventListener('click', function () {
+    navigator.clipboard.writeText(block.querySelector('pre').innerText).then(function () {
+      button.textContent = 'Copied';
+      setTimeout(function () { button.textContent = 'Copy'; }, 1500);
+    });
+  });
+  block.appendChild(button);
+});
+</script>
+</body></html>

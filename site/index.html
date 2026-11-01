@@ -1,0 +1,302 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Jimmy · An always-on assistant for Windows 11 that stays quiet</title>
+<meta name="description" content="Jimmy is an always-on assistant for Windows 11 that remembers what you saw and heard, answers out loud when you ask, and otherwise stays quiet. Captures stay on your PC.">
+<link rel="icon" href="/icon.png">
+<meta property="og:title" content="Jimmy"><meta property="og:description" content="Remembers what you saw and heard. Answers out loud when you ask. Otherwise, quiet."><meta property="og:image" content="/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/site.css">
+</head><body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top"><div class="wrap">
+  <a class="brand" href="/" aria-label="Jimmy home"><img src="/icon.png" alt="" width="32" height="32">Jimmy</a>
+  <nav class="nav" aria-label="Primary"><a href="/#how">How it works</a><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a></nav>
+  <a class="btn btn-primary" href="/docs/#install">Get started</a>
+</div></header>
+
+<main id="main">
+<section class="hero">
+  <div class="wrap grid12">
+    <div class="hero-copy">
+      <p class="eyebrow">An always-on assistant for Windows 11</p>
+      <h1>Remembers what you saw. <span>Speaks only when asked.</span></h1>
+      <p class="lede">Jimmy turns your screen's text and the speech near your mic into one searchable history on your own PC. Say <em>"Jimmy, …"</em> and it answers out loud, beside the moments it found. The rest of the time, it stays quiet.</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="/docs/#install">Get started</a>
+        <a class="btn btn-ghost" href="https://github.com/Adhrit-Verma/Jimmy" target="_blank" rel="noopener"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.71 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.22 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.66 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg>View on GitHub</a>
+      </div>
+      <ul class="facts">
+        <li>Captures stored only on your PC</li><li>English and Hindi</li><li>Runs on a 6 GB laptop GPU</li><li>MIT licensed</li>
+      </ul>
+    </div>
+    <div class="hero-side">
+      <div class="stage">
+        <svg class="eq" viewBox="0 0 120 62.4" role="img" aria-label="Jimmy's mark: a pill with five listening bars">
+          <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7dd3fc"/><stop offset="1" stop-color="#0ea5e9"/></linearGradient></defs>
+          <rect class="pill" x="1" y="1" width="118" height="60.4" rx="30.2"/>
+          <rect x="22.8" y="23.61" width="9" height="15.18" rx="4.5" fill="url(#sky)" style="--i:0"/>
+          <rect x="39.15" y="16.83" width="9" height="28.75" rx="4.5" fill="url(#sky)" style="--i:1"/>
+          <rect x="55.5" y="11.23" width="9" height="39.94" rx="4.5" fill="url(#sky)" style="--i:2"/>
+          <rect x="71.85" y="18.82" width="9" height="24.76" rx="4.5" fill="url(#sky)" style="--i:3"/>
+          <rect x="88.2" y="22.82" width="9" height="16.77" rx="4.5" fill="url(#sky)" style="--i:4"/>
+        </svg>
+        <p class="stage-cap">listening for "Jimmy"</p>
+      </div>
+      <figure class="chat" aria-label="An example question and answer, with invented data">
+        <div class="chat-bar"><span class="dot" aria-hidden="true"></span>Jimmy · heard you</div>
+        <div class="chat-body">
+          <p class="msg user">Jimmy, what was that fellowship application I saw on Tuesday?</p>
+          <div class="msg bot">
+            <div class="calls"><span class="call"><b>recall</b> · Tuesday</span><span class="call"><b>keywords + meaning</b> → 3 moments</span></div>
+            <p>The Northwind Fellowship application, open in Chrome on Tuesday at 15:02. The screenshots it came from are on the left of the answer.</p>
+            <p class="demo-note">Invented data. Real answers are spoken and shown beside their evidence.</p>
+          </div>
+        </div>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<div class="wrap"><figure class="shot">
+  <img src="/img/hero-answer.png" width="1600" height="902" alt="Jimmy answering a question about a fellowship application: blurred evidence screenshots on the left, the spoken answer on the right">
+  <figcaption><b>The real overlay, on invented pages.</b> Evidence on the left, the best match first; the answer streams in on the right and is read aloud.</figcaption>
+</figure></div>
+
+<div class="wrap" style="margin-top:5rem"><div class="rule" style="--c:5;--cp:3" aria-hidden="true"></div></div>
+
+<section aria-labelledby="day-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">The idea</p>
+      <h2 id="day-h">Built for six good interruptions an evening</h2>
+      <p class="lede">Capturing everything is the easy part. What matters is deciding when to stay quiet. Jimmy shows at most 4 cards an hour, never two within 10 minutes, and goes quiet for 30 minutes after you dismiss one. Most hours produce no card at all.</p>
+    </div>
+    <ol class="day" id="day">
+      <li style="--i:0"><time>09:12</time><p>You sit down. <span>The privacy curtain lifts when the webcam sees you facing the screen.</span></p><span class="card-pill"><b>RESUME</b>Left off: Fellowship essay · draft 2</span></li>
+      <li style="--i:1"><time>11:40</time><p>Deep in VS Code. <span>Jimmy is capturing and indexing, silently.</span></p><span class="card-pill quiet">no card</span></li>
+      <li style="--i:2"><time>13:31</time><p>You open a form. <span>It links what's on screen to a concrete earlier moment.</span></p><span class="card-pill"><b>RECALL</b>Same Northwind Fellowship as Tue 15:02</span></li>
+      <li style="--i:3"><time>14:05</time><p><em>"Jimmy, when does it close?"</em> <span>It searches Tuesday by meaning and answers out loud.</span></p><span class="card-pill quiet">spoken answer</span></li>
+      <li style="--i:4"><time>15:30</time><p>You drift to YouTube. <span>You said "focus on the essay" earlier, so one nudge, then 45 minutes of quiet.</span></p><span class="card-pill"><b>FOCUS</b>Back to: the essay</span></li>
+      <li style="--i:5"><time>16:02</time><p>You step away. <span>The curtain comes down: no capture, no listening.</span></p><span class="card-pill quiet">resting</span></li>
+      <li style="--i:6"><time>21:00</time><p>Wrapping up. <span>Ask "how was my day?" for the chart.</span></p><span class="card-pill"><b>RECAP</b>Today: 10h 42m, mostly VS Code</span></li>
+    </ol>
+    <p class="fine">An illustrative day with invented names. Card kinds and limits are the real ones from the code; every card line is written by code from words in your own data, never by a model.</p>
+  </div>
+</section>
+
+<div class="wrap"><div class="rule" style="--c:21;--cp:9" aria-hidden="true"></div></div>
+
+<section id="how" aria-labelledby="how-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">How it works</p>
+      <h2 id="how-h">Capture locally. Ask out loud. Approve what it does.</h2>
+    </div>
+    <div class="steps">
+      <article class="card">
+        <span class="step-n">1</span>
+        <h3>Capture</h3>
+        <p>When the screen changes, Jimmy reads the window's exact text through Windows' accessibility interface (UI Automation) and transcribes speech near your mic with Whisper, on your GPU. Faces are blurred before a screenshot is written.</p>
+        <div class="viz"><pre><span class="c">every 2 s, only if pixels moved</span>
+<span class="k">text</span>    from UI Automation
+<span class="k">speech</span>  Whisper, local
+<span class="k">faces</span>   blurred before the write
+<span class="k">store</span>   SQLite on your PC</pre></div>
+      </article>
+      <article class="card">
+        <span class="step-n">2</span>
+        <h3>Ask</h3>
+        <p>Say "Jimmy," then your question, in English or Hindi. It searches by keywords and by meaning inside the time you name, shows the moments it used, and speaks the answer.</p>
+        <div class="viz"><pre><span class="k">heard</span>   "…on Tuesday?"
+<span class="k">route</span>   recall
+<span class="k">search</span>  keywords + meaning
+<span class="c">        → evidence in ~0.5 s</span>
+<span class="k">speak</span>   from the first sentence</pre></div>
+      </article>
+      <article class="card">
+        <span class="step-n">3</span>
+        <h3>Act</h3>
+        <p>Ask it to do something on screen. It plans a few steps, a policy in code checks each one, and its own cursor presses and types through UI Automation, never your mouse. Each step is checked before the next.</p>
+        <div class="viz"><pre><span class="k">plan</span>    type "CarryMinati" in Search
+        press Enter
+<span class="k">policy</span>  allow · allow
+<span class="k">check</span>   ✓ box holds the text
+        ✓ page changed</pre></div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<div class="wrap"><div class="rule" style="--c:11;--cp:6" aria-hidden="true"></div></div>
+
+<section aria-labelledby="say-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Talk to it</p>
+      <h2 id="say-h">No typing, no keywords</h2>
+      <p class="lede">It understands times like <em>yesterday afternoon</em>, <em>between 2 and 3</em> and <em>last Friday</em>. After it answers, keep talking for 10 seconds without the name. <a href="/docs/#talk">Everything you can say &rarr;</a></p>
+    </div>
+    <div class="say">
+      <div><h3>Ask about the past</h3><q>what was that fellowship application I saw on Tuesday?</q><q>…and when does it close?</q></div>
+      <div><h3>Ask about now</h3><q>what's on my screen?</q><q>what's this?</q></div>
+      <div><h3>Your time</h3><q>how was my day?</q><q>how long was I on YouTube?</q></div>
+      <div><h3>Reminders and timers</h3><q>remind me at 5 to call Sam</q><q>set a timer for 10 minutes</q></div>
+      <div><h3>Forget</h3><q>delete everything from September</q><q>forget the last hour</q></div>
+      <div><h3>Hands</h3><q>search YouTube for CarryMinati</q><q>switch to Chrome</q></div>
+    </div>
+  </div>
+</section>
+
+<div class="wrap"><div class="rule" style="--c:30;--cp:11" aria-hidden="true"></div></div>
+
+<section aria-labelledby="see-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">What it looks like</p>
+      <h2 id="see-h">It shows its work</h2>
+      <p class="lede">Every screenshot here is the real interface showing invented pages and data, so no personal data appears.</p>
+    </div>
+    <div class="shots">
+      <figure class="shot"><img src="/img/how-was-my-day.png" width="1600" height="937" loading="lazy" alt="Jimmy answering 'how was my day?' with a chart of time per app and one spoken line"><figcaption><b>"How was my day?"</b> Answered instantly, with no model: code writes the line, the chart shows where the time went.</figcaption></figure>
+      <figure class="shot"><img src="/img/timeline.png" width="1200" height="814" loading="lazy" alt="The timeline window: search results, a preview and a minute-by-minute strip"><figcaption><b>The timeline</b> (Ctrl + Alt + T). Your day as a strip of blurred screenshots, searchable the way you remember it.</figcaption></figure>
+      <figure class="shot"><img src="/img/ask-back.png" width="700" height="384" loading="lazy" alt="Jimmy asking whether you mean the screen now or something you saw earlier"><figcaption><b>It asks when it isn't sure.</b> "What's this?" could mean the screen now or last week. Answer out loud or tap.</figcaption></figure>
+      <figure class="shot"><img src="/img/insights.png" width="1600" height="1347" loading="lazy" alt="The Insights tab: a day map with one lane per app, hour-by-hour bars and a week heatmap"><figcaption><b>Insights</b> (Ctrl + Alt + I). Estimated from captures already on disk: no new tracking, no model.</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<div class="wrap"><div class="rule" style="--c:16;--cp:2" aria-hidden="true"></div></div>
+
+<section id="privacy" aria-labelledby="privacy-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Privacy by construction</p>
+      <h2 id="privacy-h">Absent code paths, not settings left off</h2>
+      <p class="lede">Each of these is enforced in code, and most are checked by a test. <a href="/security/">What is stored, what leaves your PC, and what is not done yet &rarr;</a></p>
+    </div>
+    <div class="grid12 safety-grid">
+      <ul class="checks" id="checks">
+        <li style="--i:0"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x=".5" y=".5" width="23" height="23" rx="6"/><path pathLength="1" d="M7 12.5l3.2 3.2L17 8.8"/></svg><div><b>Faces blurred before anything is written</b><span>A test re-runs the face detector on the saved JPEG and requires zero hits. The clean frame never reaches disk.</span></div></li>
+        <li style="--i:1"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x=".5" y=".5" width="23" height="23" rx="6"/><path pathLength="1" d="M7 12.5l3.2 3.2L17 8.8"/></svg><div><b>Sensitive windows are never captured</b><span>Password managers, banking and payment sites, private browser windows and Jimmy's own windows. The list shipped before the first run, and you can add to it.</span></div></li>
+        <li style="--i:2"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x=".5" y=".5" width="23" height="23" rx="6"/><path pathLength="1" d="M7 12.5l3.2 3.2L17 8.8"/></svg><div><b>No faces table, no people table</b><span>Neither exists, and a test asserts it. The webcam recognises only you, and only if you ask it to.</span></div></li>
+        <li style="--i:3"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x=".5" y=".5" width="23" height="23" rx="6"/><path pathLength="1" d="M7 12.5l3.2 3.2L17 8.8"/></svg><div><b>No raw audio, no system audio</b><span>Only transcripts are kept. The far end of a call is never recorded, and the mic pauses on sensitive screens.</span></div></li>
+        <li style="--i:4"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x=".5" y=".5" width="23" height="23" rx="6"/><path pathLength="1" d="M7 12.5l3.2 3.2L17 8.8"/></svg><div><b>Captured text is treated as data</b><span>It reaches the model only inside a context block, under a rule to ignore any instructions found there.</span></div></li>
+        <li style="--i:5"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x=".5" y=".5" width="23" height="23" rx="6"/><path pathLength="1" d="M7 12.5l3.2 3.2L17 8.8"/></svg><div><b>Rules for actions live in code</b><span>Every proposed action passes a policy layer that refuses, stops, asks or allows, whatever model proposed it.</span></div></li>
+      </ul>
+      <div class="refused" id="refused">
+        <figure class="chat">
+          <div class="chat-bar"><span class="dot" aria-hidden="true"></span>Jimmy · a password field is in front</div>
+          <div class="chat-body">
+            <p class="msg user ask-it">Jimmy, type my password in here</p>
+            <div class="refusal" role="note"><strong>Refused</strong><p>Never into a password box.</p><small>Decided in code by the policy layer, before any model is trusted.</small></div>
+          </div>
+        </figure>
+        <figure class="chat">
+          <div class="chat-bar"><span class="dot" aria-hidden="true"></span>Jimmy · a plan is running</div>
+          <div class="chat-body">
+            <p class="msg user">Jimmy, send it</p>
+            <div class="refusal ask" role="note"><strong>Asks first</strong><p>Anything that can't be undone waits for your "yes".</p><small>Send, delete, buy, close: even inside a plan you already approved.</small></div>
+          </div>
+        </figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="wrap"><div class="rule" style="--c:9;--cp:8" aria-hidden="true"></div></div>
+
+<section aria-labelledby="results-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Measured</p>
+      <h2 id="results-h">Numbers from the development laptop</h2>
+      <p class="lede">Every figure on this site comes from a measurement written down in the repository, with how it was taken.</p>
+    </div>
+    <div class="tiles">
+      <div class="tile">
+        <span class="lbl">Right first decision on 130 real spoken commands</span>
+        <span class="big">124<small>/ 130</small></span>
+        <div class="bars" aria-label="Agent 95 percent versus the earlier system's 71 percent">
+          <div class="bar now"><span>Agent (D42)</span><i style="width:95%"></i><span>95 %</span></div>
+          <div class="bar"><span>Before (D41)</span><i style="width:71%"></i><span>71 %</span></div>
+        </div>
+      </div>
+      <div class="tile">
+        <span class="lbl">Hybrid search over your history</span>
+        <span class="big">0.5<small>s</small></span>
+        <div class="bars" aria-label="0.5 seconds now versus 2.8 seconds before the performance pass">
+          <div class="bar now"><span>Now</span><i style="width:17.9%"></i><span>0.5 s</span></div>
+          <div class="bar"><span>Before (D38)</span><i style="width:100%"></i><span>2.8 s</span></div>
+        </div>
+      </div>
+      <div class="tile">
+        <span class="lbl">Faces the detector finds in a saved screenshot</span>
+        <span class="big">0</span>
+        <p class="note">The stage 1 test puts 2 faces in, saves the blurred JPEG, and runs the face detector on it again: 0 found.</p>
+      </div>
+    </div>
+    <div class="context">
+      <span><strong>One laptop: Ryzen 7 7840HS, RTX 4050 with 6 GB.</strong> Your results will vary.</span>
+      <a href="/benchmark/">All measurements, including weak spots &rarr;</a>
+    </div>
+  </div>
+</section>
+
+<div class="wrap"><div class="rule" style="--c:26;--cp:4" aria-hidden="true"></div></div>
+
+<section id="start" aria-labelledby="start-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Get started</p>
+      <h2 id="start-h">Install from source</h2>
+      <p class="lede">You need Windows 11, an NVIDIA GPU (built on a 6 GB RTX 4050), Python 3.12, Node.js and Ollama. A one-click installer is in progress and not released yet.</p>
+    </div>
+    <div class="steps">
+      <article class="card"><span class="step-n">1</span><h3>Install</h3><p>Make a Python 3.12 environment, install the packages, and build the overlay once.</p><div class="viz"><pre>py -3.12 -m venv .venv
+.venv\Scripts\pip install -r requirements.txt
+cd overlay; npm install; npm run build</pre></div></article>
+      <article class="card"><span class="step-n">2</span><h3>Pull two local models</h3><p>One decides cards; the other powers meaning search. Both run on your PC through Ollama.</p><div class="viz"><pre>ollama pull qwen2.5:3b
+ollama pull bge-m3</pre></div></article>
+      <article class="card"><span class="step-n">3</span><h3>Check, then run</h3><p>Add a free model key for spoken answers, or run without one: answers then show what search found.</p><div class="viz"><pre>python -m ambient doctor
+python -m ambient run</pre></div><p><a href="/docs/" style="color:var(--primary);font-weight:600">Full setup guide &rarr;</a></p></article>
+    </div>
+  </div>
+</section>
+
+<div class="wrap"><div class="rule" style="--c:14;--cp:7" aria-hidden="true"></div></div>
+
+<section aria-labelledby="faq-h">
+  <div class="wrap">
+    <div class="sec-head"><p class="eyebrow">FAQ</p><h2 id="faq-h">Questions</h2></div>
+    <div class="faq">
+      <details><summary>Does Jimmy send my screen to the cloud?</summary><p>Not continuously. Captures are stored on your PC. When you ask a question, the evidence shown with the answer (at most 6,000 characters) goes to the model provider you chose. A question about your screen also sends that window's latest picture, with faces already blurred. Without a key, nothing is sent. <a href="/security/#leaves">The full list</a>.</p></details>
+      <details><summary>Does it work without an API key?</summary><p>Yes. Capture, search, the timeline, insights and cards all run locally. Without a key, each answer shows what search found (exactly what would have been sent to the model) instead of a spoken reply.</p></details>
+      <details><summary>Which model providers does it support?</summary><p>NVIDIA (the default; a free key from build.nvidia.com), Google Gemini on its free tier with NVIDIA as a backup, or OpenAI (paid). Card decisions and meaning search always run locally through Ollama.</p></details>
+      <details><summary>Does it record other people?</summary><p>The mic hears the room, so speech near it is transcribed. System audio, such as the other side of a call, is never captured. Faces in screenshots are blurred, only counts are kept, and the webcam recognises only you, and only after you say "remember my face".</p></details>
+      <details><summary>Can it click and type on its own?</summary><p>Only when you asked, it is sure which control you meant, and the action can be undone. It shows its cursor first and gives you a moment to say "stop". Anything that can't be undone, or a site you didn't name, waits for your "yes". It never types into a password box or acts in banking or password-manager windows.</p></details>
+      <details><summary>Which languages does it understand?</summary><p>English and Hindi. Hindi works through one model call that also returns the English; its real-world accuracy has not been measured yet.</p></details>
+      <details><summary>Is there an installer?</summary><p>Not yet. A Windows installer is being built; until it is released, install from source with the <a href="/docs/">setup guide</a>.</p></details>
+      <details><summary>Is it open source?</summary><p>Yes, MIT licensed. The code, every design decision and the evidence behind it are public (View on GitHub, above).</p></details>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer><div class="wrap foot">
+  <a class="foot-brand" href="/"><img src="/icon.png" alt="" width="32" height="32">Jimmy</a>
+  <nav aria-label="Footer"><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a></nav>
+  <p>Jimmy · an always-on assistant for Windows 11 that stays quiet until you ask · MIT licensed</p>
+</div></footer>
+
+<script>
+(function(){
+  if(!window.matchMedia || !window.matchMedia('(prefers-reduced-motion: no-preference)').matches || !('IntersectionObserver' in window)) return;
+  ['day','checks','refused'].forEach(function(id){
+    var el=document.getElementById(id); if(!el) return;
+    var io=new IntersectionObserver(function(es){ es.forEach(function(e){ if(e.isIntersecting){ io.disconnect(); el.classList.add('go'); } }); },{threshold:.35});
+    io.observe(el);
+  });
+})();
+</script>
+</body></html>

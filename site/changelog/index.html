@@ -1,0 +1,102 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Changelog · Jimmy</title>
+<meta name="description" content="What changed in Jimmy and when, from the first capture loop in September 2026 to Gemini, autonomy when sure, and answer cards.">
+<link rel="icon" href="/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/site.css">
+</head><body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top"><div class="wrap">
+  <a class="brand" href="/" aria-label="Jimmy home"><img src="/icon.png" alt="" width="32" height="32">Jimmy</a>
+  <nav class="nav" aria-label="Primary"><a href="/#how">How it works</a><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/" aria-current="page">Changelog</a></nav>
+  <a class="btn btn-primary" href="/docs/#install">Get started</a>
+</div></header>
+
+<main id="main">
+<div class="page-head"><div class="wrap">
+  <p class="eyebrow">Changelog</p>
+  <h1>What changed, and when</h1>
+  <p class="lede">Newest first. The labels in brackets (D58 and so on) are the project's decision records, where each change is written up with the evidence behind it.</p>
+</div></div>
+
+<div class="wrap doc-layout single">
+<div class="prose" style="max-width:52rem">
+<ol class="log">
+  <li><time datetime="2026-11-01">2026-11-01</time><div>
+    <h3>Gemini, measured live (D58)</h3>
+    <ul>
+      <li>A slow model now counts as a down model: one try per model, the first word within 6 seconds, then the next model in the chain (Gemini 3.8 Flash → 3.5 Flash-Lite → NVIDIA).</li>
+      <li>In a "which one?" question, the model's own pick comes first, where the cursor points and where "yes" lands.</li>
+    </ul></div></li>
+  <li><time datetime="2026-10-31">2026-10-31</time><div>
+    <h3>Gemini, acting when sure, answer cards (D53–D57)</h3>
+    <ul>
+      <li>Google Gemini on its free tier as a provider, with NVIDIA as a backup that answers when Gemini can't.</li>
+      <li>Jimmy acts without a "yes" only when it is sure which control you meant and the action can be undone, shown first with a moment to say "stop". Otherwise it asks "which one?".</li>
+      <li>Answers can come as cards: steps, a choice, a confirmation, a list, a table, a checklist or a chart. Plans are played back live as they run.</li>
+    </ul></div></li>
+  <li><time datetime="2026-10-07">2026-10-07</time><div>
+    <h3>Lighter and safer (D47–D52)</h3>
+    <ul>
+      <li>Background work runs in Windows' efficiency mode and waits on battery or a busy CPU; capture slows down when you're idle.</li>
+      <li>The agent sees fewer tools per step, checks every action, and is scored on whole tasks.</li>
+      <li>A policy layer in code decides what the agent may do. A plan's steps run back to back after one "yes".</li>
+      <li>Windows OCR, read-only recall over MCP, and several voice, GPU and storage upgrades, built behind settings that stay off until measured.</li>
+    </ul></div></li>
+  <li><time datetime="2026-10-05">2026-10-05</time><div>
+    <h3>Fixes from a live session; OpenAI (D44–D46)</h3>
+    <ul>
+      <li>OpenAI as a second provider, and keys in a <code>.env</code> file.</li>
+      <li>Each request gets its own decision trace; slow steps fall back to another model; "stop" ends a running task; switching, minimizing and maximizing windows.</li>
+      <li>While paused, the mic listens only for the name and stores nothing.</li>
+    </ul></div></li>
+  <li><time datetime="2026-10-03">2026-10-03</time><div>
+    <h3>Hands, eyes, and an agent (D41–D43)</h3>
+    <ul>
+      <li>Reminders, goals and memories by voice and in a Memory tab; questions about the screen can use a vision model.</li>
+      <li>A virtual cursor that presses and types through UI Automation after a "yes".</li>
+      <li>Jimmy became one agent loop that sees its own state, your lists and the window's controls, runs multi-step tasks on one "yes", and logs every decision. 95 % on 130 real commands, up from 71 %.</li>
+      <li>When the default NVIDIA model reached end of life, Jimmy moved to the next one automatically.</li>
+    </ul></div></li>
+  <li><time datetime="2026-10-02">2026-10-02</time><div>
+    <h3>Insights, a privacy curtain, and a lot of polish (D31–D40)</h3>
+    <ul>
+      <li>The Insights tab and instant answers to "how was my day?".</li>
+      <li>Cards Jimmy writes itself: welcome back, reminders, deadlines, an evening recap. Hands-free navigation after it shows you something.</li>
+      <li>The privacy curtain: the webcam notices when you leave, and capture and listening stop. "Remember my face", encrypted with Windows DPAPI.</li>
+      <li>English and Hindi only; timers; forgetting a span of history; asking without the name by looking at the screen.</li>
+      <li>A performance pass: search from 2.8 s to 0.5 s, with identical results.</li>
+    </ul></div></li>
+  <li><time datetime="2026-09-25">2026-09-25</time><div>
+    <h3>Cards, the overlay, recall and voice (D19–D30)</h3>
+    <ul>
+      <li>The trigger gate: RECALL and FOCUS cards, decided by a local model and closed against blind judges.</li>
+      <li>The overlay: a transparent, click-through pill and cards that never steal focus.</li>
+      <li>Search by keywords and meaning, and the timeline window. All five planned stages done.</li>
+      <li>"Jimmy, …" by voice, with evidence and a spoken answer; it asks back when a question is unclear.</li>
+    </ul></div></li>
+  <li><time datetime="2026-09-22">2026-09-22</time><div>
+    <h3>The first real hour (D17–D18)</h3>
+    <ul>
+      <li>A change gate that sees a one-message chat scroll, leaner stored text, and a visible mic state.</li>
+      <li>A faster chat model, about 1 s to the first word.</li>
+    </ul></div></li>
+  <li><time datetime="2026-09-21">2026-09-21</time><div>
+    <h3>Capture and the Jimmy core (D1–D16)</h3>
+    <ul>
+      <li>Screen text, speech and blurred screenshots into one searchable store, with the exclusion list in place before the first run.</li>
+      <li>The Jimmy core: one model client, memory, and a plugin seam with the capture layer as its first plugin.</li>
+    </ul></div></li>
+</ol>
+</div>
+</div>
+</main>
+
+<footer><div class="wrap foot">
+  <a class="foot-brand" href="/"><img src="/icon.png" alt="" width="32" height="32">Jimmy</a>
+  <nav aria-label="Footer"><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a></nav>
+  <p>Jimmy · an always-on assistant for Windows 11 that stays quiet until you ask · MIT licensed</p>
+</div></footer>
+</body></html>
