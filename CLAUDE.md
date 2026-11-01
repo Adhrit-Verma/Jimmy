@@ -231,6 +231,7 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `docs/RESEARCH-AGENT-2026-10.md` | research and a measured roadmap for the agent, voice and footprint (2026-10-07). Built as D47–D52; the flagged items still need the measurements it names. |
 | `docs/img/` | README screenshots: the real overlay and model on **invented** pages, never real captures (they hold personal data). |
 | `data/` | the capture DB and blurred thumbnails. Never commit. |
+| `site/` | the public website (static, TableFox design, sky accent), hosted on Render via `render.yaml`. `python site/check_site.py` must print `ok`: one github.com link only (the hero button). Every number on it comes from a D-record; update it when those change. |
 
 ---
 
