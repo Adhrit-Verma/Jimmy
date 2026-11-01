@@ -71,15 +71,21 @@ jobs:
 
           # 2. first run, headless: Jimmy's own Python, packages, the speech model (Lite, CPU)
           $t = Get-Date
-          $p = Start-Process D:\Apps\Jimmy\Jimmy.exe -ArgumentList '--provision','--data','D:\JimmyData','--profile','lite','--gpu','0','--log','D:\provision.log' -Wait -PassThru
+          $env:ELECTRON_ENABLE_LOGGING = "1"
+          $p = Start-Process D:\Apps\Jimmy\Jimmy.exe -ArgumentList '--provision','--data','D:\JimmyData','--profile','lite','--gpu','0','--log','D:\provision.log' -Wait -PassThru -RedirectStandardOutput D:\provision.out -RedirectStandardError D:\provision.err
           "provision: exit $($p.ExitCode) in $([int]((Get-Date)-$t).TotalSeconds) s"
-          Get-Content D:\provision.log -ErrorAction SilentlyContinue | Select-String '\] (done|failed)|vcrtFrom|verify.*✗|FAILED' | ForEach-Object { $_.Line }
-          if ($p.ExitCode -ne 0) { Get-Content D:\provision.log -Tail 60; throw "provision failed" }
+          Get-Content D:\provision.log -ErrorAction SilentlyContinue | Select-String '\] (done|failed)|vcrtFrom|verify.*✗|FAILED|^\S+ provision:|headless' | ForEach-Object { $_.Line }
+          if ($p.ExitCode -ne 0 -or -not (Test-Path D:\JimmyData\runtime\ready.json)) {
+            "--- provision.log"; Get-Content D:\provision.log -Tail 60 -ErrorAction SilentlyContinue
+            "--- Electron's stderr"; Get-Content D:\provision.err -Tail 40 -ErrorAction SilentlyContinue
+            "--- Electron's stdout"; Get-Content D:\provision.out -Tail 20 -ErrorAction SilentlyContinue
+            throw "provision didn't finish (exit $($p.ExitCode), no ready.json)"
+          }
 
           # 3. self-test: every native piece imports, doctor runs, Jimmy runs 20 s
-          $p = Start-Process D:\Apps\Jimmy\Jimmy.exe -ArgumentList '--self-test','--log','D:\selftest.log' -Wait -PassThru
+          $p = Start-Process D:\Apps\Jimmy\Jimmy.exe -ArgumentList '--self-test','--log','D:\selftest.log' -Wait -PassThru -RedirectStandardOutput D:\selftest.out -RedirectStandardError D:\selftest.err
           Get-Content D:\selftest.log -ErrorAction SilentlyContinue | Select-String 'self-test|"ok": false|msvcp140|cuda|ok  |FAIL' | ForEach-Object { $_.Line }
-          if ($p.ExitCode -ne 0) { Get-Content D:\selftest.log -Tail 80; throw "self-test failed" }
+          if ($p.ExitCode -ne 0 -or -not (Test-Path D:\selftest.log)) { Get-Content D:\selftest.log -Tail 80 -ErrorAction SilentlyContinue; Get-Content D:\selftest.err -Tail 40 -ErrorAction SilentlyContinue; throw "self-test failed (exit $($p.ExitCode))" }
           $vc = Select-String -Path D:\selftest.log -Pattern '"dll": "msvcp140.dll", "path": "([^"]+)"' | Select-Object -First 1
           "C++ runtime loaded from: $($vc.Matches[0].Groups[1].Value)"
           if ($vc -and $vc.Matches[0].Groups[1].Value -notlike 'D:\JimmyData\runtime\*') { throw "msvcp140 came from outside Jimmy's own Python" }
@@ -105,12 +111,17 @@ jobs:
           if (Test-Path D:\Apps\Jimmy\Jimmy.exe) { throw "uninstall left Jimmy.exe" }
           if (Test-Path "$env:APPDATA\Jimmy") { throw "uninstall left APPDATA\Jimmy" }
           if (Test-Path D:\JimmyData\runtime) { throw "uninstall left Jimmy's Python" }
+      - name: Collect logs
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force logs | Out-Null
+          foreach ($f in 'D:\provision.log','D:\provision.out','D:\provision.err','D:\selftest.log','D:\selftest.out','D:\selftest.err','D:\JimmyData\logs\jimmy.log','D:\Apps\Jimmy\setup.log') {
+            if (Test-Path $f) { Copy-Item $f logs\ }
+          }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: clean-machine-logs
-          path: |
-            D:\provision.log
-            D:\selftest.log
-            D:\JimmyData\logs\jimmy.log
+          path: logs/
           retention-days: 14
