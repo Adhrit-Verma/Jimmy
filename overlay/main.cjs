@@ -352,5 +352,33 @@ app.whenReady().then(() => {
 });
 
 app.on("before-quit", () => { quitting = true; });
+// D64: updates. The installed overlay checks GitHub Releases 10 minutes after start and every 6 h;
+// a newer setup is downloaded and verified in the background, then one notification: click to
+// update now, otherwise the launcher installs it the next time Jimmy starts.
+if (app.isPackaged && API) {
+  const updater = require("./updater.cjs");
+  const { Notification } = require("electron");
+  let told = "";
+  const check = () => {
+    const data = updater.dataDir();
+    updater.check({ version: app.getVersion(), data, log: (s) => console.log(s) }).then((p) => {
+      if (!p || told === p.version || !Notification.isSupported()) return;
+      told = p.version;
+      const n = new Notification({ title: `Jimmy ${p.version} is ready`,
+        body: "Click to update now (Jimmy restarts in a minute), or it installs the next time Jimmy starts." });
+      n.on("click", () => {
+        updater.apply(p, data, path.dirname(process.execPath));
+        setTimeout(() => app.exit(0), 300);
+      });
+      n.show();
+    }).catch((e) => console.log(`[update] check failed: ${e.message}`));
+  };
+  app.whenReady().then(() => {
+    app.setAppUserModelId("dev.jimmy.ambient");      // the toast's sender, as the Start menu shortcut names it
+    setTimeout(check, 10 * 60 * 1000);
+    setInterval(check, 6 * 60 * 60 * 1000);
+  });
+}
+
 app.on("will-quit", () => globalShortcut.unregisterAll());
 app.on("window-all-closed", () => app.quit());

@@ -108,9 +108,10 @@ export default function Settings() {
             ))}
           </div>
           <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3">
-            {[["webcam", "Privacy curtain (webcam)"], ["local_ai", "Local AI (needs the Full setup's models)"]].map(([k, label]) => (
+            {[["webcam", "Privacy curtain (webcam)"], ["local_ai", "Local AI (needs the Full setup's models)"],
+              ["auto_update", "Update Jimmy automatically"]].map(([k, label]) => (
               <label key={k} className="flex cursor-pointer items-center gap-2.5 text-[13px] text-neutral-300">
-                <input type="checkbox" checked={!!st[k]} onChange={(e) => change({ [k]: e.target.checked })} className="size-4 accent-sky-400" /> {label}
+                <input type="checkbox" checked={k === "auto_update" ? st[k] !== false : !!st[k]} onChange={(e) => change({ [k]: e.target.checked })} className="size-4 accent-sky-400" /> {label}
               </label>
             ))}
             <label className="flex cursor-pointer items-center gap-2.5 text-[13px] text-neutral-300">

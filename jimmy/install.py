@@ -61,7 +61,8 @@ SECRETS = DATA / "secrets.bin"
 # --- settings -------------------------------------------------------------------------------
 DEFAULTS = {"profile": "balanced", "retention_days": 30, "storage_cap_gb": 20, "webcam": True,
             "local_ai": False, "voice": "sapi", "start_with_windows": True, "gpu_release_away_s": 600,
-            "provider": "", "whisper_model": "", "whisper_device": ""}   # "" = the code's default
+            "provider": "", "whisper_model": "", "whisper_device": "",   # "" = the code's default
+            "auto_update": True}                    # D64: the overlay's updater reads it
 
 
 def settings() -> dict:

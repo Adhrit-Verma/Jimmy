@@ -97,6 +97,25 @@ jobs:
           "update: exit $($p.ExitCode); runtime kept: $(Test-Path D:\JimmyData\runtime\ready.json); pointer kept: $(Test-Path $env:APPDATA\Jimmy\location.json)"
           if (-not (Test-Path D:\JimmyData\runtime\ready.json) -or -not (Test-Path $env:APPDATA\Jimmy\location.json)) { throw "an update undid the setup" }
 
+          # 3c. self-update (D64): a downloaded, verified update installs when Jimmy.exe starts,
+          # and the setup starts Jimmy again. The same setup stands in for a newer one.
+          $up = 'D:\JimmyData\cache\update'
+          New-Item -ItemType Directory -Force $up | Out-Null
+          Copy-Item $setup "$up\Jimmy-Setup-999.0.0.exe"
+          $sha = (Get-FileHash "$up\Jimmy-Setup-999.0.0.exe" -Algorithm SHA256).Hash.ToLower()
+          @{ version = '999.0.0'; file = "$up\Jimmy-Setup-999.0.0.exe"; sha256 = $sha } | ConvertTo-Json | Set-Content -Encoding ascii "$up\pending.json"
+          Set-Content D:\Apps\Jimmy\marker.txt 'gone if the setup ran'
+          Start-Process D:\Apps\Jimmy\Jimmy.exe
+          $deadline = (Get-Date).AddSeconds(180)
+          do { Start-Sleep 3 } until (((-not (Test-Path D:\Apps\Jimmy\marker.txt)) -and (Test-Path D:\Apps\Jimmy\Jimmy.exe) -and -not (Test-Path $up)) -or (Get-Date) -gt $deadline)
+          $py = @(Get-Process | Where-Object { $_.Path -like 'D:\JimmyData\runtime\*' }).Count
+          "self-update: setup ran: $(-not (Test-Path D:\Apps\Jimmy\marker.txt)); Jimmy.exe back: $(Test-Path D:\Apps\Jimmy\Jimmy.exe); tried update cleared: $(-not (Test-Path $up)); Jimmy's Python running: $py"
+          Get-Content D:\Apps\Jimmy\setup.log -Tail 5 -ErrorAction SilentlyContinue
+          if (Test-Path D:\Apps\Jimmy\marker.txt) { throw "the update's setup never ran" }
+          if (Test-Path $up) { throw "Jimmy didn't start again after the update (the tried update is still there)" }
+          Get-Process | Where-Object { $_.Path -like 'D:\Apps\Jimmy\*' -or $_.Path -like 'D:\JimmyData\runtime\*' } | Stop-Process -Force
+          Start-Sleep 3
+
           # 4. what landed on C:
           "on C: (APPDATA\Jimmy):"; Get-ChildItem "$env:APPDATA\Jimmy" | ForEach-Object { "  $($_.Name) $($_.Length) B" }
           $c = (Get-ChildItem "$env:APPDATA\Jimmy" -Recurse -File | Measure-Object Length -Sum).Sum
@@ -127,3 +146,25 @@ jobs:
           name: clean-machine-logs
           path: logs/
           retention-days: 14
+
+  # D64: a new version in overlay/package.json, pushed to main and passing the clean-machine
+  # test, becomes a GitHub Release; installed copies pick it up on their own. Any other push
+  # releases nothing (that version already has its release).
+  release:
+    needs: [build, test-clean-machine]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: jimmy-setup, path: setup }
+      - name: Publish the release, if this version is new
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          v=$(node -p "require('./overlay/package.json').version")
+          if gh release view "v$v" > /dev/null 2>&1; then echo "v$v is already released: nothing to do"; exit 0; fi
+          exe="setup/Jimmy-Setup-$v.exe"
+          test -f "$exe" && test -f "$exe.sha256" || { echo "no $exe in the build"; exit 1; }
+          (cd setup && sha256sum -c "Jimmy-Setup-$v.exe.sha256")
+          gh release create "v$v" "$exe" "$exe.sha256" --target "$GITHUB_SHA" --title "Jimmy $v" --generate-notes

@@ -6,6 +6,7 @@ cheaper to design in now than to retrofit -- see the legal note in AMBIENT_LAYER
 """
 from __future__ import annotations
 
+import os
 import queue
 import threading
 import time
@@ -40,10 +41,66 @@ _MIC_STORE = r"Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager
 
 
 def _own_mic_keys() -> set[str]:
-    """Our own interpreter holds the mic too; it must not count as 'a call'."""
+    """Our own interpreter holds the mic and camera too; it must not count as 'a call'.
+    By the image Windows actually ran, too: an installed Jimmy starts a venv's pythonw.exe,
+    which runs the base interpreter, a path neither sys value names."""
     import sys
-    paths = {sys.executable, getattr(sys, "_base_executable", sys.executable)}
+    paths = {sys.executable, getattr(sys, "_base_executable", sys.executable), _image_path(os.getpid())}
+    for p in list(paths):
+        if p and Path(p).name.lower() in ("python.exe", "pythonw.exe"):
+            paths |= {str(Path(p).with_name("python.exe")), str(Path(p).with_name("pythonw.exe"))}
     return {p.replace("\\", "#").lower() for p in paths if p}
+
+
+def _k32():
+    import ctypes
+    from ctypes import wintypes
+    k = ctypes.WinDLL("kernel32", use_last_error=True)
+    k.OpenProcess.restype = wintypes.HANDLE
+    k.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    k.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR,
+                                             ctypes.POINTER(wintypes.DWORD)]
+    k.CloseHandle.argtypes = [wintypes.HANDLE]
+    return k
+
+
+def _image_path(pid: int) -> str:
+    """The full path of a process's exe; "" if Windows won't say (system and protected
+    processes; never an app that holds a camera)."""
+    import ctypes
+    from ctypes import wintypes
+    k32 = _k32()
+    h = k32.OpenProcess(0x1000, False, pid)            # PROCESS_QUERY_LIMITED_INFORMATION
+    if not h:
+        return ""
+    try:
+        buf, n = ctypes.create_unicode_buffer(1024), wintypes.DWORD(1024)
+        return buf.value if k32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(n)) else ""
+    finally:
+        k32.CloseHandle(h)
+
+
+def _running_images() -> set[str]:
+    """Every running process's exe path, lowercased."""
+    import ctypes
+    from ctypes import wintypes
+    pids, got = (wintypes.DWORD * 4096)(), wintypes.DWORD()
+    if not ctypes.WinDLL("psapi").EnumProcesses(pids, ctypes.sizeof(pids), ctypes.byref(got)):
+        return set()
+    return {p.lower() for p in (_image_path(pid) for pid in pids[: got.value // 4] if pid) if p}
+
+
+def _alive(key: str, images: set[str]) -> bool:
+    """Is the app behind a registry key running? A desktop app's key is its exe path
+    ("C:#…#chrome.exe"); a Store app's is its package family ("Name_publisherid"), whose
+    exes live in "…\\WindowsApps\\Name_<version>_<arch>__publisherid\\".
+    Why it matters: an app that crashed or was killed while holding the camera stays
+    "in use" in the registry for good, and Jimmy kept giving up the camera for nobody."""
+    k = key.lower()
+    if "#" in k:
+        return k.replace("#", "\\") in images
+    name, _, pub = k.rpartition("_")
+    return any(f"\\windowsapps\\{name}_" in p and f"__{pub}\\" in p for p in images)
 
 
 # D40: mic holders you said aren't a call ("Jimmy, I'm not on a call"), as
@@ -125,6 +182,9 @@ def _holders(capability: str) -> list[tuple[str, int]]:
                     continue
 
     scan(_MIC_STORE.rsplit("\\", 1)[0] + "\\" + capability)   # D34: "webcam" too
+    if out:                         # rare: only then is listing processes worth it
+        images = _running_images()
+        out = [(k, s) for k, s in out if _alive(k, images)] if images else out
     return out
 
 

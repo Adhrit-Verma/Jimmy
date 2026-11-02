@@ -15,7 +15,8 @@
 
 !macro customUnInstall
   ; Stop Jimmy first, or its Python would keep files open (an update too: its files get replaced).
-  nsExec::Exec `powershell.exe -NoProfile -NonInteractive -Command "Get-Process | Where-Object { $$_.Path -like '$INSTDIR\*' } | Stop-Process -Force"`
+  ; D64: its Python too, which runs from <data>\runtime, not from here.
+  nsExec::Exec `powershell.exe -NoProfile -NonInteractive -Command "$$d = Get-Content -LiteralPath (Join-Path $$env:APPDATA 'Jimmy\data-path.txt') -ErrorAction SilentlyContinue | Select-Object -First 1; Get-Process | Where-Object { $$_.Path -like '$INSTDIR\*' -or ($$d -and $$_.Path -like ($$d.Trim() + '\runtime\*')) } | Stop-Process -Force"`
   Sleep 800
   ; An update runs the old uninstaller first: then Jimmy's Python, cache and the pointer to the
   ; user's data must stay, or the update would undo the setup (found in the D61 upgrade test).

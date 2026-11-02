@@ -29,7 +29,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 STAGE = HERE / "stage"
-VERSION = "1.0.0"
+# D64: one version, overlay/package.json's. A new one there is what makes CI publish a release.
+VERSION = json.loads((ROOT / "overlay" / "package.json").read_text(encoding="utf-8"))["version"]
 UV_VERSION = "0.13.6"
 UV_URL = f"https://github.com/astral-sh/uv/releases/download/{UV_VERSION}/uv-x86_64-pc-windows-msvc.zip"
 UV_SHA256 = "a2a8820d5eea32f08ef467ef3b7f66883a9b076d5737a2fc2fbb5f458d1bb50f"

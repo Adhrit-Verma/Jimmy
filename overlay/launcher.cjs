@@ -22,6 +22,8 @@ const path = require("path");
 const cp = require("child_process");
 const https = require("https");
 const crypto = require("crypto");
+const updater = require("./updater.cjs");
+const { download } = updater;
 
 const DEV = !app.isPackaged;
 const INSTALL = DEV ? path.join(__dirname, "..", "installer", "dev-install") : path.dirname(process.execPath);
@@ -119,31 +121,7 @@ function run(exe, args, { env, cwd, input, onLine } = {}) {
   });
 }
 
-function download(url, dest, sha256, onProgress) {
-  return new Promise((resolve, reject) => {
-    const get = (u, hops) => https.get(u, { headers: { "User-Agent": "Jimmy-Setup" } }, (res) => {
-      if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && hops < 6) {
-        res.resume();
-        return get(new URL(res.headers.location, u).toString(), hops + 1);
-      }
-      if (res.statusCode !== 200) { res.resume(); return reject(new Error(`HTTP ${res.statusCode} for ${u}`)); }
-      const total = Number(res.headers["content-length"] || 0);
-      const hash = crypto.createHash("sha256");
-      const out = fs.createWriteStream(dest + ".part");
-      let done = 0;
-      res.on("data", (c) => { done += c.length; hash.update(c); onProgress?.(done, total); });
-      res.pipe(out);
-      out.on("finish", () => {
-        const got = hash.digest("hex");
-        if (sha256 && got !== sha256) { fs.rmSync(dest + ".part", { force: true }); return reject(new Error("download doesn't match its SHA-256")); }
-        fs.renameSync(dest + ".part", dest);
-        resolve(dest);
-      });
-      out.on("error", reject);
-    }).on("error", reject);
-    get(url, 0);
-  });
-}
+// download(url, dest, sha256, onProgress): shared with the updater (D64).
 
 // --- the PC, as the onboarding shows it -----------------------------------------------------
 const CHECK_PS = `
@@ -455,6 +433,15 @@ module.exports = function launch() {
   app.whenReady().then(() => {
     if (has("--provision") || has("--self-test")) return headless();
     logFile = path.join(INSTALL, "setup.log");
+    // D64: an update the overlay downloaded and verified installs now, before Jimmy starts;
+    // the setup starts Jimmy again when it's done.
+    const update = DEV ? null : updater.pending(pointer(), app.getVersion());
+    if (update && !has("--onboarding")) {
+      log(`update: installing Jimmy ${update.version} over ${app.getVersion()}`);
+      updater.apply(update, pointer(), INSTALL);
+      setTimeout(() => app.exit(0), 300);
+      return;
+    }
     if (ready() && !has("--onboarding")) {
       updatePackages().then((ok) => {
         if (!ok) return onboarding();               // couldn't update: the onboarding repairs it
