@@ -87,8 +87,10 @@ jobs:
           Get-Content D:\selftest.log -ErrorAction SilentlyContinue | Select-String 'self-test|"ok": false|msvcp140|cuda|ok  |FAIL' | ForEach-Object { $_.Line }
           if ($p.ExitCode -ne 0 -or -not (Test-Path D:\selftest.log)) { Get-Content D:\selftest.log -Tail 80 -ErrorAction SilentlyContinue; Get-Content D:\selftest.err -Tail 40 -ErrorAction SilentlyContinue; throw "self-test failed (exit $($p.ExitCode))" }
           $vc = Select-String -Path D:\selftest.log -Pattern '"dll": "msvcp140.dll", "path": "([^"]+)"' | Select-Object -First 1
-          "C++ runtime loaded from: $($vc.Matches[0].Groups[1].Value)"
-          if ($vc -and $vc.Matches[0].Groups[1].Value -notlike 'D:\JimmyData\runtime\*') { throw "msvcp140 came from outside Jimmy's own Python" }
+          # The path comes from a JSON line: its backslashes are doubled.
+          $vcPath = if ($vc) { $vc.Matches[0].Groups[1].Value.Replace('\\', '\') } else { "" }
+          "C++ runtime loaded from: $vcPath"
+          if (-not $vcPath -or $vcPath -notlike 'D:\JimmyData\runtime\*') { throw "msvcp140 came from outside Jimmy's own Python ($vcPath)" }
 
           # 3b. an update over the top keeps the setup (Jimmy's Python, the pointer, the data)
           $p = Start-Process $setup -ArgumentList '/S','/D=D:\Apps\Jimmy' -Wait -PassThru
