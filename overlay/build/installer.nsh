@@ -9,8 +9,19 @@
   !define MUI_DIRECTORYPAGE_TEXT_TOP "Choose where Jimmy itself goes (about 350 MB). Any drive is fine. On first start you'll pick a second folder, for your data and Jimmy's own Python and models (2 to 11 GB): it can be on another drive.$\r$\n$\r$\nOnly this stays on C:, whatever you choose: a tiny file that remembers where your data is, the shortcuts, and the uninstall entry."
 !macroend
 
+!include FileFunc.nsh
+
 !macro customInstall
-  ; Nothing to add: everything else happens in Jimmy's own onboarding, where it can show progress.
+  ; Everything else happens in Jimmy's own onboarding, where it can show progress.
+  ; D64: an update Jimmy started itself (overlay/updater.cjs) asks to be started again. Not
+  ; electron-builder's --force-run: that goes through ExecShellAsUser (Explorer), which did
+  ; nothing on the clean-machine test. A plain Exec, as the user running this setup.
+  ${GetParameters} $R0
+  ClearErrors
+  ${GetOptions} $R0 "--jimmy-restart" $R1
+  ${ifNot} ${Errors}
+    Exec '"$INSTDIR\Jimmy.exe"'
+  ${endIf}
 !macroend
 
 !macro customUnInstall

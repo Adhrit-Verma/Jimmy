@@ -5,7 +5,7 @@
 // downloaded into <data>\cache\update (the drive the user chose, never C:) and verified
 // against the release's .sha256. Then a Windows notification: click to update now, or it
 // installs the next time Jimmy.exe starts (the launcher). Installing stops Jimmy (its Python
-// in <data>\runtime and the Jimmy.exe processes), runs the setup with /S --force-run, and the
+// in <data>\runtime and the Jimmy.exe processes), runs the setup with /S --jimmy-restart, and the
 // setup starts Jimmy again. `auto_update: false` in settings.json turns all of it off.
 const fs = require("fs");
 const os = require("os");
@@ -119,7 +119,7 @@ async function check({ version, data, log = () => {} }) {
   return p;
 }
 
-// Stop Jimmy, run the setup silently over the same folder, start Jimmy again (--force-run).
+// Stop Jimmy, run the setup silently over the same folder, start Jimmy again (--jimmy-restart: installer.nsh's customInstall).
 // A detached PowerShell does it, so it outlives the Jimmy.exe that asked.
 function apply(p, data, install) {
   // 0. One try per download (see pending()).
@@ -132,7 +132,7 @@ function apply(p, data, install) {
   // 2. The setup, detached: Node puts other children in a job that dies with their parent, and
   // the setup outlives us (the caller exits next). It stops any other Jimmy.exe itself.
   // /D= must come last and unquoted (NSIS), hence the verbatim command line.
-  cp.spawn(p.file, ["/S", "--force-run", `/D=${install}`],
+  cp.spawn(p.file, ["/S", "--jimmy-restart", `/D=${install}`],
            { detached: true, stdio: "ignore", windowsVerbatimArguments: true, argv0: `"${p.file}"` }).unref();
 }
 
