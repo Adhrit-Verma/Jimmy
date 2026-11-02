@@ -287,7 +287,8 @@ Fellowship", "Alex Rivera"), so no personal data appears.</sub>
 
 For Windows 10 (22H2) or 11, 64-bit. No Python, Node, CUDA or admin rights needed.
 
-1. **Download** `Jimmy-Setup-<version>.exe` (about 170 MB) and its `.sha256`. Check it in PowerShell:
+1. **Download** `Jimmy-Setup-<version>.exe` (about 170 MB) and its `.sha256` from
+   [Releases](https://github.com/Adhrit-Verma/Jimmy/releases/latest). Check it in PowerShell:
    `(Get-FileHash .\Jimmy-Setup-1.0.0.exe).Hash` must equal the `.sha256` file's value.
 2. **Run it.** The setup isn't code-signed yet, so Windows shows *"Windows protected your PC"*:
    click **More info → Run anyway**. Pick a folder on any drive.
