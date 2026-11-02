@@ -214,6 +214,13 @@ call, an unmeasured lip veto, no visible calibration, a flickering eye, a stale
 timeline after a forget, scroll in Claude). Checks: `tests\test_stage9.py` (14),
 matrix (154), eval 41/41.
 
+## Updates and the camera fix · **built 2026-11-02 (D63–D64), v1.0.1**
+
+The camera no longer says "in use" for an app that's gone or for Jimmy itself (D63). Installed
+copies update themselves from GitHub Releases; a version bump pushed to `main` becomes a release
+once the clean-machine test passes, which now also runs a real self-update (D64). Checks:
+`tests\test_stage16.py` (5). **Open:** the first real update in the field (1.0.1 → the next).
+
 ## Installer · **built 2026-11-01 (D60–D62)**
 
 `docs/PLAN-2026-11-01-installer.md`. `Jimmy-Setup.exe` (`python installer/build.py`): per

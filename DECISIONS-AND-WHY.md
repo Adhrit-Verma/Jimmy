@@ -2525,3 +2525,62 @@ installing, say hi) reads the PC live (Windows, 64-bit, RAM, NVIDIA GPU and driv
 camera and Windows' privacy switches for them), recommends a profile, tests keys, shows each
 install step's progress and offers start with Windows. `--onboarding --shot x.png --step N`
 renders any step for review.
+
+### D63 — "Another app is using the camera", when none was
+
+**2026-11-02.** The human: the camera constantly said it was in use, with nothing else using it.
+`audio._holders` read Windows' privacy registry (`CapabilityAccessManager\ConsentStore\webcam`),
+where an app holding the camera has `LastUsedTimeStop == 0`, and trusted it. Two ways it lies:
+
+- **An app that crashed or was killed while holding the camera stays "in use" for good**, until
+  it next uses the camera. The presence loop then let go of the camera every 5 s, for nobody.
+- **Jimmy itself.** Its own key was `sys.executable` / `sys._base_executable`; the installed copy
+  starts a venv's `pythonw.exe`, which runs the base interpreter, a path neither names (and
+  `pythonw` vs `python`). Jimmy could see itself as "another app".
+
+Fix, in the one function both the camera and the mic's "is this a call?" go through: a holder
+counts only if a process with that image is running (`_running_images`: EnumProcesses +
+QueryFullProcessImageNameW, ~20 ms for ~330 processes, and only when the registry names a
+holder at all). A Store app's key is its package family; it counts if an exe runs from
+`WindowsApps\<Name>_…__<publisher>\`. Jimmy's own keys now include the image Windows actually
+ran (by its PID; `GetCurrentProcess`'s pseudo-handle came back empty through ctypes) and the
+`python`/`pythonw` pair. Checks: `tests/test_stage16.py` (a fake registry and process list).
+
+Limit: a process Windows won't describe (protected, another user's) counts as not running.
+Apps that hold a camera (browsers, Teams, Zoom, OBS) are the user's own and are described.
+
+### D64 — Updates: CI releases a new version, installed copies update themselves
+
+**2026-11-02.** The human: auto-update, when they push changes and make releases.
+
+**Releasing**: `overlay/package.json`'s `version` is the one version (`installer/build.py` reads
+it). On a push to `main`, after the clean-machine test passes, a `release` job publishes
+`v<version>` with the setup and its `.sha256`, unless that release already exists. So pushes
+don't release by accident; raising the version does.
+
+**Updating** (`overlay/updater.cjs`, no library): the installed overlay checks
+`api.github.com/repos/…/releases/latest` 10 minutes after start and every 6 h, downloads a newer
+setup into `<data>\cache\update` (the user's drive, never C:; electron-updater would have cached
+it under `%LOCALAPPDATA%`) and verifies it against the release's `.sha256` before giving it its
+name. Then one notification: click to update now, or the launcher installs it at the next start,
+before Jimmy runs. Installing stops Jimmy's Python, then starts the setup `/S --force-run
+/D=<install folder>`; the setup replaces Jimmy (keeping data and runtime, D61's `isUpdated`
+guard) and starts it again, and new Python packages follow from D61's lock fingerprint.
+`auto_update: false` (Settings) turns it all off.
+
+Found while testing `apply()` on this PC: Windows PowerShell started `detached` (no console) exits
+at once and does nothing; a non-detached child dies with its parent, because Node puts its
+children in a kill-on-close job; and with a verbatim command line (NSIS wants `/D=` last and
+unquoted) Node doesn't quote the exe's own path either. So: a short PowerShell that stops Python
+*while we wait*, then the setup itself `detached` (a GUI program needs no console), with `argv0`
+quoted by hand. A stand-in setup recorded the exact command line and outlived its killed parent.
+An update is tried once (`tried` in `pending.json`): a setup that failed must not stop Jimmy
+starting every time. The uninstaller now also stops Jimmy's Python in `<data>\runtime`.
+
+The clean-machine test plants a verified "999.0.0" (the same setup) and starts Jimmy.exe like a
+user: the setup must run (the install folder is replaced), Jimmy must start again, and the tried
+update must be gone.
+
+Trust: HTTPS from GitHub, and the `.sha256` comes from the same release, so it catches a broken
+or swapped download, not a compromised repo or account. Signing the setup would cover that; until
+then, protect the GitHub account (2FA). 1.0.0 has no updater: its users install 1.0.1 once by hand.

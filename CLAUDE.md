@@ -123,6 +123,7 @@ cd overlay; npm install; npm run build   # once, and after any change under over
 .\.venv\Scripts\python.exe tests\test_stage14.py  # 16 checks: D54/D58 Gemini + backup chain, D55 ask when unsure, D56 templates, D57 steps
 .\.venv\Scripts\python.exe -m ambient.ui         # self-check of the template validator (D56)
 .\.venv\Scripts\python.exe tests\test_stage15.py  # 6 checks: D60-D61 data folder/pointer, settings, DPAPI keys, storage limits, Settings API, setup pieces
+.\.venv\Scripts\python.exe tests\test_stage16.py  # 5 checks: D63 camera "in use" by gone apps / Jimmy itself, D64 updates
 .\.venv\Scripts\python.exe installer\build.py     # D61: installer\out\Jimmy-Setup-<v>.exe (+ .sha256); needs Node + internet
 .\.venv\Scripts\python.exe installer\art.py       # D62: the icon and the installer's images from Jimmy's mark
 .\.venv\Scripts\python.exe tests\test_commands.py # the command matrix: 177 utterances, talk, a drill
@@ -222,6 +223,8 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `installer/` | D61/D62: `build.py` (uv, hash-locked requirements, staged code, app-local C++ runtime, electron-builder), `art.py` (icon and NSIS images). `stage/`, `out/`, `cache/`, `dev-install/` are build outputs, git-ignored. |
 | `overlay/launcher.cjs` | D61: the installed Jimmy.exe's launcher, the onboarding's main process, the provisioner (uv, packages, models, Ollama), headless `--provision`/`--self-test`. |
 | `overlay/setup-preload.cjs` | D61: the onboarding page's only bridge. |
+| `overlay/updater.cjs` | D64: updates from GitHub Releases: check, download + SHA-256, `pending`, `apply` (stop Python, the setup `/S --force-run`). `node overlay/updater.cjs` self-checks. |
+| `tests/test_stage16.py` | D63–D64 check: camera holders that are gone or Jimmy itself, the pending update, the off switch, what ships. |
 | `overlay/src/Onboarding.jsx` | D61/D62: the first run, eight steps, in Jimmy's design. |
 | `overlay/src/Logo.jsx` | D62: Jimmy's mark, animated (the pill and its listening bars). |
 | `overlay/src/Settings.jsx` | D60: Settings → storage, limits, profile, clean-up, start with Windows (the timeline window's 4th tab). |
@@ -596,6 +599,14 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   not the venv: a venv's python.exe launches the base one, whose folder Windows searches first.
 - **Windows tools write JSON with a BOM** (PowerShell `Set-Content -Encoding utf8`); the
   launcher strips it before `JSON.parse`.
+- **A release is a version bump** (D64): `overlay/package.json`'s `version` is the only one
+  (`installer/build.py` reads it). Pushing a new one to `main` publishes `v<version>` after the
+  clean-machine test; installed copies then update themselves. Never reuse a version.
+- **The camera/mic registry lies** (D63): `LastUsedTimeStop == 0` stays for an app that crashed
+  holding the device. `audio._holders` checks the process is running; keep it that way.
+- **Node on Windows: `detached` PowerShell does nothing** (no console), and a non-detached child
+  dies with its parent (Node's kill-on-close job). Start GUI programs detached; wait for
+  PowerShell (D64's `apply`).
 - **A test's `OverlayAPI` must be `.start()`ed and `.stop()`ped**: `server.shutdown()` on one
   that never served waits forever.
 - **Ollama loads qwen3 at its full context** (256k: 37.5 GB asked, D53). A local model for

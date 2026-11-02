@@ -302,12 +302,23 @@ and its models go in the folder you pick on first start. **On C: only** a 55-byt
 remembers where your data is, the shortcuts and the uninstall entry. Nothing in Windows' own folders.
 
 **Afterwards**: Settings (Ctrl+Alt+T, then the Settings tab) shows what Jimmy uses and lets you set
-how many days to keep, a size cap, the profile, clean-ups and start with Windows. **Uninstalling**
+how many days to keep, a size cap, the profile, clean-ups and start with Windows.
+
+**Updates come by themselves.** From 1.0.1 on, Jimmy checks this repo's Releases 10 minutes after it
+starts and every 6 hours, downloads a newer setup into your data folder and checks its SHA-256.
+A notification then says it's ready: click it to update now, or it installs the next time Jimmy
+starts, keeping your data and settings. Settings → *Update Jimmy automatically* turns it off.
+(1.0.0 has no updater: install 1.0.1 over it once, by hand.) **Uninstalling**
 (Windows Settings → Apps) removes Jimmy and its Python and asks before deleting your data.
 
 Building the setup yourself: `python installer/build.py` (needs Node and internet) writes
 `installer/out/Jimmy-Setup-<version>.exe`. Each push to `installer/`, `overlay/`, `ambient/` or
 `jimmy/` builds it on a fresh GitHub Windows VM and tests it on another (`.github/workflows/installer.yml`).
+
+**Releasing a new version**: raise `version` in `overlay/package.json` (`cd overlay; npm version patch
+--no-git-tag-version`) and push to `main`. Once the clean-machine test passes, CI publishes
+`v<version>` with the setup and its `.sha256`, and installed copies update themselves. A push that
+doesn't change the version releases nothing.
 
 ## 🚀 Quick start
 
