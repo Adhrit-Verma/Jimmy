@@ -223,7 +223,7 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `installer/` | D61/D62: `build.py` (uv, hash-locked requirements, staged code, app-local C++ runtime, electron-builder), `art.py` (icon and NSIS images). `stage/`, `out/`, `cache/`, `dev-install/` are build outputs, git-ignored. |
 | `overlay/launcher.cjs` | D61: the installed Jimmy.exe's launcher, the onboarding's main process, the provisioner (uv, packages, models, Ollama), headless `--provision`/`--self-test`. |
 | `overlay/setup-preload.cjs` | D61: the onboarding page's only bridge. |
-| `overlay/updater.cjs` | D64: updates from GitHub Releases: check, download + SHA-256, `pending`, `apply` (stop Python, the setup `/S --force-run`). `node overlay/updater.cjs` self-checks. |
+| `overlay/updater.cjs` | D64: updates from GitHub Releases: check, download + SHA-256, `pending`, `apply` (stop Python, the setup `/S --jimmy-restart`). `node overlay/updater.cjs` self-checks. |
 | `tests/test_stage16.py` | D63–D64 check: camera holders that are gone or Jimmy itself, the pending update, the off switch, what ships. |
 | `overlay/src/Onboarding.jsx` | D61/D62: the first run, eight steps, in Jimmy's design. |
 | `overlay/src/Logo.jsx` | D62: Jimmy's mark, animated (the pill and its listening bars). |

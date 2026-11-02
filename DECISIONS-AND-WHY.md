@@ -2563,7 +2563,7 @@ don't release by accident; raising the version does.
 setup into `<data>\cache\update` (the user's drive, never C:; electron-updater would have cached
 it under `%LOCALAPPDATA%`) and verifies it against the release's `.sha256` before giving it its
 name. Then one notification: click to update now, or the launcher installs it at the next start,
-before Jimmy runs. Installing stops Jimmy's Python, then starts the setup `/S --force-run
+before Jimmy runs. Installing stops Jimmy's Python, then starts the setup `/S --jimmy-restart
 /D=<install folder>`; the setup replaces Jimmy (keeping data and runtime, D61's `isUpdated`
 guard) and starts it again, and new Python packages follow from D61's lock fingerprint.
 `auto_update: false` (Settings) turns it all off.
@@ -2584,3 +2584,8 @@ update must be gone.
 Trust: HTTPS from GitHub, and the `.sha256` comes from the same release, so it catches a broken
 or swapped download, not a compromised repo or account. Signing the setup would cover that; until
 then, protect the GitHub account (2FA). 1.0.0 has no updater: its users install 1.0.1 once by hand.
+
+**Not `--force-run`** (found by that test's first run): electron-builder starts the app after a
+silent install through `ExecShellAsUser`, which asks Explorer to open the Start-menu shortcut;
+on the clean VM the setup ran and Jimmy never started again. Jimmy's own `--jimmy-restart` makes
+`installer.nsh`'s `customInstall` start `Jimmy.exe` with a plain `Exec`, once the files are in.
