@@ -1,302 +1,416 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Jimmy · An always-on assistant for Windows 11 that stays quiet</title>
-<meta name="description" content="Jimmy is an always-on assistant for Windows 11 that remembers what you saw and heard, answers out loud when you ask, and otherwise stays quiet. Captures stay on your PC.">
+<title>Jimmy · An always-on assistant for Windows that stays quiet</title>
+<meta name="description" content="Jimmy is an always-on assistant for Windows that remembers what you saw and heard, answers out loud when you ask, and otherwise stays quiet. Captures stay on your PC.">
+<meta name="theme-color" content="#0a0a0a">
 <link rel="icon" href="/icon.png">
 <meta property="og:title" content="Jimmy"><meta property="og:description" content="Remembers what you saw and heard. Answers out loud when you ask. Otherwise, quiet."><meta property="og:image" content="/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="/site.css">
 </head><body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+  <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+  <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></symbol>
+  <symbol id="i-eyeoff" viewBox="0 0 24 24"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.53 13.53 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><path d="M2 2l20 20"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></symbol>
+  <symbol id="i-pointer" viewBox="0 0 24 24"><path d="M4 4l7.07 17 2.51-7.39L21 11.07z"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+  <symbol id="i-gpu" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></symbol>
+  <symbol id="i-lang" viewBox="0 0 24 24"><path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6"/></symbol>
+  <symbol id="i-wait" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/></symbol>
+  <symbol id="i-run" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.22-8.56"/></symbol>
+</defs></svg>
+
 <a class="skip" href="#main">Skip to content</a>
-<header class="top"><div class="wrap">
-  <a class="brand" href="/" aria-label="Jimmy home"><img src="/icon.png" alt="" width="32" height="32">Jimmy</a>
-  <nav class="nav" aria-label="Primary"><a href="/#how">How it works</a><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a></nav>
-  <a class="btn btn-primary" href="/docs/#install">Get started</a>
-</div></header>
+<header class="topbar">
+  <nav class="pill" aria-label="Primary">
+    <a class="pill-brand" href="/" aria-label="Jimmy home"><span class="dot live" aria-hidden="true"></span>Jimmy</a>
+    <span class="pill-status" aria-hidden="true">Listening</span>
+    <span class="pill-links"><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a></span>
+    <a class="pill-cta" href="/docs/#install">Get started</a>
+  </nav>
+</header>
 
 <main id="main">
 <section class="hero">
-  <div class="wrap grid12">
-    <div class="hero-copy">
-      <p class="eyebrow">An always-on assistant for Windows 11</p>
-      <h1>Remembers what you saw. <span>Speaks only when asked.</span></h1>
-      <p class="lede">Jimmy turns your screen's text and the speech near your mic into one searchable history on your own PC. Say <em>"Jimmy, …"</em> and it answers out loud, beside the moments it found. The rest of the time, it stays quiet.</p>
-      <div class="cta">
-        <a class="btn btn-primary" href="/docs/#install">Get started</a>
-        <a class="btn btn-ghost" href="https://github.com/Adhrit-Verma/Jimmy" target="_blank" rel="noopener"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.71 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.22 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.66 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg>View on GitHub</a>
+  <div class="wrap hero-head">
+    <p class="kicker"><span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>An always-on assistant for Windows</p>
+    <h1>Remembers what you saw. <span>Speaks only when asked.</span></h1>
+    <p class="lede">Jimmy turns your screen's text and the speech near your mic into one searchable history, kept on your own PC. Say <em>"Jimmy, …"</em> and it answers out loud, beside the moments it found. The rest of the time, it stays quiet.</p>
+    <div class="cta">
+      <a class="btn btn-sky" href="/docs/#install">Get started</a>
+      <a class="btn btn-quiet" href="https://github.com/Adhrit-Verma/Jimmy" target="_blank" rel="noopener"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.71 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.22 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.66 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg>View on GitHub</a>
+    </div>
+    <ul class="facts">
+      <li><svg class="i" aria-hidden="true"><use href="#i-shield"/></svg>Captures stay on your PC</li>
+      <li><svg class="i" aria-hidden="true"><use href="#i-lang"/></svg>English and Hindi</li>
+      <li><svg class="i" aria-hidden="true"><use href="#i-gpu"/></svg>Windows 10 and 11, no admin needed</li>
+    </ul>
+  </div>
+
+  <div class="wrap desk-wrap">
+    <div class="desk" id="desk" role="img" aria-label="Jimmy's overlay over a writing app: the pill at the top hears 'what was that fellowship application I saw on Tuesday?', evidence screenshots appear on the left with the best match ringed in green, and the answer is written out on the right. Invented data.">
+      <div class="app" aria-hidden="true">
+        <div class="app-title"><b>Fellowship essay</b> · draft 2<span class="win"><span>–</span><span>□</span><span>✕</span></span></div>
+        <div class="app-body">
+          <div class="app-side"><i style="width:70%"></i><i style="width:55%"></i><i style="width:80%"></i><i style="width:45%"></i><i style="width:65%"></i></div>
+          <div class="app-doc"><h4>Why this fellowship</h4><i style="width:92%"></i><i style="width:86%"></i><i style="width:95%"></i><i style="width:60%"></i><i style="width:0;height:1cqw;background:none"></i><i style="width:88%"></i><i style="width:93%"></i><i style="width:74%"></i><i style="width:0;height:1cqw;background:none"></i><i style="width:90%"></i><i style="width:82%"></i><i style="width:94%"></i><i style="width:40%"></i></div>
+        </div>
       </div>
-      <ul class="facts">
-        <li>Captures stored only on your PC</li><li>English and Hindi</li><li>Runs on a 6 GB laptop GPU</li><li>MIT licensed</li>
+      <div class="ov" aria-hidden="true">
+        <div class="ov-pill s">
+          <span data-for="idle"><span class="dot" style="width:.75cqw;height:.75cqw"></span></span>
+          <span data-for="listen"><span class="eq"><i></i><i></i><i></i><i></i></span></span>
+          <span data-for="think answer"><span class="dot" style="width:.75cqw;height:.75cqw;background:var(--sky)"></span></span>
+          <b>Jimmy</b>
+          <span data-for="idle" class="st">Listening</span>
+          <span data-for="listen" class="st listen">Listening… ask away</span>
+          <span data-for="think" class="st shimmer">Thinking…</span>
+          <span data-for="answer" class="st shimmer">Answering…</span>
+        </div>
+        <div class="ov-heard s"><em>heard</em><span id="heard">what was that fellowship application I saw on Tuesday?</span></div>
+        <div class="ov-card s">
+          <div class="card-head"><span class="tone t-white"><svg class="i"><use href="#i-history"/></svg></span>Recall<span style="margin-left:auto;letter-spacing:0;text-transform:none;color:#8a8a8a">13:31</span></div>
+          <p class="card-line">Same Northwind Fellowship as Tue 15:02</p>
+          <div class="card-acts"><span>Show me then</span></div>
+          <div class="card-time"></div>
+        </div>
+        <div class="ov-ev s">
+          <div class="ov-h"><span>Evidence</span><span>3 moments · Tuesday</span></div>
+          <div class="evi best"><div class="thumb"></div><div class="evi-meta"><span class="app-dot"></span>Tue · 15:02 · Chrome<span class="bm">best match</span></div><div class="evi-t">Northwind Fellowship · Apply</div></div>
+          <div class="evi"><div class="thumb b"></div><div class="evi-meta"><span class="app-dot" style="background:#4f8ef7"></span>Tue · 14:48 · Mail</div><div class="evi-t">Re: fellowship deadline</div></div>
+        </div>
+        <div class="ov-ans s">
+          <div class="prog"><i></i></div>
+          <div class="ov-h" style="margin-top:1.2cqw"><span>Answer</span><span>spoken</span></div>
+          <p class="ans-q">what was that fellowship application I saw on Tuesday?</p>
+          <p class="ans-a" id="ans">That was the <b>Northwind Fellowship</b> application, open in Chrome on Tuesday at 15:02. The mail at 14:48 says it closes on Friday.</p>
+        </div>
+      </div>
+    </div>
+    <p class="fine center">A re-creation of the overlay with invented data. The real one floats over whatever you're doing and never takes focus.</p>
+  </div>
+</section>
+
+<section class="sec" id="quiet" aria-labelledby="quiet-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="label">The idea</p>
+      <h2 id="quiet-h">Capturing everything is easy. Staying quiet is the product.</h2>
+      <p class="lede">Jimmy is built for six good interruptions an evening, not a stream of notifications. A model never writes a card: code writes every line from words in your own data, with real times.</p>
+    </div>
+    <div class="rules">
+      <div class="rule-n surface"><b>4<small>cards an hour, at most</small></b><span>A hard cap in code, over a rolling hour.</span></div>
+      <div class="rule-n surface"><b>10<small>min between two cards</small></b><span>Never two in a row, however much changes.</span></div>
+      <div class="rule-n surface"><b>30<small>min of quiet</small></b><span>After you dismiss one. Dismiss a kind three times in one app and it stops showing there.</span></div>
+    </div>
+    <div class="day surface" aria-labelledby="day-cap">
+      <p class="label" id="day-cap">An illustrative day · capture runs all day, cards come rarely</p>
+      <div class="ribbon" role="img" aria-label="A day from 09:00 to 21:00: capture ticks all day, a gap while the curtain is down after 16:02, and four cards at 09:12, 13:31, 15:30 and 21:00.">
+        <div class="ticks"></div>
+        <div class="gap"><span>curtain down</span></div>
+        <span class="mark m-resume" data-n="1" style="left:1.7%"></span>
+        <span class="mark m-recall" data-n="2" style="left:37.6%"></span>
+        <span class="mark m-focus" data-n="3" style="left:54.2%"></span>
+        <span class="mark m-recap" data-n="4" style="left:99%"></span>
+      </div>
+      <div class="hours" aria-hidden="true"><span>09:00</span><span>11:00</span><span>13:00</span><span>15:00</span><span>17:00</span><span>19:00</span><span>21:00</span></div>
+      <div class="cards">
+        <article class="jcard" style="--left:72%"><div class="hd"><span class="n t-sky">1</span>Welcome back<time>09:12</time></div><p>Left off: Fellowship essay · draft 2</p><small>When you sit down after a long gap.</small></article>
+        <article class="jcard" style="--left:40%"><div class="hd"><span class="n t-white">2</span>Recall<time>13:31</time></div><p>Same Northwind Fellowship as Tue 15:02</p><small>What's on screen, linked to a concrete earlier moment.</small></article>
+        <article class="jcard" style="--left:55%"><div class="hd"><span class="n t-violet">3</span>Focus<time>15:30</time></div><p>Back to: the essay</p><small>Only because you said "focus on the essay".</small></article>
+        <article class="jcard" style="--left:85%"><div class="hd"><span class="n t-emerald">4</span>Your day<time>21:00</time></div><p>Today: 10h 42m, mostly VS Code</p><small>Once an evening. Ask "how was my day?" for the chart.</small></article>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="ask" aria-labelledby="ask-h" style="padding-top:0">
+  <div class="wrap split">
+    <div>
+      <p class="label">Ask</p>
+      <h2 id="ask-h" style="margin:.8rem 0 1rem">Say it the way you remember it</h2>
+      <p class="lede">No keywords and no app to open. Jimmy searches by meaning inside the time you name, shows the moments it used, and answers out loud in about a second. After it answers, keep talking for ten seconds without the name.</p>
+      <ul class="says">
+        <li><span class="ic t-white"><svg class="i"><use href="#i-history"/></svg></span><div><q>what was that fellowship application I saw on Tuesday?</q><span>Searches Tuesday by keywords and meaning; evidence on the left, answer on the right.</span></div></li>
+        <li><span class="ic t-emerald"><svg class="i"><use href="#i-chart"/></svg></span><div><q>how long was I on YouTube today?</q><span>Instant, with no model: one line written by code, plus a chart.</span></div></li>
+        <li><span class="ic t-amber"><svg class="i"><use href="#i-bell"/></svg></span><div><q>remind me at 5 to call Sam</q><span>A card and a spoken reminder at five.</span></div></li>
+        <li><span class="ic t-rose"><svg class="i"><use href="#i-trash"/></svg></span><div><q>forget the last hour</q><span>Says exactly what would go, then waits for your "yes".</span></div></li>
+      </ul>
+      <p style="margin-top:1.25rem"><a class="more" href="/docs/#talk">Everything you can say</a></p>
+    </div>
+    <div>
+      <div class="ask-box surface" role="img" aria-label="The pill opened for typing with Ctrl+Alt+Space, showing suggested questions: How was my day?, What's on my screen?, What was I doing an hour ago?, Focus on…, Pause for 30 minutes, Open insights.">
+        <div class="ask-input" aria-hidden="true"><span class="dot" style="background:var(--sky)"></span><b>Jimmy</b><span>How was my<span class="caret"></span></span></div>
+        <ul class="sugg" aria-hidden="true">
+          <li class="sel"><svg class="i"><use href="#i-chart"/></svg>How was my day?</li>
+          <li><svg class="i"><use href="#i-clock"/></svg>How was my week?<small>recent</small></li>
+          <li><svg class="i"><use href="#i-monitor"/></svg>What's on my screen?</li>
+          <li><svg class="i"><use href="#i-history"/></svg>What was I doing an hour ago?</li>
+          <li><svg class="i"><use href="#i-target"/></svg>Focus on…</li>
+          <li><svg class="i"><use href="#i-pause"/></svg>Pause for 30 minutes</li>
+        </ul>
+        <div class="keys" aria-hidden="true"><span>↑↓ choose</span><span>Tab fill</span><span>Enter ask</span><span>Esc close</span></div>
+      </div>
+      <p class="fine">Prefer typing? <b style="color:var(--ink-2)">Ctrl + Alt + Space</b> opens the pill as a search box.</p>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="hands" aria-labelledby="hands-h" style="padding-top:0">
+  <div class="wrap split">
+    <div style="order:2">
+      <p class="label">Hands</p>
+      <h2 id="hands-h" style="margin:.8rem 0 1rem">Its own cursor, never yours</h2>
+      <p class="lede">Ask it to do something on screen and Jimmy makes a short plan, plays it back live, and presses and types through Windows' accessibility interface. Every action is checked before the next. A policy in code decides what it may do, whatever model proposed it:</p>
+      <ul class="policy">
+        <li><span class="tag t-rose">Refuse</span><span>Typing into a password box, or words you didn't say.</span></li>
+        <li><span class="tag t-amber">Stop</span><span>A CAPTCHA. Jimmy never solves one.</span></li>
+        <li><span class="tag t-violet">Ask</span><span>Anything that can't be undone, or a site you didn't name.</span></li>
+        <li><span class="tag t-emerald">Allow</span><span>An undoable action on a control you named, shown first, with a moment to say "stop".</span></li>
       </ul>
     </div>
-    <div class="hero-side">
-      <div class="stage">
-        <svg class="eq" viewBox="0 0 120 62.4" role="img" aria-label="Jimmy's mark: a pill with five listening bars">
-          <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7dd3fc"/><stop offset="1" stop-color="#0ea5e9"/></linearGradient></defs>
-          <rect class="pill" x="1" y="1" width="118" height="60.4" rx="30.2"/>
-          <rect x="22.8" y="23.61" width="9" height="15.18" rx="4.5" fill="url(#sky)" style="--i:0"/>
-          <rect x="39.15" y="16.83" width="9" height="28.75" rx="4.5" fill="url(#sky)" style="--i:1"/>
-          <rect x="55.5" y="11.23" width="9" height="39.94" rx="4.5" fill="url(#sky)" style="--i:2"/>
-          <rect x="71.85" y="18.82" width="9" height="24.76" rx="4.5" fill="url(#sky)" style="--i:3"/>
-          <rect x="88.2" y="22.82" width="9" height="16.77" rx="4.5" fill="url(#sky)" style="--i:4"/>
-        </svg>
-        <p class="stage-cap">listening for "Jimmy"</p>
-      </div>
-      <figure class="chat" aria-label="An example question and answer, with invented data">
-        <div class="chat-bar"><span class="dot" aria-hidden="true"></span>Jimmy · heard you</div>
-        <div class="chat-body">
-          <p class="msg user">Jimmy, what was that fellowship application I saw on Tuesday?</p>
-          <div class="msg bot">
-            <div class="calls"><span class="call"><b>recall</b> · Tuesday</span><span class="call"><b>keywords + meaning</b> → 3 moments</span></div>
-            <p>The Northwind Fellowship application, open in Chrome on Tuesday at 15:02. The screenshots it came from are on the left of the answer.</p>
-            <p class="demo-note">Invented data. Real answers are spoken and shown beside their evidence.</p>
+    <div style="order:1">
+      <div class="stage surface" id="hands-demo" role="img" aria-label="Jimmy's sky-blue cursor types CarryMinati into a search box and presses Search, while a plan card ticks off both steps.">
+        <div class="browser" aria-hidden="true">
+          <div class="browser-top"><i></i><i></i><i></i><span>videos.example</span></div>
+          <div class="browser-body">
+            <div class="logo-v">▶ Videos</div>
+            <div class="search"><div class="search-box" id="hd-box"><span id="hd-text">CarryMinati</span><span class="ph" id="hd-ph" hidden>Search</span></div><div class="search-btn" id="hd-btn">Search</div></div>
           </div>
         </div>
-      </figure>
-    </div>
-  </div>
-</section>
-
-<div class="wrap"><figure class="shot">
-  <img src="/img/hero-answer.png" width="1600" height="902" alt="Jimmy answering a question about a fellowship application: blurred evidence screenshots on the left, the spoken answer on the right">
-  <figcaption><b>The real overlay, on invented pages.</b> Evidence on the left, the best match first; the answer streams in on the right and is read aloud.</figcaption>
-</figure></div>
-
-<div class="wrap" style="margin-top:5rem"><div class="rule" style="--c:5;--cp:3" aria-hidden="true"></div></div>
-
-<section aria-labelledby="day-h">
-  <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">The idea</p>
-      <h2 id="day-h">Built for six good interruptions an evening</h2>
-      <p class="lede">Capturing everything is the easy part. What matters is deciding when to stay quiet. Jimmy shows at most 4 cards an hour, never two within 10 minutes, and goes quiet for 30 minutes after you dismiss one. Most hours produce no card at all.</p>
-    </div>
-    <ol class="day" id="day">
-      <li style="--i:0"><time>09:12</time><p>You sit down. <span>The privacy curtain lifts when the webcam sees you facing the screen.</span></p><span class="card-pill"><b>RESUME</b>Left off: Fellowship essay · draft 2</span></li>
-      <li style="--i:1"><time>11:40</time><p>Deep in VS Code. <span>Jimmy is capturing and indexing, silently.</span></p><span class="card-pill quiet">no card</span></li>
-      <li style="--i:2"><time>13:31</time><p>You open a form. <span>It links what's on screen to a concrete earlier moment.</span></p><span class="card-pill"><b>RECALL</b>Same Northwind Fellowship as Tue 15:02</span></li>
-      <li style="--i:3"><time>14:05</time><p><em>"Jimmy, when does it close?"</em> <span>It searches Tuesday by meaning and answers out loud.</span></p><span class="card-pill quiet">spoken answer</span></li>
-      <li style="--i:4"><time>15:30</time><p>You drift to YouTube. <span>You said "focus on the essay" earlier, so one nudge, then 45 minutes of quiet.</span></p><span class="card-pill"><b>FOCUS</b>Back to: the essay</span></li>
-      <li style="--i:5"><time>16:02</time><p>You step away. <span>The curtain comes down: no capture, no listening.</span></p><span class="card-pill quiet">resting</span></li>
-      <li style="--i:6"><time>21:00</time><p>Wrapping up. <span>Ask "how was my day?" for the chart.</span></p><span class="card-pill"><b>RECAP</b>Today: 10h 42m, mostly VS Code</span></li>
-    </ol>
-    <p class="fine">An illustrative day with invented names. Card kinds and limits are the real ones from the code; every card line is written by code from words in your own data, never by a model.</p>
-  </div>
-</section>
-
-<div class="wrap"><div class="rule" style="--c:21;--cp:9" aria-hidden="true"></div></div>
-
-<section id="how" aria-labelledby="how-h">
-  <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">How it works</p>
-      <h2 id="how-h">Capture locally. Ask out loud. Approve what it does.</h2>
-    </div>
-    <div class="steps">
-      <article class="card">
-        <span class="step-n">1</span>
-        <h3>Capture</h3>
-        <p>When the screen changes, Jimmy reads the window's exact text through Windows' accessibility interface (UI Automation) and transcribes speech near your mic with Whisper, on your GPU. Faces are blurred before a screenshot is written.</p>
-        <div class="viz"><pre><span class="c">every 2 s, only if pixels moved</span>
-<span class="k">text</span>    from UI Automation
-<span class="k">speech</span>  Whisper, local
-<span class="k">faces</span>   blurred before the write
-<span class="k">store</span>   SQLite on your PC</pre></div>
-      </article>
-      <article class="card">
-        <span class="step-n">2</span>
-        <h3>Ask</h3>
-        <p>Say "Jimmy," then your question, in English or Hindi. It searches by keywords and by meaning inside the time you name, shows the moments it used, and speaks the answer.</p>
-        <div class="viz"><pre><span class="k">heard</span>   "…on Tuesday?"
-<span class="k">route</span>   recall
-<span class="k">search</span>  keywords + meaning
-<span class="c">        → evidence in ~0.5 s</span>
-<span class="k">speak</span>   from the first sentence</pre></div>
-      </article>
-      <article class="card">
-        <span class="step-n">3</span>
-        <h3>Act</h3>
-        <p>Ask it to do something on screen. It plans a few steps, a policy in code checks each one, and its own cursor presses and types through UI Automation, never your mouse. Each step is checked before the next.</p>
-        <div class="viz"><pre><span class="k">plan</span>    type "CarryMinati" in Search
-        press Enter
-<span class="k">policy</span>  allow · allow
-<span class="k">check</span>   ✓ box holds the text
-        ✓ page changed</pre></div>
-      </article>
-    </div>
-  </div>
-</section>
-
-<div class="wrap"><div class="rule" style="--c:11;--cp:6" aria-hidden="true"></div></div>
-
-<section aria-labelledby="say-h">
-  <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">Talk to it</p>
-      <h2 id="say-h">No typing, no keywords</h2>
-      <p class="lede">It understands times like <em>yesterday afternoon</em>, <em>between 2 and 3</em> and <em>last Friday</em>. After it answers, keep talking for 10 seconds without the name. <a href="/docs/#talk">Everything you can say &rarr;</a></p>
-    </div>
-    <div class="say">
-      <div><h3>Ask about the past</h3><q>what was that fellowship application I saw on Tuesday?</q><q>…and when does it close?</q></div>
-      <div><h3>Ask about now</h3><q>what's on my screen?</q><q>what's this?</q></div>
-      <div><h3>Your time</h3><q>how was my day?</q><q>how long was I on YouTube?</q></div>
-      <div><h3>Reminders and timers</h3><q>remind me at 5 to call Sam</q><q>set a timer for 10 minutes</q></div>
-      <div><h3>Forget</h3><q>delete everything from September</q><q>forget the last hour</q></div>
-      <div><h3>Hands</h3><q>search YouTube for CarryMinati</q><q>switch to Chrome</q></div>
-    </div>
-  </div>
-</section>
-
-<div class="wrap"><div class="rule" style="--c:30;--cp:11" aria-hidden="true"></div></div>
-
-<section aria-labelledby="see-h">
-  <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">What it looks like</p>
-      <h2 id="see-h">It shows its work</h2>
-      <p class="lede">Every screenshot here is the real interface showing invented pages and data, so no personal data appears.</p>
-    </div>
-    <div class="shots">
-      <figure class="shot"><img src="/img/how-was-my-day.png" width="1600" height="937" loading="lazy" alt="Jimmy answering 'how was my day?' with a chart of time per app and one spoken line"><figcaption><b>"How was my day?"</b> Answered instantly, with no model: code writes the line, the chart shows where the time went.</figcaption></figure>
-      <figure class="shot"><img src="/img/timeline.png" width="1200" height="814" loading="lazy" alt="The timeline window: search results, a preview and a minute-by-minute strip"><figcaption><b>The timeline</b> (Ctrl + Alt + T). Your day as a strip of blurred screenshots, searchable the way you remember it.</figcaption></figure>
-      <figure class="shot"><img src="/img/ask-back.png" width="700" height="384" loading="lazy" alt="Jimmy asking whether you mean the screen now or something you saw earlier"><figcaption><b>It asks when it isn't sure.</b> "What's this?" could mean the screen now or last week. Answer out loud or tap.</figcaption></figure>
-      <figure class="shot"><img src="/img/insights.png" width="1600" height="1347" loading="lazy" alt="The Insights tab: a day map with one lane per app, hour-by-hour bars and a week heatmap"><figcaption><b>Insights</b> (Ctrl + Alt + I). Estimated from captures already on disk: no new tracking, no model.</figcaption></figure>
-    </div>
-  </div>
-</section>
-
-<div class="wrap"><div class="rule" style="--c:16;--cp:2" aria-hidden="true"></div></div>
-
-<section id="privacy" aria-labelledby="privacy-h">
-  <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">Privacy by construction</p>
-      <h2 id="privacy-h">Absent code paths, not settings left off</h2>
-      <p class="lede">Each of these is enforced in code, and most are checked by a test. <a href="/security/">What is stored, what leaves your PC, and what is not done yet &rarr;</a></p>
-    </div>
-    <div class="grid12 safety-grid">
-      <ul class="checks" id="checks">
-        <li style="--i:0"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x=".5" y=".5" width="23" height="23" rx="6"/><path pathLength="1" d="M7 12.5l3.2 3.2L17 8.8"/></svg><div><b>Faces blurred before anything is written</b><span>A test re-runs the face detector on the saved JPEG and requires zero hits. The clean frame never reaches disk.</span></div></li>
-        <li style="--i:1"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x=".5" y=".5" width="23" height="23" rx="6"/><path pathLength="1" d="M7 12.5l3.2 3.2L17 8.8"/></svg><div><b>Sensitive windows are never captured</b><span>Password managers, banking and payment sites, private browser windows and Jimmy's own windows. The list shipped before the first run, and you can add to it.</span></div></li>
-        <li style="--i:2"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x=".5" y=".5" width="23" height="23" rx="6"/><path pathLength="1" d="M7 12.5l3.2 3.2L17 8.8"/></svg><div><b>No faces table, no people table</b><span>Neither exists, and a test asserts it. The webcam recognises only you, and only if you ask it to.</span></div></li>
-        <li style="--i:3"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x=".5" y=".5" width="23" height="23" rx="6"/><path pathLength="1" d="M7 12.5l3.2 3.2L17 8.8"/></svg><div><b>No raw audio, no system audio</b><span>Only transcripts are kept. The far end of a call is never recorded, and the mic pauses on sensitive screens.</span></div></li>
-        <li style="--i:4"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x=".5" y=".5" width="23" height="23" rx="6"/><path pathLength="1" d="M7 12.5l3.2 3.2L17 8.8"/></svg><div><b>Captured text is treated as data</b><span>It reaches the model only inside a context block, under a rule to ignore any instructions found there.</span></div></li>
-        <li style="--i:5"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x=".5" y=".5" width="23" height="23" rx="6"/><path pathLength="1" d="M7 12.5l3.2 3.2L17 8.8"/></svg><div><b>Rules for actions live in code</b><span>Every proposed action passes a policy layer that refuses, stops, asks or allows, whatever model proposed it.</span></div></li>
-      </ul>
-      <div class="refused" id="refused">
-        <figure class="chat">
-          <div class="chat-bar"><span class="dot" aria-hidden="true"></span>Jimmy · a password field is in front</div>
-          <div class="chat-body">
-            <p class="msg user ask-it">Jimmy, type my password in here</p>
-            <div class="refusal" role="note"><strong>Refused</strong><p>Never into a password box.</p><small>Decided in code by the policy layer, before any model is trusted.</small></div>
-          </div>
-        </figure>
-        <figure class="chat">
-          <div class="chat-bar"><span class="dot" aria-hidden="true"></span>Jimmy · a plan is running</div>
-          <div class="chat-body">
-            <p class="msg user">Jimmy, send it</p>
-            <div class="refusal ask" role="note"><strong>Asks first</strong><p>Anything that can't be undone waits for your "yes".</p><small>Send, delete, buy, close: even inside a plan you already approved.</small></div>
-          </div>
-        </figure>
+        <div class="vcur" id="hd-cur" aria-hidden="true" style="opacity:0"><svg viewBox="0 0 24 24"><path d="M3 2l7.5 19 2.6-7.6L21 11z" fill="#38bdf8" stroke="#082f49" stroke-width="1.3" stroke-linejoin="round"/></svg><span id="hd-label">Type into · Search</span></div>
+        <div class="plan" aria-hidden="true">
+          <div class="label" id="hd-state">Done</div>
+          <ol>
+            <li class="done" id="hd-s1"><svg class="i st st-done"><use href="#i-check"/></svg><span><span class="n">1.</span>Type "CarryMinati" into Search</span></li>
+            <li class="done" id="hd-s2"><svg class="i st st-done"><use href="#i-check"/></svg><span><span class="n">2.</span>Press Search</span></li>
+          </ol>
+        </div>
       </div>
+      <p class="fine">You said <em>"search for CarryMinati"</em>; nothing in the plan was risky, so it started on its own.</p>
     </div>
   </div>
 </section>
 
-<div class="wrap"><div class="rule" style="--c:9;--cp:8" aria-hidden="true"></div></div>
+<section class="sec" id="privacy" aria-labelledby="privacy-h" style="padding-top:0">
+  <div class="wrap split">
+    <div>
+      <p class="label">Private by construction</p>
+      <h2 id="privacy-h" style="margin:.8rem 0 1rem">Absent code paths, not settings left off</h2>
+      <p class="lede">Walk away and the webcam notices: the curtain comes down and Jimmy stops capturing and listening. Faces are blurred before a screenshot is written, and a test re-runs the face detector on the saved file to prove it finds none. <a href="/security/">What leaves your PC, and what's not done yet</a></p>
+    </div>
+    <div>
+      <div class="curtain" role="img" aria-label="The privacy curtain: an opaque dark screen reading 'Privacy curtain. You stepped away.'">
+        <span class="mini" aria-hidden="true"><span class="dot"></span>Curtain down</span>
+        <div aria-hidden="true"><svg class="i"><use href="#i-eyeoff"/></svg><b>Privacy curtain</b><span>You stepped away · nothing is captured</span></div>
+      </div>
+      <p class="fine">Looking down at your phone doesn't count; leaving the camera's view for a moment and a half does. Ctrl + Alt + L draws it by hand.</p>
+    </div>
+  </div>
+  <div class="wrap">
+    <div class="ledger">
+      <div class="surface yes"><p class="label">Kept on your PC</p><ul>
+        <li><svg class="i"><use href="#i-check"/></svg>Window text and titles</li>
+        <li><svg class="i"><use href="#i-check"/></svg>Blurred screenshots</li>
+        <li><svg class="i"><use href="#i-check"/></svg>Transcripts of speech</li>
+        <li><svg class="i"><use href="#i-check"/></svg>How many faces, never whose</li></ul></div>
+      <div class="surface no"><p class="label">Never kept</p><ul>
+        <li><svg class="i"><use href="#i-x"/></svg>An unblurred frame</li>
+        <li><svg class="i"><use href="#i-x"/></svg>Raw audio, or the other side of a call</li>
+        <li><svg class="i"><use href="#i-x"/></svg>Banking, password managers, private windows</li>
+        <li><svg class="i"><use href="#i-x"/></svg>A faces table or a people table</li></ul></div>
+    </div>
+  </div>
+</section>
 
-<section aria-labelledby="results-h">
+<section class="sec" id="measured" aria-labelledby="measured-h" style="padding-top:0">
   <div class="wrap">
     <div class="sec-head">
-      <p class="eyebrow">Measured</p>
-      <h2 id="results-h">Numbers from the development laptop</h2>
-      <p class="lede">Every figure on this site comes from a measurement written down in the repository, with how it was taken.</p>
+      <p class="label">Measured, not promised</p>
+      <h2 id="measured-h">Numbers from the laptop it was built on</h2>
+      <p class="lede">Each one is written down in the repository with how it was taken.</p>
     </div>
     <div class="tiles">
-      <div class="tile">
+      <div class="tile surface">
         <span class="lbl">Right first decision on 130 real spoken commands</span>
         <span class="big">124<small>/ 130</small></span>
         <div class="bars" aria-label="Agent 95 percent versus the earlier system's 71 percent">
-          <div class="bar now"><span>Agent (D42)</span><i style="width:95%"></i><span>95 %</span></div>
-          <div class="bar"><span>Before (D41)</span><i style="width:71%"></i><span>71 %</span></div>
+          <div class="bar now"><span>Agent</span><i style="width:95%"></i><span>95 %</span></div>
+          <div class="bar"><span>Before it</span><i style="width:71%"></i><span>71 %</span></div>
         </div>
       </div>
-      <div class="tile">
-        <span class="lbl">Hybrid search over your history</span>
+      <div class="tile surface">
+        <span class="lbl">Search over your whole history, keywords and meaning</span>
         <span class="big">0.5<small>s</small></span>
         <div class="bars" aria-label="0.5 seconds now versus 2.8 seconds before the performance pass">
           <div class="bar now"><span>Now</span><i style="width:17.9%"></i><span>0.5 s</span></div>
-          <div class="bar"><span>Before (D38)</span><i style="width:100%"></i><span>2.8 s</span></div>
+          <div class="bar"><span>Before</span><i style="width:100%"></i><span>2.8 s</span></div>
         </div>
       </div>
-      <div class="tile">
+      <div class="tile surface">
         <span class="lbl">Faces the detector finds in a saved screenshot</span>
         <span class="big">0</span>
-        <p class="note">The stage 1 test puts 2 faces in, saves the blurred JPEG, and runs the face detector on it again: 0 found.</p>
+        <p class="note">The test puts 2 faces in, saves the blurred JPEG, and runs the face detector on it again.</p>
       </div>
     </div>
-    <div class="context">
-      <span><strong>One laptop: Ryzen 7 7840HS, RTX 4050 with 6 GB.</strong> Your results will vary.</span>
-      <a href="/benchmark/">All measurements, including weak spots &rarr;</a>
-    </div>
+    <div class="context"><span><strong>One laptop: Ryzen 7 7840HS, RTX 4050 with 6 GB.</strong> Your results will vary.</span><a class="more" href="/benchmark/">All measurements, with weak spots</a></div>
   </div>
 </section>
 
-<div class="wrap"><div class="rule" style="--c:26;--cp:4" aria-hidden="true"></div></div>
-
-<section id="start" aria-labelledby="start-h">
+<section class="sec" id="screens" aria-labelledby="screens-h" style="padding-top:0">
   <div class="wrap">
     <div class="sec-head">
-      <p class="eyebrow">Get started</p>
-      <h2 id="start-h">Install from source</h2>
-      <p class="lede">You need Windows 11, an NVIDIA GPU (built on a 6 GB RTX 4050), Python 3.12, Node.js and Ollama. A one-click installer is in progress and not released yet.</p>
+      <p class="label">The real thing</p>
+      <h2 id="screens-h">What it looks like on a screen</h2>
+      <p class="lede">Screenshots of the actual overlay, showing invented pages and data, so no personal data appears.</p>
     </div>
-    <div class="steps">
-      <article class="card"><span class="step-n">1</span><h3>Install</h3><p>Make a Python 3.12 environment, install the packages, and build the overlay once.</p><div class="viz"><pre>py -3.12 -m venv .venv
-.venv\Scripts\pip install -r requirements.txt
-cd overlay; npm install; npm run build</pre></div></article>
-      <article class="card"><span class="step-n">2</span><h3>Pull two local models</h3><p>One decides cards; the other powers meaning search. Both run on your PC through Ollama.</p><div class="viz"><pre>ollama pull qwen2.5:3b
-ollama pull bge-m3</pre></div></article>
-      <article class="card"><span class="step-n">3</span><h3>Check, then run</h3><p>Add a free model key for spoken answers, or run without one: answers then show what search found.</p><div class="viz"><pre>python -m ambient doctor
-python -m ambient run</pre></div><p><a href="/docs/" style="color:var(--primary);font-weight:600">Full setup guide &rarr;</a></p></article>
+    <div>
+      <div class="tabs" role="tablist" aria-label="Screenshots">
+        <button role="tab" id="t-1" aria-controls="p-1" aria-selected="true">An answer</button>
+        <button role="tab" id="t-2" aria-controls="p-2" aria-selected="false" tabindex="-1">Your day</button>
+        <button role="tab" id="t-3" aria-controls="p-3" aria-selected="false" tabindex="-1">Timeline</button>
+        <button role="tab" id="t-4" aria-controls="p-4" aria-selected="false" tabindex="-1">Insights</button>
+        <button role="tab" id="t-5" aria-controls="p-5" aria-selected="false" tabindex="-1">Asking back</button>
+      </div>
+      <figure class="shot" role="tabpanel" id="p-1" aria-labelledby="t-1"><img src="/img/hero-answer.png" width="1600" height="902" alt="Jimmy answering a question about a fellowship application: blurred evidence screenshots on the left, the spoken answer on the right"><figcaption><b>An answer.</b> Evidence on the left, the best match first; the answer streams in on the right and is read aloud.</figcaption></figure>
+      <figure class="shot" role="tabpanel" id="p-2" aria-labelledby="t-2" hidden><img src="/img/how-was-my-day.png" width="1600" height="937" loading="lazy" alt="Jimmy answering 'how was my day?' with a chart of time per app and one spoken line"><figcaption><b>"How was my day?"</b> Instant, with no model: code writes the line, the chart shows where the time went.</figcaption></figure>
+      <figure class="shot" role="tabpanel" id="p-3" aria-labelledby="t-3" hidden><img src="/img/timeline.png" width="1200" height="814" loading="lazy" alt="The timeline window: search results, a preview and a minute-by-minute strip"><figcaption><b>The timeline</b> (Ctrl + Alt + T). Your day as a strip of blurred screenshots, searchable the way you remember it.</figcaption></figure>
+      <figure class="shot" role="tabpanel" id="p-4" aria-labelledby="t-4" hidden><img src="/img/insights.png" width="1600" height="1347" loading="lazy" alt="The Insights tab: a day map with one lane per app, hour-by-hour bars and a week heatmap"><figcaption><b>Insights</b> (Ctrl + Alt + I). Estimated from captures already on disk: no new tracking, no model.</figcaption></figure>
+      <figure class="shot" role="tabpanel" id="p-5" aria-labelledby="t-5" hidden><img src="/img/ask-back.png" width="700" height="384" loading="lazy" alt="Jimmy asking whether you mean the screen now or something you saw earlier"><figcaption><b>It asks when it isn't sure.</b> "What's this?" could mean the screen now or last week. Answer out loud or tap.</figcaption></figure>
     </div>
   </div>
 </section>
 
-<div class="wrap"><div class="rule" style="--c:14;--cp:7" aria-hidden="true"></div></div>
+<section class="sec" id="start" aria-labelledby="start-h" style="padding-top:0">
+  <div class="wrap split">
+    <div>
+      <p class="label">Get started</p>
+      <h2 id="start-h" style="margin:.8rem 0 1rem">One setup file, then Jimmy sets itself up</h2>
+      <p class="lede">Download <code>Jimmy-Setup-1.0.0.exe</code> (about 170 MB) from the project's Releases page on GitHub. It installs for you alone, on any drive, with no Python, Node or admin rights needed. On first start Jimmy checks your PC, asks where to keep your data and how much of the PC it may use, then fetches its own Python and speech model.</p>
+      <ul class="needs"><li>Windows 10 (22H2) or 11, 64-bit</li><li>Lite ~2.5 GB</li><li>Balanced ~4.5 GB</li><li>Full ~11 GB, with local AI</li></ul>
+      <p class="fine">The setup isn't code-signed yet, so Windows shows "Windows protected your PC": choose More info, then Run anyway. NVIDIA GPUs get fast GPU speech; other PCs use the processor.</p>
+      <p style="margin-top:1.5rem;display:flex;flex-wrap:wrap;gap:.75rem"><a class="btn btn-sky" href="/docs/#install">Install guide</a><a class="btn btn-quiet" href="/docs/#source">Build from source</a></p>
+    </div>
+    <div>
+      <div class="term" role="img" aria-label="For developers, from source: PowerShell commands to create a Python 3.12 environment, install requirements, build the overlay, pull qwen2.5:3b and bge-m3 with Ollama, then run ambient doctor and ambient run.">
+        <div class="term-top" aria-hidden="true">Or from source · PowerShell · C:\Jimmy</div>
+<pre aria-hidden="true"><span class="c"># 1 · packages and the overlay</span>
+<span class="p">&gt;</span> py -3.12 -m venv .venv
+<span class="p">&gt;</span> .venv\Scripts\pip install -r requirements.txt
+<span class="p">&gt;</span> cd overlay; npm install; npm run build; cd ..
+<span class="c"># 2 · two small local models</span>
+<span class="p">&gt;</span> ollama pull qwen2.5:3b
+<span class="p">&gt;</span> ollama pull bge-m3
+<span class="c"># 3 · check, then run</span>
+<span class="p">&gt;</span> .venv\Scripts\python -m ambient doctor
+<span class="p">&gt;</span> .venv\Scripts\python -m ambient run</pre>
+      </div>
+    </div>
+  </div>
+</section>
 
-<section aria-labelledby="faq-h">
+<section class="sec" aria-labelledby="faq-h" style="padding-top:0">
   <div class="wrap">
-    <div class="sec-head"><p class="eyebrow">FAQ</p><h2 id="faq-h">Questions</h2></div>
+    <div class="sec-head"><p class="label">Questions</p><h2 id="faq-h">Before you install it</h2></div>
     <div class="faq">
       <details><summary>Does Jimmy send my screen to the cloud?</summary><p>Not continuously. Captures are stored on your PC. When you ask a question, the evidence shown with the answer (at most 6,000 characters) goes to the model provider you chose. A question about your screen also sends that window's latest picture, with faces already blurred. Without a key, nothing is sent. <a href="/security/#leaves">The full list</a>.</p></details>
       <details><summary>Does it work without an API key?</summary><p>Yes. Capture, search, the timeline, insights and cards all run locally. Without a key, each answer shows what search found (exactly what would have been sent to the model) instead of a spoken reply.</p></details>
       <details><summary>Which model providers does it support?</summary><p>NVIDIA (the default; a free key from build.nvidia.com), Google Gemini on its free tier with NVIDIA as a backup, or OpenAI (paid). Card decisions and meaning search always run locally through Ollama.</p></details>
       <details><summary>Does it record other people?</summary><p>The mic hears the room, so speech near it is transcribed. System audio, such as the other side of a call, is never captured. Faces in screenshots are blurred, only counts are kept, and the webcam recognises only you, and only after you say "remember my face".</p></details>
       <details><summary>Can it click and type on its own?</summary><p>Only when you asked, it is sure which control you meant, and the action can be undone. It shows its cursor first and gives you a moment to say "stop". Anything that can't be undone, or a site you didn't name, waits for your "yes". It never types into a password box or acts in banking or password-manager windows.</p></details>
+      <details><summary>Will it run on my PC?</summary><p>Windows 10 (22H2) or 11, 64-bit. An NVIDIA GPU makes speech recognition fast, but it isn't required: other PCs use the processor. Jimmy was built and measured on a laptop with a 6 GB RTX 4050.</p></details>
       <details><summary>Which languages does it understand?</summary><p>English and Hindi. Hindi works through one model call that also returns the English; its real-world accuracy has not been measured yet.</p></details>
-      <details><summary>Is there an installer?</summary><p>Not yet. A Windows installer is being built; until it is released, install from source with the <a href="/docs/">setup guide</a>.</p></details>
-      <details><summary>Is it open source?</summary><p>Yes, MIT licensed. The code, every design decision and the evidence behind it are public (View on GitHub, above).</p></details>
+      <details><summary>Is it open source?</summary><p>Yes, MIT licensed. The code, every design decision and the evidence behind it are public (View on GitHub, at the top of this page).</p></details>
     </div>
   </div>
 </section>
 </main>
 
-<footer><div class="wrap foot">
-  <a class="foot-brand" href="/"><img src="/icon.png" alt="" width="32" height="32">Jimmy</a>
-  <nav aria-label="Footer"><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a></nav>
-  <p>Jimmy · an always-on assistant for Windows 11 that stays quiet until you ask · MIT licensed</p>
+<footer class="foot"><div class="wrap">
+  <div class="foot-row">
+    <a class="foot-brand" href="/"><img src="/icon.png" alt="" width="32" height="32">Jimmy</a>
+    <nav aria-label="Footer"><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a></nav>
+  </div>
+  <p>Jimmy · an always-on assistant for Windows that stays quiet until you ask · MIT licensed</p>
 </div></footer>
 
 <script>
 (function(){
-  if(!window.matchMedia || !window.matchMedia('(prefers-reduced-motion: no-preference)').matches || !('IntersectionObserver' in window)) return;
-  ['day','checks','refused'].forEach(function(id){
-    var el=document.getElementById(id); if(!el) return;
-    var io=new IntersectionObserver(function(es){ es.forEach(function(e){ if(e.isIntersecting){ io.disconnect(); el.classList.add('go'); } }); },{threshold:.35});
-    io.observe(el);
+  // screenshot tabs (work with or without motion)
+  var tabs=[].slice.call(document.querySelectorAll('[role=tab]'));
+  function pick(t,focus){ tabs.forEach(function(b){ var on=b===t; b.setAttribute('aria-selected',on); b.tabIndex=on?0:-1; document.getElementById(b.getAttribute('aria-controls')).hidden=!on; }); if(focus) t.focus(); }
+  tabs.forEach(function(b,i){
+    b.addEventListener('click',function(){ pick(b); });
+    b.addEventListener('keydown',function(e){ var d=e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:0; if(d){ e.preventDefault(); pick(tabs[(i+d+tabs.length)%tabs.length],true); } });
   });
+
+  var motion=window.matchMedia && window.matchMedia('(prefers-reduced-motion: no-preference)').matches;
+  if(!motion || !('IntersectionObserver' in window)) return;   // static final frames
+  function seen(el,fn,th){ var io=new IntersectionObserver(function(es){ es.forEach(function(e){ fn(e.isIntersecting); }); },{threshold:th||.25}); io.observe(el); }
+  var wait=function(ms){ return new Promise(function(r){ setTimeout(r,ms); }); };
+
+
+  // the desk: card, a question heard, thinking, evidence, the answer written out
+  var desk=document.getElementById('desk'), heard=document.getElementById('heard'), ans=document.getElementById('ans');
+  var q=heard.textContent, words=[];
+  ans.innerHTML=ans.innerHTML.replace(/(<b>[^<]*<\/b>|[^\s<]+)/g,'<span class="w">$1</span>');
+  words=[].slice.call(ans.querySelectorAll('.w'));
+  var visible=false, running=false;
+  seen(desk,function(v){ visible=v; if(v && !running) loop(); });
+  async function loop(){
+    running=true;
+    while(visible){
+      words.forEach(function(w){ w.classList.remove('on'); }); heard.textContent='';
+      desk.dataset.step='idle'; await wait(1200);
+      desk.dataset.step='card'; await wait(3400);
+      desk.dataset.step='listen'; await wait(500);
+      for(var i=1;i<=q.length;i+=2){ heard.textContent=q.slice(0,i); await wait(38); }
+      heard.textContent=q; await wait(700);
+      desk.dataset.step='think'; await wait(1500);
+      desk.dataset.step='answer'; await wait(400);
+      for(var k=0;k<words.length;k++){ words[k].classList.add('on'); await wait(85); }
+      await wait(600); desk.dataset.step='done'; await wait(4600);
+    }
+    running=false;
+  }
+
+  // hands: the cursor glides from the top, types, presses; the plan ticks
+  var stage=document.getElementById('hands-demo'), cur=document.getElementById('hd-cur'), label=document.getElementById('hd-label');
+  var box=document.getElementById('hd-box'), btn=document.getElementById('hd-btn'), text=document.getElementById('hd-text'), ph=document.getElementById('hd-ph');
+  var s1=document.getElementById('hd-s1'), s2=document.getElementById('hd-s2'), st=document.getElementById('hd-state');
+  function status(li,kind){ li.className=kind==='done'?'done':kind==='run'?'run':''; var svg=li.querySelector('svg'); svg.setAttribute('class','i st st-'+kind); svg.querySelector('use').setAttribute('href',kind==='done'?'#i-check':kind==='run'?'#i-run':'#i-wait'); }
+  function aim(el){ var a=stage.getBoundingClientRect(), b=el.getBoundingClientRect(); cur.style.left=(b.left-a.left+Math.min(b.width/2,60))+'px'; cur.style.top=(b.top-a.top+b.height/2)+'px'; }
+  var hv=false, hrun=false;
+  seen(stage,function(v){ hv=v; if(v && !hrun) hands(); },.4);
+  async function hands(){
+    hrun=true;
+    while(hv){
+      text.textContent=''; ph.hidden=false; status(s1,'wait'); status(s2,'wait'); st.textContent='On it (say stop)';
+      box.classList.remove('ringed'); btn.classList.remove('ringed');
+      cur.style.transition='none'; cur.style.left='50%'; cur.style.top='-30px'; cur.style.opacity=0; void cur.offsetWidth; cur.style.transition='';
+      await wait(700);
+      status(s1,'run'); label.textContent='Type into · Search'; cur.style.opacity=1; aim(box); await wait(950);
+      box.classList.add('ringed'); ph.hidden=true;
+      var w='CarryMinati'; for(var i=1;i<=w.length;i++){ text.textContent=w.slice(0,i); await wait(70); }
+      await wait(350); status(s1,'done'); box.classList.remove('ringed');
+      status(s2,'run'); label.textContent='Jimmy · Search'; aim(btn); await wait(950);
+      btn.classList.add('ringed'); btn.style.transform='scale(.94)'; await wait(180); btn.style.transform='';
+      await wait(400); status(s2,'done'); btn.classList.remove('ringed'); st.textContent='Done';
+      cur.style.opacity=0; await wait(3200);
+    }
+    hrun=false;
+  }
 })();
 </script>
 </body></html>

@@ -2,17 +2,21 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Privacy · Jimmy</title>
 <meta name="description" content="Jimmy stores its captures on your own PC and has no account or telemetry. What it stores, what it sends and to whom, and what this website collects.">
+<meta name="theme-color" content="#0a0a0a">
 <link rel="icon" href="/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="/site.css">
 </head><body>
 <a class="skip" href="#main">Skip to content</a>
-<header class="top"><div class="wrap">
-  <a class="brand" href="/" aria-label="Jimmy home"><img src="/icon.png" alt="" width="32" height="32">Jimmy</a>
-  <nav class="nav" aria-label="Primary"><a href="/#how">How it works</a><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a></nav>
-  <a class="btn btn-primary" href="/docs/#install">Get started</a>
-</div></header>
+<header class="topbar">
+  <nav class="pill" aria-label="Primary">
+    <a class="pill-brand" href="/" aria-label="Jimmy home"><span class="dot live" aria-hidden="true"></span>Jimmy</a>
+    <span class="pill-status" aria-hidden="true">Listening</span>
+    <span class="pill-links"><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a></span>
+    <a class="pill-cta" href="/docs/#install">Get started</a>
+  </nav>
+</header>
 
 <main id="main">
 <div class="page-head"><div class="wrap">
@@ -25,13 +29,14 @@
 <div class="prose">
 <section id="stores">
   <h2>What Jimmy stores</h2>
-  <p>All of it is in the <code>data</code> folder inside the Jimmy folder, on your PC only:</p>
+  <p>All of it is in one data folder on your PC only: the folder you picked on first start, or <code>data</code> inside the Jimmy folder for a source install.</p>
   <ul>
     <li>A capture database: window app and title, window text, transcribed speech near your mic, and the number of faces in each frame.</li>
     <li>Blurred screenshots, about 80–88 KB each.</li>
     <li>Jimmy's own database: things you asked it to remember, reminders, goals, conversation turns and a decision log of each request.</li>
     <li>Your wiki: short pages about your projects, interests and habits, built from the above, which you can confirm or delete.</li>
     <li>A log of the console, where captured text appears only as its length, never as text.</li>
+    <li>Keys you typed into the installed app's setup, encrypted with Windows DPAPI. (A source install reads keys from <code>.env</code> or your environment.)</li>
     <li>Only if you say <em>"remember my face"</em>: your face template, encrypted with Windows DPAPI so only your Windows account on this PC can read it.</li>
   </ul>
 </section>
@@ -46,7 +51,7 @@
   <ul>
     <li><strong>The model provider you choose</strong> (NVIDIA, Google or OpenAI), only if you add a key, receives your question and the evidence for its answer, a screenshot of the window for a question about your screen, and the other items listed under <a href="/security/#leaves">what leaves your PC</a>. Each handles that data under its own privacy policy. On Google's free tier, Google may let reviewers read it.</li>
     <li><strong>Another assistant</strong> you connect through the MCP server receives what its recall tool returns.</li>
-    <li><strong>During setup</strong>, packages and models download from their usual sources: Python packages, npm, Ollama's model library and Hugging Face (for the Whisper speech model). They see a normal download request.</li>
+    <li><strong>During setup and first start</strong>, Jimmy downloads its own Python (through the uv tool), its packages from the Python package index, the Whisper speech model from Hugging Face and, with the Full profile, Ollama and its models. A source install also uses npm. Each of these sees a normal download request.</li>
   </ul>
   <p>Ollama, the card model, meaning search, speech recognition and the face detector all run on your PC.</p>
 </section>
@@ -58,7 +63,8 @@
     <li><strong>Forget</strong> any span: <em>"Jimmy, delete everything from September"</em> shows what goes and asks first.</li>
     <li><strong>Exclude</strong> more windows in <code>data\exclusions.txt</code>.</li>
     <li><strong>Keep everything local</strong> by running without a model key.</li>
-    <li><strong>Delete it all</strong> by deleting the <code>data</code> folder. <em>"Forget my face"</em> removes the face template.</li>
+    <li><strong>Limit it</strong> in the installed app's Settings: how many days to keep (30 by default) and a size cap (20 GB by default).</li>
+    <li><strong>Delete it all</strong> by deleting the data folder; uninstalling asks whether to. <em>"Forget my face"</em> removes the face template.</li>
   </ul>
   <p>Because nothing reaches us, there is nothing for us to delete on request.</p>
 </section>
@@ -71,9 +77,11 @@
 </div>
 </main>
 
-<footer><div class="wrap foot">
-  <a class="foot-brand" href="/"><img src="/icon.png" alt="" width="32" height="32">Jimmy</a>
-  <nav aria-label="Footer"><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a></nav>
-  <p>Jimmy · an always-on assistant for Windows 11 that stays quiet until you ask · MIT licensed</p>
+<footer class="foot"><div class="wrap">
+  <div class="foot-row">
+    <a class="foot-brand" href="/"><img src="/icon.png" alt="" width="32" height="32">Jimmy</a>
+    <nav aria-label="Footer"><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a></nav>
+  </div>
+  <p>Jimmy · an always-on assistant for Windows that stays quiet until you ask · MIT licensed</p>
 </div></footer>
 </body></html>

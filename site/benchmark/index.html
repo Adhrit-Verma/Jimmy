@@ -2,17 +2,21 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Benchmark · Jimmy</title>
 <meta name="description" content="Every number Jimmy claims, measured on one Windows laptop: capture, speech, search, the card gate, the agent on 130 real commands, and the weak spots.">
+<meta name="theme-color" content="#0a0a0a">
 <link rel="icon" href="/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="/site.css">
 </head><body>
 <a class="skip" href="#main">Skip to content</a>
-<header class="top"><div class="wrap">
-  <a class="brand" href="/" aria-label="Jimmy home"><img src="/icon.png" alt="" width="32" height="32">Jimmy</a>
-  <nav class="nav" aria-label="Primary"><a href="/#how">How it works</a><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/" aria-current="page">Benchmark</a><a href="/changelog/">Changelog</a></nav>
-  <a class="btn btn-primary" href="/docs/#install">Get started</a>
-</div></header>
+<header class="topbar">
+  <nav class="pill" aria-label="Primary">
+    <a class="pill-brand" href="/" aria-label="Jimmy home"><span class="dot live" aria-hidden="true"></span>Jimmy</a>
+    <span class="pill-status" aria-hidden="true">Listening</span>
+    <span class="pill-links"><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/" aria-current="page">Benchmark</a><a href="/changelog/">Changelog</a></span>
+    <a class="pill-cta" href="/docs/#install">Get started</a>
+  </nav>
+</header>
 
 <main id="main">
 <div class="page-head"><div class="wrap">
@@ -23,7 +27,7 @@
 
 <div class="wrap doc-layout">
 <nav class="toc" aria-label="On this page">
-  <a href="#machine">The machine</a><a href="#capture">Capture and speech</a><a href="#search">Search and answers</a><a href="#gate">The card gate</a><a href="#agent">The agent</a><a href="#storage">Storage</a><a href="#weak">Weak spots</a><a href="#repeat">Run them yourself</a>
+  <a href="#machine">The machine</a><a href="#capture">Capture and speech</a><a href="#search">Search and answers</a><a href="#gate">The card gate</a><a href="#agent">The agent</a><a href="#installer">The installer</a><a href="#storage">Storage</a><a href="#weak">Weak spots</a><a href="#repeat">Run them yourself</a>
 </nav>
 
 <div class="prose">
@@ -78,6 +82,17 @@
   <p><strong>Tools per step:</strong> 19 core tools, about 1,400 tokens, instead of all 54 at about 3,300 (D48). A two-step screen task takes 2 model calls instead of 4 (D49).</p>
 </section>
 
+<section id="installer">
+  <h2>The installer</h2>
+  <p>Measured on the development laptop with its developer tools hidden (Python, Node and CUDA taken off the path), installing to a separate drive letter (D61):</p>
+  <div class="tscroll"><table class="dtable stack"><thead><tr><th>What</th><th class="num">Measured</th><th>How</th></tr></thead><tbody>
+    <tr><td>Install</td><td class="num">20 s</td><td>The 172 MB setup, per user, no admin.</td></tr>
+    <tr><td>First start, Lite profile</td><td class="num">71–436 s</td><td>On the processor; the range depends on how much was already downloaded.</td></tr>
+    <tr><td>Left on C:</td><td class="num">67 bytes</td><td>The 55-byte pointer to your data and a 12-byte path file, besides shortcuts and the uninstall entry.</td></tr>
+  </tbody></table></div>
+  <p>The same steps run on fresh GitHub Windows machines for every change: install to D:, setup, self-test, update, what's left on C:, and uninstall.</p>
+</section>
+
 <section id="storage">
   <h2>Storage</h2>
   <p>Screenshots are 1280 px wide so they're readable when opened full size, about 80–88 KB each. That is roughly 30–85 MB per active hour, or 90–250 GB a year at 8 hours a day (D38). The text database is small beside the images.</p>
@@ -108,10 +123,12 @@
 </div>
 </main>
 
-<footer><div class="wrap foot">
-  <a class="foot-brand" href="/"><img src="/icon.png" alt="" width="32" height="32">Jimmy</a>
-  <nav aria-label="Footer"><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a></nav>
-  <p>Jimmy · an always-on assistant for Windows 11 that stays quiet until you ask · MIT licensed</p>
+<footer class="foot"><div class="wrap">
+  <div class="foot-row">
+    <a class="foot-brand" href="/"><img src="/icon.png" alt="" width="32" height="32">Jimmy</a>
+    <nav aria-label="Footer"><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a></nav>
+  </div>
+  <p>Jimmy · an always-on assistant for Windows that stays quiet until you ask · MIT licensed</p>
 </div></footer>
 
 <script>

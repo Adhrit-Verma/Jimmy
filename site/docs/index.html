@@ -1,32 +1,36 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Docs · Jimmy</title>
-<meta name="description" content="Install Jimmy on Windows 11 from source, add a model key or run offline, and learn what you can say to it.">
+<meta name="description" content="Install Jimmy on Windows 10 or 11 with its setup file or from source, add a model key or run offline, and learn what you can say to it.">
+<meta name="theme-color" content="#0a0a0a">
 <link rel="icon" href="/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="/site.css">
 </head><body>
 <a class="skip" href="#main">Skip to content</a>
-<header class="top"><div class="wrap">
-  <a class="brand" href="/" aria-label="Jimmy home"><img src="/icon.png" alt="" width="32" height="32">Jimmy</a>
-  <nav class="nav" aria-label="Primary"><a href="/#how">How it works</a><a href="/docs/" aria-current="page">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a></nav>
-  <a class="btn btn-primary" href="#install">Get started</a>
-</div></header>
+<header class="topbar">
+  <nav class="pill" aria-label="Primary">
+    <a class="pill-brand" href="/" aria-label="Jimmy home"><span class="dot live" aria-hidden="true"></span>Jimmy</a>
+    <span class="pill-status" aria-hidden="true">Listening</span>
+    <span class="pill-links"><a href="/docs/" aria-current="page">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a></span>
+    <a class="pill-cta" href="/docs/#install">Get started</a>
+  </nav>
+</header>
 
 <main id="main">
 <div class="page-head"><div class="wrap">
   <p class="eyebrow">Documentation</p>
   <h1>Set up Jimmy</h1>
-  <p class="lede">Install Jimmy from source on Windows 11, choose a model provider or run offline, and start talking to it. Most of the time goes into downloads.</p>
+  <p class="lede">Install Jimmy with its setup file on Windows 10 or 11, or build it from source. Choose a model provider or run offline, and start talking to it.</p>
 </div></div>
 
 <div class="wrap doc-layout">
 <nav class="toc" aria-label="On this page">
   <p>Start</p>
-  <a href="#overview">Overview</a><a href="#needs">What you need</a>
-  <p>Install</p>
-  <a href="#install">Get the code</a><a href="#packages">Packages and overlay</a><a href="#models">Local models</a><a href="#key">Model key</a><a href="#run">Check and run</a>
+  <a href="#overview">Overview</a><a href="#install">Install with the setup</a><a href="#first-start">First start</a><a href="#settings">Storage and limits</a>
+  <p>From source</p>
+  <a href="#needs">What you need</a><a href="#source">Get the code</a><a href="#packages">Packages and overlay</a><a href="#models">Local models</a><a href="#key">Model key</a><a href="#run">Check and run</a>
   <p>Use</p>
   <a href="#talk">What you can say</a><a href="#controls">Everyday controls</a><a href="#exclusions">Exclusions</a><a href="#cli">Command line</a><a href="#mcp">Other assistants (MCP)</a>
   <p>Reference</p>
@@ -42,11 +46,42 @@
     <li><strong>A Python program</strong> (<code>ambient</code> and <code>jimmy</code>) that captures, stores, searches and talks to a language model.</li>
     <li><strong>An overlay</strong>: a small pill at the top of your screen, plus cards and answers, built with Electron. The Python program starts it for you.</li>
   </ul>
-  <div class="callout"><p>A one-click Windows installer is being built but is not released yet. For now, install from source with the steps below.</p></div>
+  <div class="callout"><p>Most people should use the setup file below. Building from source is for developers who want to change Jimmy.</p></div>
+</section>
+
+<section id="install">
+  <h2>Install with the setup</h2>
+  <p>For Windows 10 (22H2) or 11, 64-bit. You don't need Python, Node, CUDA or admin rights.</p>
+  <ol>
+    <li><strong>Download</strong> <code>Jimmy-Setup-1.0.0.exe</code> (about 170 MB) and its <code>.sha256</code> file from the project's <strong>Releases</strong> page on GitHub (the <strong>View on GitHub</strong> button on the <a href="/">home page</a>, then Releases).</li>
+    <li><strong>Check the file</strong> in PowerShell, from the folder you downloaded it to. The result must equal the value in the <code>.sha256</code> file:</li>
+  </ol>
+  <div class="code"><pre>(Get-FileHash .\Jimmy-Setup-1.0.0.exe).Hash</pre></div>
+  <ol start="3">
+    <li><strong>Run it.</strong> The setup isn't code-signed yet, so Windows shows <em>"Windows protected your PC"</em>: choose <strong>More info</strong>, then <strong>Run anyway</strong>. Pick a folder on any drive. It installs for your Windows account only.</li>
+  </ol>
+</section>
+
+<section id="first-start">
+  <h2>First start</h2>
+  <p>Jimmy opens its own setup the first time. It checks your PC (Windows version, memory, free space, GPU, mic and camera), then asks:</p>
+  <ul>
+    <li><strong>Where to keep your data</strong>, on any drive.</li>
+    <li><strong>How much of the PC it may use:</strong> <strong>Lite</strong> (about 2.5 GB), <strong>Balanced</strong> (about 4.5 GB) or <strong>Full</strong> (about 11 GB, with local AI for cards and search by meaning).</li>
+    <li><strong>A model key</strong>, optional: a free Gemini or NVIDIA key for spoken answers. Keys typed here are stored encrypted with Windows DPAPI, readable only by your Windows account.</li>
+  </ul>
+  <p>Then it downloads its own Python and a speech model into your data folder. NVIDIA GPUs get fast GPU speech; other PCs use the processor.</p>
+  <p><strong>What goes on C:</strong>: only a 55-byte file that remembers where your data is, the shortcuts and the uninstall entry. Everything else is in the folders you picked.</p>
+</section>
+
+<section id="settings">
+  <h2>Storage and limits</h2>
+  <p>Open the timeline (<strong>Ctrl + Alt + T</strong>) and choose the <strong>Settings</strong> tab. It shows what Jimmy uses, and lets you set how many days to keep (30 by default) and a size cap (20 GB by default). The oldest whole days go first, never today. You can also change the profile, clear caches and choose whether Jimmy starts with Windows.</p>
+  <p><strong>Uninstalling</strong> (Windows Settings → Apps) removes Jimmy and its Python, and asks before deleting your data.</p>
 </section>
 
 <section id="needs">
-  <h2>What you need</h2>
+  <h2>From source: what you need</h2>
   <table class="dtable"><thead><tr><th>Item</th><th>Why</th></tr></thead><tbody>
     <tr><td>Windows 11</td><td>Screen capture and window text use Windows-only interfaces (DXGI and UI Automation).</td></tr>
     <tr><td>An NVIDIA GPU</td><td>Speech recognition (Whisper) runs on it. Jimmy was built on an RTX 4050 with 6 GB of memory, which is enough.</td></tr>
@@ -58,7 +93,7 @@
   <p>The packages and models take several gigabytes. Captures then take roughly 30–85 MB per active hour.</p>
 </section>
 
-<section id="install">
+<section id="source">
   <h2>Get the code</h2>
   <p>On the project's GitHub page (the <strong>View on GitHub</strong> button on the <a href="/">home page</a>), choose <strong>Code → Download ZIP</strong> and unzip it to <code>C:\Jimmy</code>. If you use git, clone it to the same place instead. A short path avoids Windows' path-length problems.</p>
   <p>Open <strong>PowerShell</strong> and go to that folder. Every command on this page runs from there:</p>
@@ -210,9 +245,9 @@ url:internal\.example\.com</pre></div>
 <section id="limits">
   <h2>Current limits</h2>
   <ul>
-    <li><strong>Windows 11 and an NVIDIA GPU only</strong>, and built and measured on one laptop.</li>
-    <li><strong>No installer yet.</strong> Setup is from source.</li>
-    <li><strong>No automatic retention limit.</strong> Captures grow by roughly 30–85 MB per active hour until you forget a span.</li>
+    <li><strong>Windows only</strong>, and built and measured on one laptop. The setup was tested on that laptop with its developer tools hidden and on fresh GitHub Windows machines, not yet on many real PCs.</li>
+    <li><strong>The setup isn't code-signed</strong>, so Windows warns before running it. Check the SHA-256 as shown above.</li>
+    <li><strong>A source install keeps everything</strong>: the retention and size limits apply to the installed app. From source, captures grow by roughly 30–85 MB per active hour until you forget a span.</li>
     <li><strong>Hindi accuracy is not measured</strong> on real speech yet.</li>
     <li><strong>Canvas apps and video</strong> give no text unless you install Windows OCR, and the vision models a free key can reach describe pictures less exactly than a window's text.</li>
     <li><strong>Gemini 3.8 Flash on the free tier</strong> was often unavailable when measured; Jimmy falls back to 3.5 Flash-Lite and then NVIDIA.</li>
@@ -222,10 +257,12 @@ url:internal\.example\.com</pre></div>
 </div>
 </main>
 
-<footer><div class="wrap foot">
-  <a class="foot-brand" href="/"><img src="/icon.png" alt="" width="32" height="32">Jimmy</a>
-  <nav aria-label="Footer"><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a></nav>
-  <p>Jimmy · an always-on assistant for Windows 11 that stays quiet until you ask · MIT licensed</p>
+<footer class="foot"><div class="wrap">
+  <div class="foot-row">
+    <a class="foot-brand" href="/"><img src="/icon.png" alt="" width="32" height="32">Jimmy</a>
+    <nav aria-label="Footer"><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a></nav>
+  </div>
+  <p>Jimmy · an always-on assistant for Windows that stays quiet until you ask · MIT licensed</p>
 </div></footer>
 
 <script>

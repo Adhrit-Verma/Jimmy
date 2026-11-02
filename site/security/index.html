@@ -2,17 +2,21 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Security · Jimmy</title>
 <meta name="description" content="What Jimmy stores, what it never stores, exactly what leaves your PC, how it decides what it may do on your screen, and what is not done yet.">
+<meta name="theme-color" content="#0a0a0a">
 <link rel="icon" href="/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="/site.css">
 </head><body>
 <a class="skip" href="#main">Skip to content</a>
-<header class="top"><div class="wrap">
-  <a class="brand" href="/" aria-label="Jimmy home"><img src="/icon.png" alt="" width="32" height="32">Jimmy</a>
-  <nav class="nav" aria-label="Primary"><a href="/#how">How it works</a><a href="/docs/">Docs</a><a href="/security/" aria-current="page">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a></nav>
-  <a class="btn btn-primary" href="/docs/#install">Get started</a>
-</div></header>
+<header class="topbar">
+  <nav class="pill" aria-label="Primary">
+    <a class="pill-brand" href="/" aria-label="Jimmy home"><span class="dot live" aria-hidden="true"></span>Jimmy</a>
+    <span class="pill-status" aria-hidden="true">Listening</span>
+    <span class="pill-links"><a href="/docs/">Docs</a><a href="/security/" aria-current="page">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a></span>
+    <a class="pill-cta" href="/docs/#install">Get started</a>
+  </nav>
+</header>
 
 <main id="main">
 <div class="page-head"><div class="wrap">
@@ -30,7 +34,7 @@
 <div class="prose">
 <section id="stored">
   <h2>Stored and never stored</h2>
-  <p>Everything Jimmy stores is in the <code>data</code> folder inside the Jimmy folder on your PC. These rules are <strong>absent code paths</strong>, not settings that happen to be off.</p>
+  <p>Everything Jimmy stores is in one data folder on your PC: the one you picked on first start, or <code>data</code> inside the Jimmy folder for a source install. These rules are <strong>absent code paths</strong>, not settings that happen to be off.</p>
   <div class="tscroll"><table class="dtable"><thead><tr><th>Stored on your PC</th><th>Never stored</th></tr></thead><tbody>
     <tr><td>Window app and title</td><td>Any unblurred screen frame</td></tr>
     <tr><td>Window text, and OCR text if you install OCR</td><td>Anything from an excluded window</td></tr>
@@ -109,8 +113,9 @@
   <ul>
     <li>Jimmy has <strong>not had an independent security audit</strong>. The code and every design decision are public for anyone to review.</li>
     <li><strong>Captures are not encrypted on disk.</strong> Anyone or any program with access to your Windows account can read the <code>data</code> folder.</li>
-    <li><strong>Model keys are plain text</strong> in <code>.env</code> or your user environment. An encrypted key store is being built with the installer.</li>
-    <li><strong>There is no automatic retention limit.</strong> Captures stay until you forget a span or delete the folder.</li>
+    <li><strong>Keys from a source install are plain text</strong> in <code>.env</code> or your user environment. Keys typed into the installed app's setup are encrypted with Windows DPAPI.</li>
+    <li><strong>A source install has no retention limit.</strong> The installed app keeps 30 days and 20 GB by default, which you can change in Settings.</li>
+    <li><strong>The setup isn't code-signed yet.</strong> Check its SHA-256 against the published value before running it.</li>
     <li><strong>The face-matching threshold</strong> is OpenCV's reference value, not yet tuned on real webcam footage.</li>
     <li><strong>A face embedding is biometric data</strong> under India's DPDP Act even if it is never stored. This design shrinks that exposure a lot; it does not take it to zero.</li>
     <li><strong>The mic hears the room.</strong> Anyone speaking near it is transcribed. Tell the people around you that Jimmy is running.</li>
@@ -120,9 +125,11 @@
 </div>
 </main>
 
-<footer><div class="wrap foot">
-  <a class="foot-brand" href="/"><img src="/icon.png" alt="" width="32" height="32">Jimmy</a>
-  <nav aria-label="Footer"><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a></nav>
-  <p>Jimmy · an always-on assistant for Windows 11 that stays quiet until you ask · MIT licensed</p>
+<footer class="foot"><div class="wrap">
+  <div class="foot-row">
+    <a class="foot-brand" href="/"><img src="/icon.png" alt="" width="32" height="32">Jimmy</a>
+    <nav aria-label="Footer"><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a></nav>
+  </div>
+  <p>Jimmy · an always-on assistant for Windows that stays quiet until you ask · MIT licensed</p>
 </div></footer>
 </body></html>

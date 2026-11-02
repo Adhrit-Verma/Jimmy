@@ -2,17 +2,21 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Changelog · Jimmy</title>
 <meta name="description" content="What changed in Jimmy and when, from the first capture loop in September 2026 to Gemini, autonomy when sure, and answer cards.">
+<meta name="theme-color" content="#0a0a0a">
 <link rel="icon" href="/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="/site.css">
 </head><body>
 <a class="skip" href="#main">Skip to content</a>
-<header class="top"><div class="wrap">
-  <a class="brand" href="/" aria-label="Jimmy home"><img src="/icon.png" alt="" width="32" height="32">Jimmy</a>
-  <nav class="nav" aria-label="Primary"><a href="/#how">How it works</a><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/" aria-current="page">Changelog</a></nav>
-  <a class="btn btn-primary" href="/docs/#install">Get started</a>
-</div></header>
+<header class="topbar">
+  <nav class="pill" aria-label="Primary">
+    <a class="pill-brand" href="/" aria-label="Jimmy home"><span class="dot live" aria-hidden="true"></span>Jimmy</a>
+    <span class="pill-status" aria-hidden="true">Listening</span>
+    <span class="pill-links"><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/" aria-current="page">Changelog</a></span>
+    <a class="pill-cta" href="/docs/#install">Get started</a>
+  </nav>
+</header>
 
 <main id="main">
 <div class="page-head"><div class="wrap">
@@ -24,6 +28,14 @@
 <div class="wrap doc-layout single">
 <div class="prose" style="max-width:52rem">
 <ol class="log">
+  <li><time datetime="2026-11-02">2026-11-02</time><div>
+    <h3>Jimmy-Setup.exe, version 1.0.0 (D60–D62)</h3>
+    <ul>
+      <li>A setup file for any Windows 10 (22H2) or 11 PC, 64-bit: installed for one user, on any drive, with no admin rights, Python or Node needed.</li>
+      <li>A first-start setup in Jimmy's own design that checks the PC, asks where to keep data and how much of the PC to use (Lite, Balanced, Full), and downloads Jimmy's own Python and speech model.</li>
+      <li>Settings for storage: days to keep, a size cap, clean-ups and start with Windows. Keys typed in the setup are stored encrypted.</li>
+      <li>Every change is built and tested on a fresh GitHub Windows machine: install, setup, self-test, update and uninstall.</li>
+    </ul></div></li>
   <li><time datetime="2026-11-01">2026-11-01</time><div>
     <h3>Gemini, measured live (D58)</h3>
     <ul>
@@ -94,9 +106,11 @@
 </div>
 </main>
 
-<footer><div class="wrap foot">
-  <a class="foot-brand" href="/"><img src="/icon.png" alt="" width="32" height="32">Jimmy</a>
-  <nav aria-label="Footer"><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a></nav>
-  <p>Jimmy · an always-on assistant for Windows 11 that stays quiet until you ask · MIT licensed</p>
+<footer class="foot"><div class="wrap">
+  <div class="foot-row">
+    <a class="foot-brand" href="/"><img src="/icon.png" alt="" width="32" height="32">Jimmy</a>
+    <nav aria-label="Footer"><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a></nav>
+  </div>
+  <p>Jimmy · an always-on assistant for Windows that stays quiet until you ask · MIT licensed</p>
 </div></footer>
 </body></html>
