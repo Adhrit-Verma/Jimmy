@@ -49,6 +49,7 @@
     <p class="lede">Jimmy turns your screen's text and the speech near your mic into one searchable history, kept on your own PC. Say <em>"Jimmy, …"</em> and it answers out loud, beside the moments it found. The rest of the time, it stays quiet.</p>
     <div class="cta">
       <a class="btn btn-sky" href="/docs/#install">Get started</a>
+      <a class="btn btn-quiet" href="#trailer"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M4 2.8v10.4a.6.6 0 0 0 .9.5l8.2-5.2a.6.6 0 0 0 0-1L4.9 2.3a.6.6 0 0 0-.9.5Z"/></svg>Watch the trailer</a>
       <a class="btn btn-quiet" href="https://github.com/Adhrit-Verma/Jimmy" target="_blank" rel="noopener"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.71 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.22 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.66 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg>View on GitHub</a>
     </div>
     <ul class="facts">
@@ -99,6 +100,22 @@
       </div>
     </div>
     <p class="fine center">A re-creation of the overlay with invented data. The real one floats over whatever you're doing and never takes focus.</p>
+  </div>
+</section>
+
+<section class="sec trailer" id="trailer" aria-labelledby="trailer-h">
+  <div class="wrap">
+    <div class="sec-head center" style="justify-items:center;text-align:center">
+      <p class="label">The trailer</p>
+      <h2 id="trailer-h">Jimmy, in under two minutes</h2>
+      <p class="lede">What it remembers, how it answers, what it does on screen, and what it never keeps. Turn the sound on.</p>
+    </div>
+    <div class="film">
+      <button type="button" class="film-play" data-trailer="/video/trailer.mp4" data-poster="/video/trailer.jpg" aria-label="Play the Jimmy trailer, 1 minute 52 seconds, with music">
+        <img src="/video/trailer.jpg" width="1280" height="720" alt="" loading="lazy">
+        <span class="film-btn" aria-hidden="true"><svg viewBox="0 0 16 16"><path fill="currentColor" d="M4 2.8v10.4a.6.6 0 0 0 .9.5l8.2-5.2a.6.6 0 0 0 0-1L4.9 2.3a.6.6 0 0 0-.9.5Z"/></svg>Play the trailer<span class="film-len">1:52</span></span>
+      </button>
+    </div>
   </div>
 </section>
 
@@ -203,6 +220,32 @@
   </div>
 </section>
 
+<section class="sec" id="motion" aria-labelledby="motion-h" style="padding-top:0">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="label">In motion</p>
+      <h2 id="motion-h">Nine things, a few seconds each</h2>
+      <p class="lede">Clips from the trailer. Pick one, or let them play through.</p>
+    </div>
+    <div class="reel">
+      <div class="chapters" role="tablist" aria-label="Clips" aria-orientation="vertical" data-tabs>
+          <button role="tab" id="ch-ask" aria-controls="reel-panel" aria-selected="true" data-clip="/video/ask.mp4" data-poster="/video/ask.jpg" data-dur="11.2"><span class="ch-n">01</span><span class="ch-t"><b>Answers</b><span>Ask out loud; the answer sits beside the moments it came from.</span></span><i class="ch-bar" aria-hidden="true"></i></button>
+          <button role="tab" id="ch-cards" aria-controls="reel-panel" aria-selected="false" tabindex="-1" data-clip="/video/cards.mp4" data-poster="/video/cards.jpg" data-dur="5.4"><span class="ch-n">02</span><span class="ch-t"><b>Cards, rarely</b><span>Welcome back, recall, deadlines: written by code from your own data.</span></span><i class="ch-bar" aria-hidden="true"></i></button>
+          <button role="tab" id="ch-scrub" aria-controls="reel-panel" aria-selected="false" tabindex="-1" data-clip="/video/scrub.mp4" data-poster="/video/scrub.jpg" data-dur="5.0"><span class="ch-n">03</span><span class="ch-t"><b>Scrub your day</b><span>The timeline, searched the way you remember it.</span></span><i class="ch-bar" aria-hidden="true"></i></button>
+          <button role="tab" id="ch-private" aria-controls="reel-panel" aria-selected="false" tabindex="-1" data-clip="/video/private.mp4" data-poster="/video/private.jpg" data-dur="10.2"><span class="ch-n">04</span><span class="ch-t"><b>Private</b><span>Banking and passwords skipped, faces blurred, keys encrypted.</span></span><i class="ch-bar" aria-hidden="true"></i></button>
+          <button role="tab" id="ch-drive" aria-controls="reel-panel" aria-selected="false" tabindex="-1" data-clip="/video/drive.mp4" data-poster="/video/drive.jpg" data-dur="9.8"><span class="ch-n">05</span><span class="ch-t"><b>Your drive, your rules</b><span>Lite, Balanced or Full, on any drive, 30 days kept by default.</span></span><i class="ch-bar" aria-hidden="true"></i></button>
+          <button role="tab" id="ch-does" aria-controls="reel-panel" aria-selected="false" tabindex="-1" data-clip="/video/does.mp4" data-poster="/video/does.jpg" data-dur="6.0"><span class="ch-n">06</span><span class="ch-t"><b>It does things</b><span>A short plan, then its own cursor types and presses.</span></span><i class="ch-bar" aria-hidden="true"></i></button>
+          <button role="tab" id="ch-bursts" aria-controls="reel-panel" aria-selected="false" tabindex="-1" data-clip="/video/bursts.mp4" data-poster="/video/bursts.jpg" data-dur="5.2"><span class="ch-n">07</span><span class="ch-t"><b>Everyday</b><span>Reminders, Hindi, windows, drafts, calendar, focus.</span></span><i class="ch-bar" aria-hidden="true"></i></button>
+          <button role="tab" id="ch-numbers" aria-controls="reel-panel" aria-selected="false" tabindex="-1" data-clip="/video/numbers.mp4" data-poster="/video/numbers.jpg" data-dur="12.0"><span class="ch-n">08</span><span class="ch-t"><b>Measured</b><span>Numbers from the laptop it was built on.</span></span><i class="ch-bar" aria-hidden="true"></i></button>
+          <button role="tab" id="ch-install" aria-controls="reel-panel" aria-selected="false" tabindex="-1" data-clip="/video/install.mp4" data-poster="/video/install.jpg" data-dur="7.9"><span class="ch-n">09</span><span class="ch-t"><b>Installs and updates itself</b><span>One setup file; new versions arrive on their own.</span></span><i class="ch-bar" aria-hidden="true"></i></button>
+      </div>
+      <div class="reel-screen" role="tabpanel" id="reel-panel" aria-labelledby="ch-ask">
+        <video poster="/video/ask.jpg" preload="none" muted playsinline aria-label="A clip from the Jimmy trailer"></video>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section class="sec" id="privacy" aria-labelledby="privacy-h" style="padding-top:0">
   <div class="wrap split">
     <div>
@@ -276,7 +319,7 @@
       <p class="lede">Screenshots of the actual overlay, showing invented pages and data, so no personal data appears.</p>
     </div>
     <div>
-      <div class="tabs" role="tablist" aria-label="Screenshots">
+      <div class="tabs" role="tablist" aria-label="Screenshots" data-tabs>
         <button role="tab" id="t-1" aria-controls="p-1" aria-selected="true">An answer</button>
         <button role="tab" id="t-2" aria-controls="p-2" aria-selected="false" tabindex="-1">Your day</button>
         <button role="tab" id="t-3" aria-controls="p-3" aria-selected="false" tabindex="-1">Timeline</button>
@@ -297,7 +340,7 @@
     <div>
       <p class="label">Get started</p>
       <h2 id="start-h" style="margin:.8rem 0 1rem">One setup file, then Jimmy sets itself up</h2>
-      <p class="lede">Download <code>Jimmy-Setup-1.0.0.exe</code> (about 170 MB) from the project's Releases page on GitHub. It installs for you alone, on any drive, with no Python, Node or admin rights needed. On first start Jimmy checks your PC, asks where to keep your data and how much of the PC it may use, then fetches its own Python and speech model.</p>
+      <p class="lede">Download the latest <code>Jimmy-Setup</code> (about 170 MB) from the project's Releases page on GitHub. It installs for you alone, on any drive, with no Python, Node or admin rights needed. On first start Jimmy checks your PC, asks where to keep your data and how much of the PC it may use, then fetches its own Python and speech model. From 1.0.1 on, new versions install themselves.</p>
       <ul class="needs"><li>Windows 10 (22H2) or 11, 64-bit</li><li>Lite ~2.5 GB</li><li>Balanced ~4.5 GB</li><li>Full ~11 GB, with local AI</li></ul>
       <p class="fine">The setup isn't code-signed yet, so Windows shows "Windows protected your PC": choose More info, then Run anyway. NVIDIA GPUs get fast GPU speech; other PCs use the processor.</p>
       <p style="margin-top:1.5rem;display:flex;flex-wrap:wrap;gap:.75rem"><a class="btn btn-sky" href="/docs/#install">Install guide</a><a class="btn btn-quiet" href="/docs/#source">Build from source</a></p>
@@ -331,6 +374,7 @@
       <details><summary>Can it click and type on its own?</summary><p>Only when you asked, it is sure which control you meant, and the action can be undone. It shows its cursor first and gives you a moment to say "stop". Anything that can't be undone, or a site you didn't name, waits for your "yes". It never types into a password box or acts in banking or password-manager windows.</p></details>
       <details><summary>Will it run on my PC?</summary><p>Windows 10 (22H2) or 11, 64-bit. An NVIDIA GPU makes speech recognition fast, but it isn't required: other PCs use the processor. Jimmy was built and measured on a laptop with a 6 GB RTX 4050.</p></details>
       <details><summary>Which languages does it understand?</summary><p>English and Hindi. Hindi works through one model call that also returns the English; its real-world accuracy has not been measured yet.</p></details>
+      <details><summary>Does it update itself?</summary><p>Yes, from version 1.0.1. Every six hours the installed app checks the project's latest release, downloads a newer setup to your data drive, checks it against the published SHA-256, then asks you to update now or installs it at the next start. One switch in Settings turns this off.</p></details>
       <details><summary>Is it open source?</summary><p>Yes, MIT licensed. The code, every design decision and the evidence behind it are public (View on GitHub, at the top of this page).</p></details>
     </div>
   </div>
@@ -347,14 +391,6 @@
 
 <script>
 (function(){
-  // screenshot tabs (work with or without motion)
-  var tabs=[].slice.call(document.querySelectorAll('[role=tab]'));
-  function pick(t,focus){ tabs.forEach(function(b){ var on=b===t; b.setAttribute('aria-selected',on); b.tabIndex=on?0:-1; document.getElementById(b.getAttribute('aria-controls')).hidden=!on; }); if(focus) t.focus(); }
-  tabs.forEach(function(b,i){
-    b.addEventListener('click',function(){ pick(b); });
-    b.addEventListener('keydown',function(e){ var d=e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:0; if(d){ e.preventDefault(); pick(tabs[(i+d+tabs.length)%tabs.length],true); } });
-  });
-
   var motion=window.matchMedia && window.matchMedia('(prefers-reduced-motion: no-preference)').matches;
   if(!motion || !('IntersectionObserver' in window)) return;   // static final frames
   function seen(el,fn,th){ var io=new IntersectionObserver(function(es){ es.forEach(function(e){ fn(e.isIntersecting); }); },{threshold:th||.25}); io.observe(el); }
@@ -413,4 +449,5 @@
   }
 })();
 </script>
+<script src="/site.js" defer></script>
 </body></html>

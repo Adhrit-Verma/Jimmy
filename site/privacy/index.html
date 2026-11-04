@@ -19,10 +19,13 @@
 </header>
 
 <main id="main">
-<div class="page-head"><div class="wrap">
+<div class="page-head media"><div class="wrap">
+  <div>
   <p class="eyebrow">Privacy · last updated 2026-11-01</p>
   <h1>Privacy</h1>
   <p class="lede">Jimmy runs on your own PC. It has no account, no server of ours and no telemetry. Its author never receives your captures, your questions or your keys.</p>
+  </div>
+  <figure style="margin:0"><div class="clip"><video data-loop data-src="/video/drive.mp4" poster="/video/drive.jpg" preload="none" muted playsinline aria-label="A clip from the trailer: Lite, Balanced or Full, on the drive you choose, 30 days kept"></video></div><figcaption class="clip-cap"><span class="dot" aria-hidden="true"></span>From the trailer</figcaption></figure>
 </div></div>
 
 <div class="wrap doc-layout single">
@@ -50,6 +53,7 @@
   <h2>Who processes data</h2>
   <ul>
     <li><strong>The model provider you choose</strong> (NVIDIA, Google or OpenAI), only if you add a key, receives your question and the evidence for its answer, a screenshot of the window for a question about your screen, and the other items listed under <a href="/security/#leaves">what leaves your PC</a>. Each handles that data under its own privacy policy. On Google's free tier, Google may let reviewers read it.</li>
+    <li><strong>GitHub</strong>, from version 1.0.1: every six hours the installed app asks for the latest release and, if it's newer, downloads the setup. That is a normal web request with nothing about you in it. Settings turns this off.</li>
     <li><strong>Another assistant</strong> you connect through the MCP server receives what its recall tool returns.</li>
     <li><strong>During setup and first start</strong>, Jimmy downloads its own Python (through the uv tool), its packages from the Python package index, the Whisper speech model from Hugging Face and, with the Full profile, Ollama and its models. A source install also uses npm. Each of these sees a normal download request.</li>
   </ul>
@@ -84,4 +88,5 @@
   </div>
   <p>Jimmy · an always-on assistant for Windows that stays quiet until you ask · MIT licensed</p>
 </div></footer>
+<script src="/site.js" defer></script>
 </body></html>

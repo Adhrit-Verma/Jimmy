@@ -19,10 +19,13 @@
 </header>
 
 <main id="main">
-<div class="page-head"><div class="wrap">
+<div class="page-head media"><div class="wrap">
+  <div>
   <p class="eyebrow">Security</p>
   <h1>What Jimmy keeps, and what it never does</h1>
   <p class="lede">Software that watches your screen and listens to your room is a real decision. Here is exactly what it stores, what leaves your PC, how it decides what it may do, and what is not done yet.</p>
+  </div>
+  <figure style="margin:0"><div class="clip"><video data-loop data-src="/video/private.mp4" poster="/video/private.jpg" preload="none" muted playsinline aria-label="A clip from the trailer: banking and passwords skipped, face template and keys encrypted"></video></div><figcaption class="clip-cap"><span class="dot" aria-hidden="true"></span>From the trailer</figcaption></figure>
 </div></div>
 
 <div class="wrap doc-layout">
@@ -81,19 +84,19 @@
     <li><strong>The names of the window's buttons and boxes</strong> while Jimmy works out what you asked it to do.</li>
     <li><strong>Once a day, what it needs to keep your wiki</strong> (what Jimmy knows about you): your lists, your questions to it, and window titles.</li>
   </ul>
-  <p>Without a key, none of this is sent. If you connect the <a href="/docs/#mcp">MCP server</a>, what its recall tool returns goes to that assistant. During setup, packages and models download from their usual sources (Python packages, npm, Ollama's library and Hugging Face for Whisper). Jimmy has no telemetry and no account, and its author receives nothing.</p>
+  <p>Without a key, none of this is sent. If you connect the <a href="/docs/#mcp">MCP server</a>, what its recall tool returns goes to that assistant. During setup, packages and models download from their usual sources (Python packages, npm, Ollama's library and Hugging Face for Whisper). The installed app (from 1.0.1) also asks GitHub every six hours whether a newer release exists, and downloads it if so; Settings turns that off. Jimmy has no telemetry and no account, and its author receives nothing.</p>
   <div class="callout"><p>On Google's free tier, Google may let human reviewers read what is sent. That is why screenshots stay with NVIDIA unless you choose otherwise.</p></div>
 </section>
 
 <section id="actions">
   <h2>Actions on your screen</h2>
   <p>Jimmy acts on other apps only through Windows' accessibility interface (UI Automation), never by moving your mouse. Its own cursor shows each action before it happens. Every proposed action passes a <strong>policy layer in code</strong>, whatever model proposed it, which returns one of four answers:</p>
-  <div class="tscroll"><table class="dtable"><thead><tr><th>Answer</th><th>For</th></tr></thead><tbody>
-    <tr><td>Refuse</td><td>Typing into a password box, typing words you didn't say, a control that has changed since you saw it, one you already said no to, a non-web address</td></tr>
-    <tr><td>Stop</td><td>A CAPTCHA. Jimmy never solves one</td></tr>
-    <tr><td>Ask</td><td>Anything that can't be undone (send, delete, buy, submit, close), a site you didn't name, a button whose name reads like an instruction</td></tr>
-    <tr><td>Allow</td><td>A reversible action on a control you named, when nothing else fits as well. It is shown first, with a moment to say "stop"</td></tr>
-  </tbody></table></div>
+  <div class="answers">
+    <div><span class="tag t-rose">Refuse</span><p>Typing into a password box, typing words you didn't say, a control that has changed since you saw it, one you already said no to, a non-web address</p></div>
+    <div><span class="tag t-amber">Stop</span><p>A CAPTCHA. Jimmy never solves one</p></div>
+    <div><span class="tag t-violet">Ask</span><p>Anything that can't be undone (send, delete, buy, submit, close), a site you didn't name, a button whose name reads like an instruction</p></div>
+    <div><span class="tag t-emerald">Allow</span><p>A reversible action on a control you named, when nothing else fits as well. It is shown first, with a moment to say "stop"</p></div>
+  </div>
   <p>The one key Jimmy ever sends is Enter, and only after UI Automation focused that box and the focus was checked. It never acts in excluded windows. After each action, code checks that it worked (the box holds the text, the page changed) and stops at the first surprise.</p>
 </section>
 
@@ -132,4 +135,5 @@
   </div>
   <p>Jimmy · an always-on assistant for Windows that stays quiet until you ask · MIT licensed</p>
 </div></footer>
+<script src="/site.js" defer></script>
 </body></html>

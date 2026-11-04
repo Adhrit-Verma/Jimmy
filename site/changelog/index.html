@@ -19,17 +19,27 @@
 </header>
 
 <main id="main">
-<div class="page-head"><div class="wrap">
+<div class="page-head media"><div class="wrap">
+  <div>
   <p class="eyebrow">Changelog</p>
   <h1>What changed, and when</h1>
   <p class="lede">Newest first. The labels in brackets (D58 and so on) are the project's decision records, where each change is written up with the evidence behind it.</p>
+  </div>
+  <figure style="margin:0"><div class="clip"><video data-loop data-src="/video/bursts.mp4" poster="/video/bursts.jpg" preload="none" muted playsinline aria-label="A clip from the trailer: reminders, Hindi, windows, drafts, calendar and focus"></video></div><figcaption class="clip-cap"><span class="dot" aria-hidden="true"></span>From the trailer</figcaption></figure>
 </div></div>
 
 <div class="wrap doc-layout single">
 <div class="prose" style="max-width:52rem">
 <ol class="log">
   <li><time datetime="2026-11-02">2026-11-02</time><div>
-    <h3>Jimmy-Setup.exe, version 1.0.0 (D60–D62)</h3>
+    <h3>Jimmy updates itself (D63–D64)<span class="ver">1.0.1</span></h3>
+    <ul>
+      <li>Every six hours the installed app checks for a newer release, downloads it to your data drive, checks its SHA-256, and offers to update now or at the next start. A switch in Settings turns it off.</li>
+      <li>A new version is published only after the clean-machine test passes.</li>
+      <li>The camera no longer counts as "in use" by an app that crashed while holding it, or by Jimmy itself.</li>
+    </ul></div></li>
+  <li><time datetime="2026-11-02">2026-11-02</time><div>
+    <h3>Jimmy-Setup.exe (D60–D62)<span class="ver">1.0.0</span></h3>
     <ul>
       <li>A setup file for any Windows 10 (22H2) or 11 PC, 64-bit: installed for one user, on any drive, with no admin rights, Python or Node needed.</li>
       <li>A first-start setup in Jimmy's own design that checks the PC, asks where to keep data and how much of the PC to use (Lite, Balanced, Full), and downloads Jimmy's own Python and speech model.</li>
@@ -113,4 +123,5 @@
   </div>
   <p>Jimmy · an always-on assistant for Windows that stays quiet until you ask · MIT licensed</p>
 </div></footer>
+<script src="/site.js" defer></script>
 </body></html>

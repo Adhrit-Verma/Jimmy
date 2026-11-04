@@ -20,9 +20,9 @@ HEADERS = {   # keep in step with render.yaml
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "strict-origin-when-cross-origin",
-    "Content-Security-Policy": ("default-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline' "
+    "Content-Security-Policy": ("default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'self' 'unsafe-inline' "
                                 "https://fonts.googleapis.com; font-src https://fonts.gstatic.com; "
-                                "script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; "
+                                "script-src 'self' 'unsafe-inline'; base-uri 'none'; form-action 'none'; "
                                 "frame-ancestors 'none'"),
 }
 

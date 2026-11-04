@@ -19,10 +19,13 @@
 </header>
 
 <main id="main">
-<div class="page-head"><div class="wrap">
+<div class="page-head media"><div class="wrap">
+  <div>
   <p class="eyebrow">Documentation</p>
   <h1>Set up Jimmy</h1>
   <p class="lede">Install Jimmy with its setup file on Windows 10 or 11, or build it from source. Choose a model provider or run offline, and start talking to it.</p>
+  </div>
+  <figure style="margin:0"><div class="clip"><video data-loop data-src="/video/install.mp4" poster="/video/install.jpg" preload="none" muted playsinline aria-label="A clip from the trailer: Jimmy installs itself, then updates itself"></video></div><figcaption class="clip-cap"><span class="dot" aria-hidden="true"></span>From the trailer</figcaption></figure>
 </div></div>
 
 <div class="wrap doc-layout">
@@ -52,14 +55,13 @@
 <section id="install">
   <h2>Install with the setup</h2>
   <p>For Windows 10 (22H2) or 11, 64-bit. You don't need Python, Node, CUDA or admin rights.</p>
-  <ol>
-    <li><strong>Download</strong> <code>Jimmy-Setup-1.0.0.exe</code> (about 170 MB) and its <code>.sha256</code> file from the project's <strong>Releases</strong> page on GitHub (the <strong>View on GitHub</strong> button on the <a href="/">home page</a>, then Releases).</li>
-    <li><strong>Check the file</strong> in PowerShell, from the folder you downloaded it to. The result must equal the value in the <code>.sha256</code> file:</li>
-  </ol>
-  <div class="code"><pre>(Get-FileHash .\Jimmy-Setup-1.0.0.exe).Hash</pre></div>
-  <ol start="3">
+  <ol class="stepper">
+    <li><strong>Download</strong> the latest <code>Jimmy-Setup-&lt;version&gt;.exe</code> (about 170 MB) and its <code>.sha256</code> file from the project's <strong>Releases</strong> page on GitHub (the <strong>View on GitHub</strong> button on the <a href="/">home page</a>, then Releases).</li>
+    <li><strong>Check the file</strong> in PowerShell, from the folder you downloaded it to. The result must equal the value in the <code>.sha256</code> file:
+      <div class="code"><pre>(Get-FileHash .\Jimmy-Setup-1.0.1.exe).Hash</pre></div></li>
     <li><strong>Run it.</strong> The setup isn't code-signed yet, so Windows shows <em>"Windows protected your PC"</em>: choose <strong>More info</strong>, then <strong>Run anyway</strong>. Pick a folder on any drive. It installs for your Windows account only.</li>
   </ol>
+  <div class="callout"><p><strong>Updates install themselves</strong> from version 1.0.1: every six hours Jimmy checks for a newer release, downloads it to your data drive, checks its SHA-256, then offers to update now or installs it at the next start. Settings has a switch to turn this off. If you have 1.0.0, install 1.0.1 once by hand.</p></div>
 </section>
 
 <section id="first-start">
@@ -121,17 +123,26 @@ ollama pull bge-m3</pre></div>
 <section id="key">
   <h2>Model key (optional)</h2>
   <p>Spoken answers come from a cloud model. Pick one provider. Without any key, Jimmy still works: each answer shows what search found instead.</p>
-  <h3>NVIDIA (default, free)</h3>
-  <p>Make a key at <a href="https://build.nvidia.com/settings/api-keys" rel="noopener">build.nvidia.com</a>, then:</p>
+  <div class="tabs" role="tablist" aria-label="Model providers" data-tabs>
+    <button role="tab" id="pv-1" aria-controls="pp-1" aria-selected="true">NVIDIA · free</button>
+    <button role="tab" id="pv-2" aria-controls="pp-2" aria-selected="false" tabindex="-1">Gemini · free tier</button>
+    <button role="tab" id="pv-3" aria-controls="pp-3" aria-selected="false" tabindex="-1">OpenAI · paid</button>
+  </div>
+  <div class="panel" role="tabpanel" id="pp-1" aria-labelledby="pv-1">
+  <p>The default. Make a key at <a href="https://build.nvidia.com/settings/api-keys" rel="noopener">build.nvidia.com</a>, then:</p>
   <div class="code"><pre>setx NVIDIA_API_KEY "nvapi-your-key-here"</pre></div>
-  <h3>Google Gemini (free tier)</h3>
+  </div>
+  <div class="panel" role="tabpanel" id="pp-2" aria-labelledby="pv-2" hidden>
   <p>Make a key at <a href="https://aistudio.google.com/apikey" rel="noopener">aistudio.google.com</a>. Create a file named <code>.env</code> in the Jimmy folder with these lines, plus your NVIDIA key, which answers whenever Gemini's free quota runs out or it is down:</p>
   <div class="code"><pre>GEMINI_API_KEY=your-key-here
 JIMMY_PROVIDER=gemini</pre></div>
   <p>Google may let reviewers read what is sent on its free tier. Screenshots stay with NVIDIA unless you also add <code>JIMMY_GEMINI_SCREENSHOTS=1</code>.</p>
-  <h3>OpenAI (paid)</h3>
+  </div>
+  <div class="panel" role="tabpanel" id="pp-3" aria-labelledby="pv-3" hidden>
+  <p>Put these two lines in <code>.env</code> in the Jimmy folder:</p>
   <div class="code"><pre>OPENAI_API_KEY=sk-your-key-here
 JIMMY_PROVIDER=openai</pre></div>
+  </div>
   <div class="callout warn"><p>Keep keys in <code>.env</code> or your environment, never in a file you share. Git already ignores <code>.env</code>.</p></div>
 </section>
 
@@ -265,18 +276,5 @@ url:internal\.example\.com</pre></div>
   <p>Jimmy · an always-on assistant for Windows that stays quiet until you ask · MIT licensed</p>
 </div></footer>
 
-<script>
-document.querySelectorAll('.code').forEach(function (block) {
-  if (!navigator.clipboard) return;
-  var button = document.createElement('button');
-  button.type = 'button'; button.className = 'copy'; button.textContent = 'Copy';
-  button.addEventListener('click', function () {
-    navigator.clipboard.writeText(block.querySelector('pre').innerText).then(function () {
-      button.textContent = 'Copied';
-      setTimeout(function () { button.textContent = 'Copy'; }, 1500);
-    });
-  });
-  block.appendChild(button);
-});
-</script>
+<script src="/site.js" defer></script>
 </body></html>
