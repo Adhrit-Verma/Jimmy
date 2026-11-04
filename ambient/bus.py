@@ -6,7 +6,9 @@ happiest where it was initialised; audio runs on its own threads.
 """
 from __future__ import annotations
 
+import os
 import signal
+import subprocess
 import threading
 import time
 from dataclasses import dataclass, field
@@ -14,9 +16,16 @@ from pathlib import Path
 
 import numpy as np
 
-from . import config, power, screen
+from . import config, power, screen, selfcheck
 from .db import Store, now_ms
 from .redact import Exclusions, FaceStage, is_own_window
+
+
+def _later(seconds: float, fn, **kwargs) -> None:
+    """fn after `seconds`, on a daemon timer: quitting early never waits for it (D65)."""
+    t = threading.Timer(seconds, fn, kwargs=kwargs)
+    t.daemon = True
+    t.start()
 
 
 def memory_lists(mem) -> dict:
@@ -116,6 +125,7 @@ class ContextBus:
         self._manual_curtain = False
         self._presence = {"state": "off"}
         self._presence_obj = None
+        self._presence_lock = threading.Lock()      # D65: start_presence from a timer and a repair
         self._sensitive = False       # the last tick was an excluded surface or a password box
         self._proactive = None        # D32
         self._last_frame_ts = None
@@ -1065,6 +1075,8 @@ class ContextBus:
                                      "open_file": os.startfile,
                                      "volume": lambda word: self.set_volume(word, mem),
                                      "presence": lambda: self._presence if self._presence_obj else None,
+                                     "diagnose": lambda: selfcheck.diagnose(self),       # D65
+                                     "repair": lambda: selfcheck.repair(self),
                                      "enrol": lambda: self._presence_obj.enrol() if self._presence_obj
                                      else "The webcam is switched off in config (PRESENCE).",
                                      "unenrol": lambda: self._presence_obj.forget() if self._presence_obj
@@ -1079,17 +1091,14 @@ class ContextBus:
                                     offer=lambda kind, data: self._asker.make_offer(kind, data),
                                     say=self._voice.say if self._voice else None,
                                     is_deadline=engine.is_deadline if engine else None)
-        # D34: presence from the webcam, for the privacy curtain.
+        # D34: presence from the webcam, for the privacy curtain. D65: 15 s after the rest, so
+        # it doesn't load beside Whisper; and startable later (selfcheck turns it on, no restart).
+        self._mem = mem
         if config.PRESENCE:
-            from .presence import Presence
-            import json
-            cal = mem.setting("eye_calibration")     # D40: numbers, not a picture: see presence.calibrate
-            self._presence_obj = Presence(self._on_presence, on_enrol=self._on_enrol,
-                                          cal=json.loads(cal) if cal else None,
-                                          on_calibrated=lambda c: mem.set_setting("eye_calibration", json.dumps(c))
-                                          ).start()
-            if not cal:
-                print('[presence] eyes not calibrated yet: say "Jimmy, eye calibration" (about 20 s)')
+            # Built here, on the main thread (it set up COM for the UI Automation reads that
+            # follow: built on a timer thread, they failed with "CoInitialize has not been
+            # called"); only the camera itself starts later.
+            self.start_presence(delay=config.PRESENCE_START_DELAY_S)
         env = dict(os.environ, JIMMY_OVERLAY_URL=self._api.url, JIMMY_OVERLAY_TOKEN=self._api.token)
         # Started from an Electron app's terminal (VS Code, Claude), this is inherited
         # and makes electron.exe run as plain Node: no window, "app.whenReady" undefined.
@@ -1162,11 +1171,42 @@ class ContextBus:
             self._focus_memory.close()
             self._focus_memory = None
 
+    def start_presence(self, camera: int | None = None, delay: float = 0) -> bool:
+        """Start (or restart) the webcam's presence thread. D65: also from selfcheck's repairs."""
+        from .presence import Presence
+        import json
+        with self._presence_lock:
+            if not self._running:
+                return False
+            old, self._presence_obj = getattr(self, "_presence_obj", None), None
+            if old:
+                old.stop(wait=True)
+            return self._new_presence(Presence, json, camera, delay)
+
+    def _new_presence(self, Presence, json, camera, delay: float = 0) -> bool:
+        mem = self._mem
+        cal = mem.setting("eye_calibration")     # D40: numbers, not a picture: see presence.calibrate
+        self._presence_obj = Presence(self._on_presence, on_enrol=self._on_enrol, camera=camera,
+                                      cal=json.loads(cal) if cal else None,
+                                      on_calibrated=lambda c: mem.set_setting("eye_calibration", json.dumps(c))
+                                      )
+        if delay:
+            _later(delay, lambda p=self._presence_obj: self._running and p.start())
+        else:
+            self._presence_obj.start()
+        if not cal:
+            print('[presence] eyes not calibrated yet: say "Jimmy, eye calibration" (about 20 s)')
+        return True
+
     def _index_loop(self) -> None:
         """Embed new captures for meaning search once a minute (Stage 5, D24).
         If the embedding model is unavailable, keyword search still works; retry later."""
         from jimmy.core import LLMError
         power.background()                   # D47: efficiency mode for the indexer
+        for _ in range(30):                  # D65: after the voice and the camera have loaded
+            if not self._running:
+                return
+            time.sleep(1)
 
         from .recall import index
         # D38: load the embedding model and open the cloud connection now, not on the
@@ -1199,6 +1239,25 @@ class ContextBus:
     def run(self, duration_s: float | None = None, verbose: bool = True) -> Counters:
         self._running = True
         started = time.monotonic()
+        # D65: starting made the whole PC lag (Whisper, the wake word, the camera and the
+        # embedding model all loading at once). Below-normal priority while Jimmy loads.
+        power.priority(low=True)
+        # COM for UI Automation on this (the capture) thread, explicitly. It used to come as a
+        # side effect of what loaded first; with the camera starting later, the first screen
+        # reads failed ("CoInitialize has not been called").
+        try:
+            import uiautomation as auto
+            self._uia_com = auto.UIAutomationInitializerInThread()
+        except Exception as exc:
+            print(f"[screen] UI Automation not ready: {type(exc).__name__}: {exc}")
+        _later(90, power.priority, low=False)
+        if os.environ.get("JIMMY_OLLAMA_EXE"):          # D65: see launcher.cjs startJimmy
+            try:
+                subprocess.Popen([os.environ["JIMMY_OLLAMA_EXE"], "serve"], stdin=subprocess.DEVNULL,
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                 creationflags=0x08000000)      # CREATE_NO_WINDOW; an Ollama already up wins
+            except OSError as exc:
+                print(f"[ollama] not started: {exc}")
         if self.want_overlay:
             try:
                 self._start_overlay()

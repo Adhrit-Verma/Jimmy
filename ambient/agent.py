@@ -138,6 +138,11 @@ JIMMY = [
     ("volume", "Jimmy's speaking voice.", {"level": {"type": "string", "enum": ["softer", "louder", "mute", "unmute"]}},
      ["level"]),
     ("presence", "Say whether Jimmy's webcam sees the user, their face or their eyes.", {}, []),
+    ("diagnose", "Find out why the camera isn't working (the user asks what's wrong, why Jimmy can't see"
+     " them, to show the issue): Jimmy checks itself and says what it found.", {}, []),
+    ("fix_problem", "Repair the camera: the user says Jimmy may use the camera, is allowed, or to fix it."
+     " Jimmy turns its webcam back on, restarts it, finds the right camera, or opens Windows' privacy page.",
+     {}, []),
     ("not_a_call", "The user says an app holding the mic (Discord...) isn't a call: remembered.", {"app": _S}, []),
     ("draft", "Write a reply to the conversation on screen, to the clipboard.", {}, []),
 ]
@@ -211,7 +216,8 @@ GROUPS: list[tuple[re.Pattern, list[str]]] = [(re.compile(rx, re.I), names) for 
      ["remember", "list_memories", "memory_update", "memory_delete"]),
     (r"\b(?:delete|erase|wipe|forget|purge)\b", ["forget_data", "reminder_delete", "goal_delete", "memory_delete"]),
     (r"\bface\b|\beyes?\b|calibrat|\bsee me\b|camera|webcam|looking at", ["remember_face", "forget_face",
-     "calibrate_eyes", "presence"]),
+     "calibrate_eyes", "presence", "diagnose", "fix_problem"]),
+    (r"\bfix\b|repair|wrong|issue|problem|not working|broken|allowed|permission|diagnos", ["diagnose", "fix_problem"]),
     (r"\bcopy\b|\bdraft|write (?:a |an )?(?:reply|message|email)", ["copy_screen", "draft"]),
     (r"voice|louder|softer|quieter|\bmute|speak|volume", ["volume"]),
     (r"\bcall\b|discord|teams|zoom|meeting|\bmic\b", ["not_a_call"]),

@@ -181,7 +181,8 @@ WIKI_EVERY_H = 24            # D42: the model-written wiki pages, recompiled whi
 # D39: your face is found once, then the place you sit is followed. Where you look
 # never matters; only leaving the picture brings the curtain.
 PRESENCE = True              # False: no webcam at all
-PRESENCE_CAMERA = 0          # OpenCV camera index
+PRESENCE_CAMERA = 0          # OpenCV camera index (D65: settings' camera_index wins)
+PRESENCE_START_DELAY_S = 15  # D65: the camera starts after the voice models, not beside them
 PRESENCE_FPS = 4
 PRESENCE_CAMERA_FPS = 5      # D38: ask the camera for 5 fps, not its 30: we read 4, it decoded 30
 PRESENCE_MIN_FACE = 0.06     # ignore faces narrower than this share of the frame (far away)
@@ -387,6 +388,7 @@ THUMB_SMALL_WIDTH = 480
 if _install.SETTINGS.exists():
     _S = _install.settings()
     PRESENCE = bool(_S["webcam"])
+    PRESENCE_CAMERA = int(_S.get("camera_index") or 0)     # D65: the camera that opened
     GPU_RELEASE_AWAY_S = float(_S["gpu_release_away_s"])
     VOICE_ENGINE = str(_S["voice"]) or VOICE_ENGINE
     if _S["whisper_model"]:

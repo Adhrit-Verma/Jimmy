@@ -25,14 +25,10 @@ body {
 .eq > span:nth-child(3) { animation-delay: -0.6s; }
 .eq > span:nth-child(4) { animation-delay: -0.15s; }
 
-@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
-.shimmer {
-  background: linear-gradient(90deg, #8a8a8a 0%, #f5f5f5 45%, #8a8a8a 90%) 0 0 / 200% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: shimmer 1.8s linear infinite;
-}
+/* D65: an opacity pulse (compositor only); the moving text gradient repainted every frame. */
+@keyframes shimmer { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+.shimmer { color: #f5f5f5; animation: shimmer 1.6s ease-in-out infinite; }
+.eq > span { will-change: transform; }
 
 @keyframes indet { from { transform: translateX(-100%); } to { transform: translateX(350%); } }
 .indet { animation: indet 1.15s cubic-bezier(0.4, 0, 0.2, 1) infinite; }

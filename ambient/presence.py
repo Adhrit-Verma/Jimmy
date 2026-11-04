@@ -34,10 +34,26 @@ from collections import deque
 from pathlib import Path
 from typing import Callable
 
-import cv2
-import numpy as np
+import os
 
-from . import config, power
+# D65: Media Foundation spent 16.5 s opening the webcam on the owner's laptop (OpenCV enumerates
+# hardware transforms first); without them, 0.5 s. Read when a capture opens, so set it before.
+os.environ.setdefault("OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS", "0")
+
+import cv2  # noqa: E402
+import numpy as np  # noqa: E402
+
+from . import config, power  # noqa: E402
+
+
+def open_camera(index: int):
+    """The webcam, opened: Media Foundation, else DirectShow (D65). None if neither opens."""
+    for api in (cv2.CAP_MSMF, cv2.CAP_DSHOW):
+        cap = cv2.VideoCapture(index, api)
+        if cap.isOpened():
+            return cap
+        cap.release()
+    return None
 from .redact import SFACE, YUNET
 
 
@@ -528,11 +544,16 @@ class Presence:
         return self._enrol is not None or self._want_enrol or self._calib is not None or self._want_calib
 
     def start(self) -> "Presence":
-        threading.Thread(target=self._run, daemon=True, name="presence").start()
+        self._thread = threading.Thread(target=self._run, daemon=True, name="presence")
+        self._thread.start()
         return self
 
-    def stop(self) -> None:
+    def stop(self, wait: bool = False) -> None:
+        """wait: until the thread has let go of the camera (D65: a repair reopens it next)."""
         self._stop.set()
+        t = getattr(self, "_thread", None)
+        if wait and t and t is not threading.current_thread():
+            t.join(timeout=5)
 
     def enrol(self) -> str:
         """Start the guided capture (on the presence thread, which owns the camera)."""
@@ -761,9 +782,8 @@ class Presence:
                     self._stop.wait(1)
                     continue
                 if cap is None:
-                    cap = cv2.VideoCapture(self.camera, cv2.CAP_MSMF)
-                    if not cap.isOpened():
-                        cap = None
+                    cap = open_camera(self.camera)
+                    if cap is None:
                         self._set(state="off", faces=0, facing=False, contact=False, why="no camera")
                         self._stop.wait(10)
                         continue

@@ -62,7 +62,7 @@ SECRETS = DATA / "secrets.bin"
 DEFAULTS = {"profile": "balanced", "retention_days": 30, "storage_cap_gb": 20, "webcam": True,
             "local_ai": False, "voice": "sapi", "start_with_windows": True, "gpu_release_away_s": 600,
             "provider": "", "whisper_model": "", "whisper_device": "",   # "" = the code's default
-            "auto_update": True}                    # D64: the overlay's updater reads it
+            "auto_update": True, "camera_index": 0}                    # D64: the overlay's updater reads it
 
 
 def settings() -> dict:
@@ -126,11 +126,29 @@ def set_secret(name: str, value: str | None) -> None:
 # --- off C:, and CUDA --------------------------------------------------------------------------
 def prepare_environment() -> None:
     """Installed: caches go to the data folder. Any copy: CUDA DLLs from pip are findable."""
+    if os.name == "nt" and Path(sys.executable).name.lower() == "pythonw.exe":
+        hide_consoles()
     if INSTALLED:
         os.environ.setdefault("HF_HOME", str(DATA / "models" / "hf"))
         os.environ.setdefault("OLLAMA_MODELS", str(DATA / "models" / "ollama"))
         os.environ.setdefault("UV_CACHE_DIR", str(DATA / "cache" / "uv"))
     cuda_dirs()
+
+
+def hide_consoles() -> None:
+    """D65: pythonw has no console, so every console program started under it (by Jimmy or
+    by a library) opens a new, visible window: the user saw command prompts flash across the
+    screen at start. CREATE_NO_WINDOW gives each one a hidden console instead, which its own
+    children share."""
+    import subprocess
+    if getattr(subprocess.Popen, "_jimmy_hidden", False):
+        return
+    init = subprocess.Popen.__init__
+
+    def hidden(self, *args, creationflags: int = 0, **kwargs):
+        init(self, *args, creationflags=creationflags | 0x08000000, **kwargs)   # CREATE_NO_WINDOW
+    subprocess.Popen.__init__ = hidden
+    subprocess.Popen._jimmy_hidden = True
 
 
 def cuda_dirs() -> list[str]:

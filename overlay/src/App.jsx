@@ -206,7 +206,7 @@ function Pill({ state, mood, prompt, typing, setTyping, flash, recent, onAsk, an
           <AnimatePresence mode="wait" initial={false}>
             <motion.span
               key={flash ? `f${flash.id}` : `s${paused}${mood}${curtain}`}
-              initial={{ opacity: 0, y: 5, filter: "blur(2px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+              initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.16 }}
               onClick={() => !flash && !paused && startTyping()}
               className={`flex items-center gap-1.5 whitespace-nowrap ${flash || paused ? "" : "cursor-text"}`}
@@ -533,6 +533,18 @@ export default function App() {
   const [enrol, setEnrol] = useState(null);                                    // D37
   const [steps, setSteps] = useState(null);                                    // D57: a plan, live
   const stepsTimer = useRef(null);
+  // D65: answer text arrives a few characters at a time (20-60 events a second); re-rendering
+  // the answer, its evidence and markdown for each one made the overlay lag. Batched per ~60 ms.
+  const pend = useRef({ id: null, text: "", t: 0 });
+  const flushDelta = () => {
+    const p = pend.current;
+    clearTimeout(p.t);
+    p.t = 0;
+    if (!p.text) return;
+    const { id, text } = p;
+    p.text = "";
+    setAnswer((a) => (a && a.id === id ? { ...a, status: "answering", text: a.text + text } : a));
+  };
   const [cursor, setCursor] = useState(null);                                  // D41: Jimmy's own pointer
   const cursorTimer = useRef(null);
   const cursorN = useRef(0);
@@ -593,6 +605,7 @@ export default function App() {
 
   useEffect(() => {
     return bridge?.onEvent((ev) => {
+      if (ev.type !== "answer_delta" && pend.current.text) flushDelta();   // keep the order
       if (ev.type === "state") {
         const p = prev.current;
         if (p && p.paused !== ev.paused) say(ev.paused ? `Paused for ${span(ev.paused_until - Date.now())}` : "Capturing again", ev.paused ? "pause" : "resume");
@@ -663,7 +676,12 @@ export default function App() {
                        terms: ev.terms, days: ev.days, window: ev.window, stats: ev.stats,
                        event: ev.event ?? a.event }));
       }
-      if (ev.type === "answer_delta") same((a) => ({ ...a, status: "answering", text: a.text + ev.text }));
+      if (ev.type === "answer_delta") {
+        if (pend.current.id !== ev.id) flushDelta();
+        pend.current.id = ev.id;
+        pend.current.text += ev.text;
+        if (!pend.current.t) pend.current.t = setTimeout(flushDelta, 60);
+      }
       if (ev.type === "answer_ui") same((a) => ({ ...a, ui: ev.ui }));                       // D56
       if (ev.type === "steps") {                                                            // D57
         clearTimeout(stepsTimer.current);

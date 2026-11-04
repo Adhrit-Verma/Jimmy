@@ -298,7 +298,14 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.on("pointer-over-ui", (_e, over) => win.setIgnoreMouseEvents(!over, { forward: true }));
+  // D65: only on a change; every hover in and out of a child used to re-set the full-screen
+  // window's hit-testing, which made the overlay sluggish.
+  let overUi = null;
+  ipcMain.on("pointer-over-ui", (_e, over) => {
+    if (over === overUi) return;
+    overUi = over;
+    win.setIgnoreMouseEvents(!over, { forward: true });
+  });
   ipcMain.handle("api", (_e, route, body) => call(route, body));
   // D60: Settings. Start with Windows (HKCU Run, the packaged exe only), the data folder,
   // and the onboarding again (change the profile, repair).

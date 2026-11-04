@@ -40,6 +40,16 @@ def background() -> bool:
         return False
 
 
+def priority(low: bool) -> None:
+    """D65: the whole process below normal (or back to normal). Windows only; a no-op elsewhere."""
+    if os.name != "nt":
+        return
+    k32 = ctypes.windll.kernel32
+    k32.GetCurrentProcess.restype = ctypes.c_void_p
+    k32.SetPriorityClass.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+    k32.SetPriorityClass(k32.GetCurrentProcess(), 0x4000 if low else 0x20)   # BELOW_NORMAL / NORMAL
+
+
 def on_battery() -> bool:
     if not _WIN:
         return False

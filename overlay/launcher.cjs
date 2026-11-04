@@ -314,9 +314,13 @@ function startJimmy() {
   const data = pointer();
   let settings = {};
   try { settings = JSON.parse(fs.readFileSync(path.join(data, "settings.json"), "utf8")); } catch { /* defaults */ }
-  if (settings.local_ai) startOllama(data);
+  // D65: Jimmy's Python starts Ollama (a hidden console its helpers share). Started from here,
+  // detached, it had no console, and each GPU check and model runner it started flashed one up.
+  const ollama = path.join(OLLAMA_DIR, "ollama.exe");
+  const local = settings.local_ai && fs.existsSync(ollama)
+    ? { JIMMY_OLLAMA_EXE: ollama, OLLAMA_HOST: "127.0.0.1:11434" } : {};
   const p = cp.spawn(PYW, ["-m", "ambient", "run"], { cwd: CODE, detached: true, stdio: "ignore", windowsHide: true,
-    env: { ...pyEnv(data), JIMMY_OVERLAY_EXE: process.execPath } });
+    env: { ...pyEnv(data), JIMMY_OVERLAY_EXE: process.execPath, ...local } });
   p.unref();
   log(`started Jimmy (pid ${p.pid}) with data in ${data}`);
 }

@@ -1490,8 +1490,8 @@ class Asker:
     def _presence_line(self) -> str:
         """D35: "can you see me?", answered from the webcam's state, by code."""
         info = self.actions.get("presence", lambda: None)()
-        if not info:
-            return "No, the webcam is off for me."
+        if not info:                                         # D65: say why, and how to fix it
+            return "No. " + self.actions["diagnose"]() if "diagnose" in self.actions else "No, the webcam is off for me."
         st = info.get("state")
         if st == "present" and info.get("owner"):
             return "Yes, I can see you."                     # D37: your remembered face
@@ -1503,6 +1503,8 @@ class Asker:
             return "I see someone, but not you, so the curtain is down."
         if st == "away":
             return "No one's in front of the camera right now."
+        if "diagnose" in self.actions:                       # D65
+            return "No. " + self.actions["diagnose"]()
         return f"No, the webcam is off for me{': ' + info['why'] if info.get('why') else ''}."
 
     def _state_text(self) -> str:
@@ -1799,6 +1801,8 @@ class Asker:
         said = self._crud(tool, args)
         if said is None and tool == "presence":
             said = self._presence_line()
+        elif said is None and tool in ("diagnose", "fix_problem") and "diagnose" in self.actions:   # D65
+            said = self.actions["diagnose" if tool == "diagnose" else "repair"]()
         elif said is None and tool == "open" and args.get("view") == "memory":
             self.publish({"type": "open_view", "view": "memory"})
             said = "Here's what I keep for you."
