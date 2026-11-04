@@ -37,7 +37,7 @@
   <p>Use</p>
   <a href="#talk">What you can say</a><a href="#controls">Everyday controls</a><a href="#exclusions">Exclusions</a><a href="#cli">Command line</a><a href="#mcp">Other assistants (MCP)</a>
   <p>Reference</p>
-  <a href="#extras">Optional extras</a><a href="#troubleshooting">Troubleshooting</a><a href="#limits">Current limits</a>
+  <a href="#extras">Optional extras</a><a href="#off">If something's off</a><a href="#troubleshooting">Troubleshooting</a><a href="#limits">Current limits</a>
 </nav>
 
 <div class="prose">
@@ -58,10 +58,10 @@
   <ol class="stepper">
     <li><strong>Download</strong> the latest <code>Jimmy-Setup-&lt;version&gt;.exe</code> (about 170 MB) and its <code>.sha256</code> file from the project's <strong>Releases</strong> page on GitHub (the <strong>View on GitHub</strong> button on the <a href="/">home page</a>, then Releases).</li>
     <li><strong>Check the file</strong> in PowerShell, from the folder you downloaded it to. The result must equal the value in the <code>.sha256</code> file:
-      <div class="code"><pre>(Get-FileHash .\Jimmy-Setup-1.0.1.exe).Hash</pre></div></li>
+      <div class="code"><pre>(Get-FileHash .\Jimmy-Setup-&lt;version&gt;.exe).Hash</pre></div></li>
     <li><strong>Run it.</strong> The setup isn't code-signed yet, so Windows shows <em>"Windows protected your PC"</em>: choose <strong>More info</strong>, then <strong>Run anyway</strong>. Pick a folder on any drive. It installs for your Windows account only.</li>
   </ol>
-  <div class="callout"><p><strong>Updates install themselves</strong> from version 1.0.1: every six hours Jimmy checks for a newer release, downloads it to your data drive, checks its SHA-256, then offers to update now or installs it at the next start. Settings has a switch to turn this off. If you have 1.0.0, install 1.0.1 once by hand.</p></div>
+  <div class="callout"><p><strong>Updates install themselves</strong> from version 1.0.1: 10 minutes after it starts and every six hours after that, Jimmy checks for a newer release, downloads it to your data drive, checks its SHA-256, then offers to update now or installs it at the next start. Your data and settings are kept. In Settings, <strong>Update Jimmy automatically</strong> turns this off. If you have 1.0.0, install 1.0.1 or later once by hand.</p></div>
 </section>
 
 <section id="first-start">
@@ -238,6 +238,11 @@ url:internal\.example\.com</pre></div>
     <tr><td>Silero VAD</td><td><code>pip install onnxruntime silero-vad</code></td><td>Fewer false speech segments in a noisy room (<code>VAD_ENGINE = "silero"</code>)</td></tr>
     <tr><td>Local fallback</td><td><code>ollama pull qwen3:4b</code></td><td>Agent steps keep working when the cloud is down (<code>JIMMY_LOCAL_TOOLS=qwen3:4b</code>)</td></tr>
   </tbody></table></div>
+</section>
+
+<section id="off">
+  <h2>If something's off</h2>
+  <p>Ask Jimmy. <em>"Jimmy, what's wrong with the camera?"</em> makes it check itself and tell you what it found: its own setting, Windows' camera privacy, another app holding the camera, and whether the camera gives pictures. <em>"You can use the camera, fix it"</em> repairs what is Jimmy's own on the spot, without a restart. Jimmy never changes Windows' own privacy settings itself: for those it opens the right Settings page and says which switch to turn on.</p>
 </section>
 
 <section id="troubleshooting">

@@ -31,6 +31,15 @@
 <div class="wrap doc-layout single">
 <div class="prose" style="max-width:52rem">
 <ol class="log">
+  <li><time datetime="2026-11-04">2026-11-04</time><div>
+    <h3>Jimmy repairs itself, and the camera works (D65)<span class="ver">1.0.2</span></h3>
+    <ul>
+      <li><strong>Jimmy repairs itself.</strong> Say "Jimmy, what's wrong with the camera?" and it checks itself and says what it found. Say "you can use the camera, fix it" and it repairs what it can on the spot, without a restart: its own setting, a stuck camera, the right camera. For Windows' privacy switch, which only you can change, it opens the right Settings page.</li>
+      <li><strong>The camera works.</strong> The webcam took 16.5 s to open through Windows Media Foundation on the test laptop. It now opens in 0.5 s, with a DirectShow fallback.</li>
+      <li><strong>No more flashing command windows at start.</strong> Every helper process starts hidden.</li>
+      <li><strong>A gentler start.</strong> Jimmy runs at below-normal priority while it loads. The camera starts 15 s after voice, and search indexing 30 s after.</li>
+      <li><strong>A smoother floating UI.</strong> Streamed answers no longer redraw the overlay for every word, and hover handling and the "Thinking…" animation got lighter.</li>
+    </ul></div></li>
   <li><time datetime="2026-11-02">2026-11-02</time><div>
     <h3>Jimmy updates itself (D63–D64)<span class="ver">1.0.1</span></h3>
     <ul>
