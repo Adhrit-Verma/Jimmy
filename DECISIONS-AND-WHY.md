@@ -2638,3 +2638,38 @@ main thread as a side effect of what loaded first. `bus.run` now initialises it 
 (`UIAutomationInitializerInThread`).
 
 Checks: `tests/test_stage17.py` (8). Released as 1.0.2; installed 1.0.1 copies update themselves.
+
+### D66 — The status dock: what Jimmy is doing, at a glance (and what an update is doing)
+
+**2026-11-04.** The human: how would I know an update arrived, or that Jimmy is updating? A dot
+doesn't say whether it's listening, for how long, how much RAM and CPU it uses, whether it's
+looking through the camera. "Small things, but a lot of things."
+
+**The dock** (`overlay/src/Dock.jsx`; the pill's **Status** button, or "Jimmy, show status" /
+"how much RAM are you using?" / "are you updating?", the `show_status` tool): six tiles. Listening
+(the no-name window with its seconds, the "next / scroll down" window, who holds the mic, Pause),
+Camera (sees you / looking at you / off and why, **Why?** and **Fix it**, which say D65's
+phrases), Jimmy's load (CPU % of the whole PC and RAM, Python and the overlay apart, a one-minute
+graph), Update (your version, checking / downloading with % and a bar / ready / installing / up
+to date / couldn't check, **Check now** and **Update now**), Capture (screens kept, curtain),
+Brain (the model, or offline). **On the pill** without opening anything: a ring that empties as
+the no-name window closes (with its seconds), a camera or eye icon, a phone while another app
+has the mic, a pulsing download badge while an update downloads or waits, a warning when Jimmy
+uses over 30 % of the PC.
+
+**Where the numbers come from:** Python publishes one `vitals` event every 2 s (`bus.vitals`:
+`power.process_usage` reads its own CPU time and working set with ctypes; the rest are
+attributes it already has, no new I/O). Electron's main adds the overlay's own processes
+(`app.getAppMetrics`) before the page sees it, so the numbers are all of Jimmy. The updater now
+reports each step (`check(..., state)`), main keeps it and sends `update` events; the first check
+is 2 minutes after start (was 10). Only the pill and the dock re-render on these.
+
+**The 1.0.2 clean-machine test failed, and why:** after an update, the setup starts Jimmy again
+while it is still running from the update folder; the new launcher, seeing the update tried,
+deleted that folder, Windows refused (the setup's exe is in use), and the launcher died before
+starting anything. 1.0.1's run had won that race. Clearing the folder now never throws (what's
+left goes at a later check), and the test checks Jimmy's Python is running again, plus that the
+update is marked tried. 1.0.2 had not been released, so it ships with the dock.
+
+Checks: `tests/test_stage18.py` (4). `electron . --demo --demo-ui dock --snapshot x.png` renders
+the dock on invented readings.

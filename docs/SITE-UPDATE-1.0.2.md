@@ -18,6 +18,15 @@ Settings → "Update Jimmy automatically". 1.0.0 users install 1.0.1 or later on
 - **No more flashing command windows at start.** Every helper process starts hidden.
 - **A gentler start.** Jimmy runs at below-normal priority while it loads. The camera starts 15 s
   after voice, and search indexing 30 s after.
+- **See what Jimmy is doing.** A Status dock (the pill's Status button, or "Jimmy, show status")
+  shows:
+  - listening, and for how many seconds you can talk without saying "Jimmy";
+  - the camera;
+  - Jimmy's own CPU and RAM, with a one-minute graph;
+  - the update, with download % and **Update now**;
+  - capture, and the AI model.
+
+  The pill itself shows a countdown ring, the camera, a call, and a download badge.
 - **A smoother floating UI.** Streamed answers no longer redraw the overlay for every word, and
   hover handling and the "Thinking…" animation got lighter.
 

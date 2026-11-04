@@ -214,6 +214,12 @@ call, an unmeasured lip veto, no visible calibration, a flickering eye, a stale
 timeline after a forget, scroll in Claude). Checks: `tests\test_stage9.py` (14),
 matrix (154), eval 41/41.
 
+## The status dock · **built 2026-11-04 (D66), in v1.0.2**
+
+What Jimmy is doing at a glance: listening windows, camera, its CPU and RAM, the update's progress
+with Check now / Update now, capture, the model; signals on the pill itself; "Jimmy, show status".
+The launcher no longer dies on a setup still in use after an update (the 1.0.2 CI run found it).
+
 ## Self-repair, the camera, a lighter start and overlay · **built 2026-11-04 (D65), v1.0.2**
 
 The webcam opened in 16.5 s through Media Foundation here; now 0.5 s, with a DirectShow

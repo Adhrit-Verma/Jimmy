@@ -105,6 +105,7 @@ cd overlay; npm install; npm run build   # once, and after any change under over
 .\node_modules\electron\dist\electron.exe . --demo                      # see the UI, no Python
 .\node_modules\electron\dist\electron.exe . --demo --snapshot shot.png   # render to a PNG and quit
 .\node_modules\electron\dist\electron.exe . --demo --demo-ui table --snapshot shot.png   # D56: one template on invented data
+.\node_modules\electron\dist\electron.exe . --demo --demo-ui dock --snapshot shot.png    # D66: the status dock
 .\.venv\Scripts\python.exe tests\test_stage4.py   # 5 checks: API, pause, window flags, effect bodies
 .\.venv\Scripts\python.exe -m ambient index       # backfill meaning-search vectors (bge-m3)
 .\.venv\Scripts\python.exe -m ambient search "consulting application on Friday"   # keywords + meaning
@@ -126,6 +127,7 @@ cd overlay; npm install; npm run build   # once, and after any change under over
 .\.venv\Scripts\python.exe tests\test_stage16.py  # 5 checks: D63 camera "in use" by gone apps / Jimmy itself, D64 updates
 .\.venv\Scripts\python.exe tests\test_stage17.py  # 8 checks: D65 camera self-repair, hidden consoles, overlay/startup
 .\.venv\Scripts\python.exe -m ambient.selfcheck   # D65: the camera checks, read-only, on this PC
+.\.venv\Scripts\python.exe tests\test_stage18.py  # 4 checks: D66 the status dock's vitals and wiring
 .\.venv\Scripts\python.exe installer\build.py     # D61: installer\out\Jimmy-Setup-<v>.exe (+ .sha256); needs Node + internet
 .\.venv\Scripts\python.exe installer\art.py       # D62: the icon and the installer's images from Jimmy's mark
 .\.venv\Scripts\python.exe tests\test_commands.py # the command matrix: 177 utterances, talk, a drill
@@ -229,6 +231,8 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `tests/test_stage16.py` | D63–D64 check: camera holders that are gone or Jimmy itself, the pending update, the off switch, what ships. |
 | `ambient/selfcheck.py` | D65: self-diagnosis and self-repair of the camera (setting, Windows privacy, other apps, pictures; repairs without a restart). Agent tools `diagnose` / `fix_problem`. `python -m ambient.selfcheck` reads only. |
 | `tests/test_stage17.py` | D65 check: the camera's repairs, the tools the agent finds, hidden consoles, the overlay and launcher changes. |
+| `overlay/src/Dock.jsx` | D66: the status dock (listening, camera, load, update, capture, brain) and the pill's live signals; fed by `vitals` (Python, every 2 s, plus the overlay's own load from main) and `update` (main). |
+| `tests/test_stage18.py` | D66 check: vitals, process usage, "show status" by voice, the dock's wiring. |
 | `overlay/src/Onboarding.jsx` | D61/D62: the first run, eight steps, in Jimmy's design. |
 | `overlay/src/Logo.jsx` | D62: Jimmy's mark, animated (the pill and its listening bars). |
 | `overlay/src/Settings.jsx` | D60: Settings → storage, limits, profile, clean-up, start with Windows (the timeline window's 4th tab). |
@@ -618,6 +622,8 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   timer made the first UI Automation reads fail. `bus.run` initialises it for the capture thread.
 - **Under `pythonw` every console program opens a visible window** (D65): `install.hide_consoles`
   covers Python; a Node `detached` spawn has no console either, so its console children flash.
+- **Never let a file delete in the updater throw** (D66): right after an update the setup is still
+  running from `<data>\cache\update`; the launcher died on a refused delete before starting Jimmy.
 - **A test's `OverlayAPI` must be `.start()`ed and `.stop()`ped**: `server.shutdown()` on one
   that never served waits forever.
 - **Ollama loads qwen3 at its full context** (256k: 37.5 GB asked, D53). A local model for

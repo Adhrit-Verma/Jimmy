@@ -304,6 +304,12 @@ remembers where your data is, the shortcuts and the uninstall entry. Nothing in 
 **Afterwards**: Settings (Ctrl+Alt+T, then the Settings tab) shows what Jimmy uses and lets you set
 how many days to keep, a size cap, the profile, clean-ups and start with Windows.
 
+**What's Jimmy doing?** Hover the pill and click **Status** (or say "Jimmy, show status", "how much
+RAM are you using?", "are you updating?"): listening and for how long, the camera, Jimmy's CPU and
+RAM with a one-minute graph, the update (checking, downloading with %, ready: **Update now**),
+capture and the AI model. The pill itself shows a ring while you can talk without the name, the
+camera, a call, and a pulsing download badge while an update arrives.
+
 **If something's off, ask Jimmy.** "Jimmy, what's wrong with the camera?" makes it check itself
 and say what it found; "you can use the camera, fix it" makes it repair what it can on the spot
 (its own setting, a stuck camera, the right camera) and open Windows' privacy page for what only
