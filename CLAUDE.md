@@ -124,6 +124,8 @@ cd overlay; npm install; npm run build   # once, and after any change under over
 .\.venv\Scripts\python.exe -m ambient.ui         # self-check of the template validator (D56)
 .\.venv\Scripts\python.exe tests\test_stage15.py  # 6 checks: D60-D61 data folder/pointer, settings, DPAPI keys, storage limits, Settings API, setup pieces
 .\.venv\Scripts\python.exe tests\test_stage16.py  # 5 checks: D63 camera "in use" by gone apps / Jimmy itself, D64 updates
+.\.venv\Scripts\python.exe tests\test_stage17.py  # 8 checks: D65 camera self-repair, hidden consoles, overlay/startup
+.\.venv\Scripts\python.exe -m ambient.selfcheck   # D65: the camera checks, read-only, on this PC
 .\.venv\Scripts\python.exe installer\build.py     # D61: installer\out\Jimmy-Setup-<v>.exe (+ .sha256); needs Node + internet
 .\.venv\Scripts\python.exe installer\art.py       # D62: the icon and the installer's images from Jimmy's mark
 .\.venv\Scripts\python.exe tests\test_commands.py # the command matrix: 177 utterances, talk, a drill
@@ -225,6 +227,8 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `overlay/setup-preload.cjs` | D61: the onboarding page's only bridge. |
 | `overlay/updater.cjs` | D64: updates from GitHub Releases: check, download + SHA-256, `pending`, `apply` (stop Python, the setup `/S --jimmy-restart`). `node overlay/updater.cjs` self-checks. |
 | `tests/test_stage16.py` | D63–D64 check: camera holders that are gone or Jimmy itself, the pending update, the off switch, what ships. |
+| `ambient/selfcheck.py` | D65: self-diagnosis and self-repair of the camera (setting, Windows privacy, other apps, pictures; repairs without a restart). Agent tools `diagnose` / `fix_problem`. `python -m ambient.selfcheck` reads only. |
+| `tests/test_stage17.py` | D65 check: the camera's repairs, the tools the agent finds, hidden consoles, the overlay and launcher changes. |
 | `overlay/src/Onboarding.jsx` | D61/D62: the first run, eight steps, in Jimmy's design. |
 | `overlay/src/Logo.jsx` | D62: Jimmy's mark, animated (the pill and its listening bars). |
 | `overlay/src/Settings.jsx` | D60: Settings → storage, limits, profile, clean-up, start with Windows (the timeline window's 4th tab). |
@@ -607,6 +611,13 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
 - **Node on Windows: `detached` PowerShell does nothing** (no console), and a non-detached child
   dies with its parent (Node's kill-on-close job). Start GUI programs detached; wait for
   PowerShell (D64's `apply`).
+- **OpenCV's Media Foundation opened this webcam in 16.5 s** (D65): hardware transforms. Keep
+  `OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS=0` (set in `presence.py`) and open cameras only
+  through `presence.open_camera`. A camera check in this tool's sandbox can hang: run it unsandboxed.
+- **Don't rely on COM being initialised by side effect** (D65): moving the camera's start to a
+  timer made the first UI Automation reads fail. `bus.run` initialises it for the capture thread.
+- **Under `pythonw` every console program opens a visible window** (D65): `install.hide_consoles`
+  covers Python; a Node `detached` spawn has no console either, so its console children flash.
 - **A test's `OverlayAPI` must be `.start()`ed and `.stop()`ped**: `server.shutdown()` on one
   that never served waits forever.
 - **Ollama loads qwen3 at its full context** (256k: 37.5 GB asked, D53). A local model for

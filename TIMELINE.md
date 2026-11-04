@@ -214,6 +214,14 @@ call, an unmeasured lip veto, no visible calibration, a flickering eye, a stale
 timeline after a forget, scroll in Claude). Checks: `tests\test_stage9.py` (14),
 matrix (154), eval 41/41.
 
+## Self-repair, the camera, a lighter start and overlay · **built 2026-11-04 (D65), v1.0.2**
+
+The webcam opened in 16.5 s through Media Foundation here; now 0.5 s, with a DirectShow
+fallback. "Jimmy, what's wrong with the camera?" / "you may use the camera, fix it": Jimmy checks
+itself and repairs what it can without a restart. No flashing consoles (Ollama started hidden,
+every child hidden under `pythonw`); a gentler start; an overlay that re-renders far less.
+Checks: `tests\test_stage17.py` (8). **Open:** measure the start and the overlay on the laptop.
+
 ## Updates and the camera fix · **built 2026-11-02 (D63–D64), v1.0.1**
 
 The camera no longer says "in use" for an app that's gone or for Jimmy itself (D63). Installed

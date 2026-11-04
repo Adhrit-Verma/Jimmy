@@ -304,6 +304,11 @@ remembers where your data is, the shortcuts and the uninstall entry. Nothing in 
 **Afterwards**: Settings (Ctrl+Alt+T, then the Settings tab) shows what Jimmy uses and lets you set
 how many days to keep, a size cap, the profile, clean-ups and start with Windows.
 
+**If something's off, ask Jimmy.** "Jimmy, what's wrong with the camera?" makes it check itself
+and say what it found; "you can use the camera, fix it" makes it repair what it can on the spot
+(its own setting, a stuck camera, the right camera) and open Windows' privacy page for what only
+you can switch on.
+
 **Updates come by themselves.** From 1.0.1 on, Jimmy checks this repo's Releases 10 minutes after it
 starts and every 6 hours, downloads a newer setup into your data folder and checks its SHA-256.
 A notification then says it's ready: click it to update now, or it installs the next time Jimmy

@@ -2589,3 +2589,52 @@ then, protect the GitHub account (2FA). 1.0.0 has no updater: its users install 
 silent install through `ExecShellAsUser`, which asks Explorer to open the Start-menu shortcut;
 on the clean VM the setup ran and Jimmy never started again. Jimmy's own `--jimmy-restart` makes
 `installer.nsh`'s `customInstall` start `Jimmy.exe` with a plain `Exec`, once the files are in.
+
+### D65 — The camera that never opened, flashing consoles, a lagging overlay, and self-repair
+
+**2026-11-04.** The human, after using 1.0.1: command prompts flash across the screen at start,
+the PC lags while Jimmy starts, the floating UI lags, and the camera still never works; telling
+Jimmy it may use the camera did nothing, and it couldn't say why. They asked for a self-repair
+that any user can trigger by voice, and for agents to test it. Three read-only agents traced the
+three areas; a fourth reviewed the change (four real bugs, all fixed before release).
+
+**The camera (the real cause, measured here):** `cv2.VideoCapture(0, CAP_MSMF)` took **16.5 s**
+to open this laptop's webcam (OpenCV enumerating Media Foundation hardware transforms); DirectShow
+0.5 s; MSMF with `OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS=0` **0.5 s**. The presence thread sat
+in that open ("starting") and again on every reopen after a call. Now: the variable is set before
+any capture opens (`presence.py`), and `presence.open_camera` falls back to DirectShow. A
+presence thread started on this PC said "present" within 8 s (before: still opening).
+
+Two more ways the camera stayed off, found by the camera agent: the `webcam` setting saved off
+(Lite profile, an onboarding box, Settings, the provisioning default) was read only at start, and
+nothing could turn it back on; and Windows' camera privacy was checked only during onboarding.
+
+**Self-repair** (`ambient/selfcheck.py`; agent tools `diagnose` and `fix_problem`; "can you see
+me?" now gives the reason): checks in order: Jimmy's setting, Windows' camera privacy (the
+`ConsentStore\webcam` and `NonPackaged` values), another app holding the camera, whether the
+camera thread gives pictures. Repairs what is Jimmy's own, at once and without a restart: the
+setting back on (saved), the camera thread restarted, cameras 0-3 tried (the chosen one first)
+and the one that works kept (`camera_index` in settings). What only the user may change it opens
+(`ms-settings:privacy-webcam`) and says which switches. It never writes Windows' privacy keys.
+
+**Flashing consoles:** the launcher started Ollama `detached`, so with no console every helper
+Ollama started (GPU checks, model runners) opened a visible one. Jimmy's Python now starts Ollama
+with `CREATE_NO_WINDOW` (a hidden console its helpers share), and under `pythonw` every program
+Python starts gets one too (`install.hide_consoles`).
+
+**Startup lag:** Whisper, the wake word, the camera's models and the embedding warm-up all loaded
+at once at normal priority. Now the process runs below normal for its first 90 s, the camera
+starts 15 s later (`PRESENCE_START_DELAY_S`) and the indexer's warm-up 30 s later.
+
+**Overlay lag** (the overlay agent's ranking; the top four fixed): streamed answers re-rendered
+the whole overlay per token (20-60 a second), now batched per ~60 ms; every hover in or out of a
+child re-set the full-screen window's hit-testing, now only on a change; the "Thinking…" shimmer
+repainted a text gradient every frame, now an opacity pulse; a blur filter on each pill change,
+gone. The enrol preview (8 fps, only while learning a face) is left as it was.
+
+**Found on the way:** with the camera thread starting later, the capture thread's first UI
+Automation reads failed with "CoInitialize has not been called": COM had been initialised on the
+main thread as a side effect of what loaded first. `bus.run` now initialises it explicitly
+(`UIAutomationInitializerInThread`).
+
+Checks: `tests/test_stage17.py` (8). Released as 1.0.2; installed 1.0.1 copies update themselves.
