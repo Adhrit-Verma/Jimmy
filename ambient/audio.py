@@ -151,7 +151,7 @@ def other_app_using(capability: str) -> bool:
     return bool(_holders(capability))
 
 
-def _holders(capability: str) -> list[tuple[str, int]]:
+def _holders(capability: str, alive_only: bool = True) -> list[tuple[str, int]]:
     """(app key, LastUsedTimeStart) for every app but us with the device open."""
     import winreg
     own, out = _own_mic_keys(), []
@@ -182,7 +182,7 @@ def _holders(capability: str) -> list[tuple[str, int]]:
                     continue
 
     scan(_MIC_STORE.rsplit("\\", 1)[0] + "\\" + capability)   # D34: "webcam" too
-    if out:                         # rare: only then is listing processes worth it
+    if out and alive_only:          # rare: only then is listing processes worth it
         images = _running_images()
         out = [(k, s) for k, s in out if _alive(k, images)] if images else out
     return out

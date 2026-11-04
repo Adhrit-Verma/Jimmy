@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 
@@ -278,7 +279,11 @@ def main(argv: list[str] | None = None) -> int:
                          overlay=not a.no_overlay, demo=a.demo)
         counters = bus.run(duration_s=a.seconds)
         print(json.dumps(counters.as_dict(), indent=2))
-        return 0
+        # D67: "Quit" left Jimmy running in the background: a thread stuck in a camera or audio
+        # driver call kept Python alive (and the camera claimed). Everything is closed and saved
+        # by now (bus.run's close), so end the process whatever is still waiting.
+        sys.stdout.flush()
+        os._exit(0)
 
     if a.cmd == "search":
         # Keywords + meaning, within any time the query names (Stage 5, D24).

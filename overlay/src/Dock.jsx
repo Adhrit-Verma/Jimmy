@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import {
-  Activity, Brain, Camera, CameraOff, Check, CloudOff, Cpu, Download, Eye, Gauge, LoaderCircle, MemoryStick, Mic, MicOff,
+  Activity, Brain, Camera, CameraOff, Check, CloudOff, Cpu, Download, Eye, FileText, Gauge, LoaderCircle, MemoryStick, Mic, MicOff,
   Pause, PhoneCall, Play, RefreshCw, ScanEye, Wrench, X,
 } from "lucide-react";
 
@@ -56,7 +56,8 @@ function Ring({ until, size = 14 }) {
 }
 
 // Small signals beside the pill's dot: the listening window, the camera, an update, a busy Jimmy.
-export function Signals({ v, u, compact }) {
+export function Signals({ compact }) {
+  const { v, u } = useVitals();
   const listening = v && left(v.listen_until) > 0;
   useSecond(listening);
   if (!v && !u) return null;
@@ -132,7 +133,8 @@ const UPDATE = {
   dev: "Development copy",
 };
 
-export function Dock({ v, u, hist, onClose, hoverProps, surface }) {
+export function Dock({ onClose, hoverProps, surface }) {
+  const { v, u, hist } = useVitals();
   const listening = v && left(v.listen_until) > 0;
   const nav = v && left(v.nav_until) > 0;
   useSecond(listening || nav);
@@ -150,8 +152,11 @@ export function Dock({ v, u, hist, onClose, hoverProps, surface }) {
         <span className="flex items-center gap-1.5 text-[12px] font-medium text-neutral-200">
           <Gauge size={13} className="text-sky-300" /> Jimmy, right now
         </span>
-        <button type="button" onClick={onClose} className="rounded-md p-1 text-neutral-500 hover:bg-white/10 hover:text-neutral-200"
-          aria-label="Close"><X size={13} /></button>
+        <span className="flex items-center gap-1">
+          <Btn onClick={() => ask("make a diagnostic report")}><FileText size={11} /> Report</Btn>
+          <button type="button" onClick={onClose} className="rounded-md p-1 text-neutral-500 hover:bg-white/10 hover:text-neutral-200"
+            aria-label="Close"><X size={13} /></button>
+        </span>
       </div>
       {!v ? (
         <div className="flex items-center gap-2 px-1 py-6 text-[12px] text-neutral-500">

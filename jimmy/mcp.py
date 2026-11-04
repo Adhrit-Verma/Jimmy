@@ -33,6 +33,15 @@ TOOLS = [{
                                                                "description": "what to look for, in words"}},
                     "required": ["query"]},
     "annotations": {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False},
+}, {
+    "name": "diagnostic_report",                     # D67: Claude Desktop can help fix Jimmy
+    "title": "Jimmy's diagnostic report",
+    "description": ("Jimmy's state on this PC: version, settings, its live status (if running), the camera "
+                    "and mic checks, which apps Windows says hold them, cameras, GPU, Jimmy's processes and "
+                    "the end of its log. Nothing Jimmy captured. Read-only; use it to find why something "
+                    "doesn't work, then tell the user what to change."),
+    "inputSchema": {"type": "object", "properties": {}},
+    "annotations": {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False},
 }]
 
 
@@ -62,13 +71,18 @@ class Server:
             if method == "initialize":
                 result = {"protocolVersion": params.get("protocolVersion") or PROTOCOL,
                           "capabilities": {"tools": {"listChanged": False}},
-                          "serverInfo": {"name": "jimmy", "title": "Jimmy recall", "version": "1"},
-                          "instructions": "Read-only recall of the user's own captured screen and speech."}
+                          "serverInfo": {"name": "jimmy", "title": "Jimmy", "version": "2"},
+                          "instructions": ("Read-only: recall of the user's own captured screen and speech, "
+                                           "and Jimmy's diagnostic report for fixing problems.")}
             elif method == "ping":
                 result = {}
             elif method == "tools/list":
                 result = {"tools": TOOLS}
             elif method == "tools/call":
+                if params.get("name") == "diagnostic_report":
+                    from ambient import report
+                    return {"jsonrpc": "2.0", "id": mid, "result": {
+                        "content": [{"type": "text", "text": report.build()}], "isError": False}}
                 if params.get("name") != "recall":
                     return _error(mid, -32602, f"unknown tool {params.get('name')!r}")
                 q = str((params.get("arguments") or {}).get("query") or "").strip()

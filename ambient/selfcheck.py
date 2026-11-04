@@ -47,7 +47,7 @@ def _try_cameras(first: int = 0) -> int | None:
     Jimmy isn't holding a camera itself: a working camera is never swapped for an IR or virtual one."""
     from .presence import open_camera
     for i in [first] + [n for n in range(4) if n != first]:
-        cap = open_camera(i)
+        cap, _ = open_camera(i)
         if cap is None:
             continue
         try:

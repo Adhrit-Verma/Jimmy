@@ -22,6 +22,11 @@ import os
 import sys
 from pathlib import Path
 
+# D67: Media Foundation opens the webcam in ~1 s without its hardware transforms, ~17 s (over a
+# minute in an installed copy) with them. OpenCV reads this once, when it loads, so it has to be
+# set before any module imports cv2; this module is imported first by every entry point.
+os.environ.setdefault("OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS", "0")
+
 ROOT = Path(__file__).resolve().parents[1]
 MARKER = ROOT / "jimmy-installed.json"
 INSTALLED = MARKER.exists()

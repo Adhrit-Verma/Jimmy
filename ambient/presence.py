@@ -36,8 +36,8 @@ from typing import Callable
 
 import os
 
-# D65: Media Foundation spent 16.5 s opening the webcam on the owner's laptop (OpenCV enumerates
-# hardware transforms first); without them, 0.5 s. Read when a capture opens, so set it before.
+# D65/D67: Media Foundation without hardware transforms (16.5 s to open, else). OpenCV reads it
+# when it loads: jimmy/install.py sets it first; here only for a script that imports this alone.
 os.environ.setdefault("OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS", "0")
 
 import cv2  # noqa: E402
@@ -46,14 +46,19 @@ import numpy as np  # noqa: E402
 from . import config, power  # noqa: E402
 
 
-def open_camera(index: int):
-    """The webcam, opened: Media Foundation, else DirectShow (D65). None if neither opens."""
-    for api in (cv2.CAP_MSMF, cv2.CAP_DSHOW):
+def open_camera(index: int, first: int | None = None):
+    """(the webcam opened, the Windows API that opened it): Media Foundation, else DirectShow
+    (D65); `first` is tried first (D67). (None, None) if neither opens."""
+    apis = [cv2.CAP_MSMF, cv2.CAP_DSHOW]
+    if first in apis:
+        apis.remove(first)
+        apis.insert(0, first)
+    for api in apis:
         cap = cv2.VideoCapture(index, api)
         if cap.isOpened():
-            return cap
+            return cap, api
         cap.release()
-    return None
+    return None, None
 from .redact import SFACE, YUNET
 
 
@@ -782,7 +787,7 @@ class Presence:
                     self._stop.wait(1)
                     continue
                 if cap is None:
-                    cap = open_camera(self.camera)
+                    cap, self._api_used = open_camera(self.camera, first=getattr(self, "_api_first", None))
                     if cap is None:
                         self._set(state="off", faces=0, facing=False, contact=False, why="no camera")
                         self._stop.wait(10)
@@ -794,10 +799,16 @@ class Presence:
                     cap.set(cv2.CAP_PROP_FPS, config.PRESENCE_CAMERA_FPS)
                 ok, frame = cap.read()
                 if not ok or frame is None:
+                    # D67: some webcams (the owner's Creo) stop giving frames under one Windows
+                    # API: reopening the same way only turned the camera on and off again.
+                    used = getattr(self, "_api_used", None) or cv2.CAP_MSMF
+                    self._api_first = cv2.CAP_DSHOW if used == cv2.CAP_MSMF else cv2.CAP_MSMF
                     cap.release()
                     cap = None
                     self.track = None
                     self._set(state="off", why="camera stopped")
+                    print(f"[presence] the camera stopped giving pictures; next: "
+                          f"{'DirectShow' if self._api_first == cv2.CAP_DSHOW else 'Media Foundation'}")
                     self._stop.wait(2)
                     continue
                 H, W = frame.shape[:2]

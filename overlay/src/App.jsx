@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import Answer from "./Answer.jsx";
 import { StepsFloat } from "./Templates.jsx";
-import { Dock, Signals, useVitals } from "./Dock.jsx";
+import { Dock, Signals } from "./Dock.jsx";
 
 const CARD_MS = 12_000;      // a card fades on its own; × is the only real dismissal
 const ANSWER_MS = 30_000;    // D35: an answer fades after 30 s unless hovered (was a minute: clutter)
@@ -122,8 +122,8 @@ function Pill({ state, mood, prompt, typing, setTyping, flash, recent, onAsk, an
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(-1);
   const [armed, setArmed] = useState(false);     // Quit asks twice
-  const [dock, setDock] = useState(false);       // D66: the status dock
-  const vit = useVitals();
+  const [dock, setDock] = useState(false);       // D66: the status dock (D67: it and the signals
+                                                 // read the vitals themselves; the pill doesn't re-render)
   useEffect(() => bridge?.onEvent((ev) => { if (ev.type === "dock") setDock(!!ev.open); }), []);
   const input = useRef(null);
   const [, tick] = useState(0);
@@ -197,7 +197,7 @@ function Pill({ state, mood, prompt, typing, setTyping, flash, recent, onAsk, an
             </span>
           )}
         </span>
-        <Signals v={vit.v} u={vit.u} compact={compact} />
+        <Signals compact={compact} />
         {!compact && <span className="font-medium text-neutral-100">Jimmy</span>}
         {compact ? null : typing ? (
           <form onSubmit={submit} className="flex items-center">
@@ -280,7 +280,7 @@ function Pill({ state, mood, prompt, typing, setTyping, flash, recent, onAsk, an
       </motion.div>
       <AnimatePresence>
         {dock && !typing && (
-          <Dock key="dock" v={vit.v} u={vit.u} hist={vit.hist} surface={surface} hoverProps={hover}
+          <Dock key="dock" surface={surface} hoverProps={hover}
             onClose={() => { setDock(false); bridge?.pointerOverUi(false); }} />
         )}
       </AnimatePresence>

@@ -964,13 +964,37 @@ class ContextBus:
                 f"plus my window on screen. The camera is "
                 f"{(cam.get('state') or 'starting') if cam['on'] else 'off'}. It's all on screen now.")
 
+    def _make_report(self) -> str:
+        """D67: "make a diagnostic report": the file, shown in Explorer, its path remembered."""
+        from . import report
+        self._last_report = report.save(self)
+        report.show(self._last_report)
+        return ("I've written a diagnostic report and opened its folder. Nothing I captured is in it. "
+                "Say \u201csend it to the developer\u201d to open a GitHub issue you can check and submit.")
+
+    def _send_report(self) -> str:
+        """D67: a prefilled GitHub issue in the browser; the user attaches the file and submits."""
+        from . import report
+        path = getattr(self, "_last_report", None)
+        if not path or not path.exists():
+            self._make_report()
+            path = self._last_report
+        if self._api:
+            self._api.publish({"type": "open_url", "url": report.issue_url(path)})
+        return ("I've opened a GitHub issue with the report's first part. Add a line about what happened, "
+                f"drag in the file {path.name}, and submit it if you're happy with what's in it.")
+
     def _vitals_loop(self) -> None:
-        prev = None
+        from . import report
+        prev, n = None, 0
         while self._running:
             try:
                 v, prev = self.vitals(prev)
                 if self._api:
                     self._api.publish(v)
+                if n % 10 == 0:                     # D67: for a report made outside Jimmy (CLI, Claude)
+                    report.write_status(v)
+                n += 1
             except Exception as exc:
                 print(f"[vitals] {type(exc).__name__}: {exc}")
             time.sleep(2)
@@ -1129,6 +1153,8 @@ class ContextBus:
                                      "presence": lambda: self._presence if self._presence_obj else None,
                                      "diagnose": lambda: selfcheck.diagnose(self),       # D65
                                      "vitals": self._vitals_line,                        # D66
+                                     "report": self._make_report,                        # D67
+                                     "send_report": self._send_report,
                                      "repair": lambda: selfcheck.repair(self),
                                      "enrol": lambda: self._presence_obj.enrol() if self._presence_obj
                                      else "The webcam is switched off in config (PRESENCE).",
@@ -1306,7 +1332,7 @@ class ContextBus:
         _later(90, power.priority, low=False)
         if os.environ.get("JIMMY_OLLAMA_EXE"):          # D65: see launcher.cjs startJimmy
             try:
-                subprocess.Popen([os.environ["JIMMY_OLLAMA_EXE"], "serve"], stdin=subprocess.DEVNULL,
+                self._ollama = subprocess.Popen([os.environ["JIMMY_OLLAMA_EXE"], "serve"], stdin=subprocess.DEVNULL,
                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                  creationflags=0x08000000)      # CREATE_NO_WINDOW; an Ollama already up wins
             except OSError as exc:
@@ -1417,6 +1443,9 @@ class ContextBus:
     def close(self, verbose: bool = False) -> None:
         self._running = False
         self._stop_overlay()
+        ollama = getattr(self, "_ollama", None)
+        if ollama and ollama.poll() is None:          # D67: the Ollama Jimmy started goes with it
+            ollama.terminate()
         if self._audio:
             self._audio.stop()
             if verbose and self._audio.errors:
