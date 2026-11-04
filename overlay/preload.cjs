@@ -20,4 +20,7 @@ contextBridge.exposeInMainWorld("jimmy", {
   loginItem: (on) => ipcRenderer.invoke("login-item", on),           // D60: Settings
   openData: (dir) => ipcRenderer.send("open-data", String(dir)),
   runSetup: () => ipcRenderer.send("run-setup"),
+  updateState: () => ipcRenderer.invoke("update-state"),            // D66: the status dock
+  updateCheck: () => ipcRenderer.send("update-check"),
+  updateNow: () => ipcRenderer.send("update-now"),
 });

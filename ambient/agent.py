@@ -138,6 +138,8 @@ JIMMY = [
     ("volume", "Jimmy's speaking voice.", {"level": {"type": "string", "enum": ["softer", "louder", "mute", "unmute"]}},
      ["level"]),
     ("presence", "Say whether Jimmy's webcam sees the user, their face or their eyes.", {}, []),
+    ("show_status", "Show what Jimmy is doing right now and say it: listening, camera, its CPU and RAM,"
+     " updates and version, capture, the AI model (\"how much RAM are you using\", \"are you updating\").", {}, []),
     ("diagnose", "Find out why the camera isn't working (the user asks what's wrong, why Jimmy can't see"
      " them, to show the issue): Jimmy checks itself and says what it found.", {}, []),
     ("fix_problem", "Repair the camera: the user says Jimmy may use the camera, is allowed, or to fix it."
@@ -218,6 +220,7 @@ GROUPS: list[tuple[re.Pattern, list[str]]] = [(re.compile(rx, re.I), names) for 
     (r"\bface\b|\beyes?\b|calibrat|\bsee me\b|camera|webcam|looking at", ["remember_face", "forget_face",
      "calibrate_eyes", "presence", "diagnose", "fix_problem"]),
     (r"\bfix\b|repair|wrong|issue|problem|not working|broken|allowed|permission|diagnos", ["diagnose", "fix_problem"]),
+    (r"status|\bram\b|memory us|\bcpu\b|processor|updat|version|how (?:much|heavy)|are you (?:listening|on)", ["show_status"]),
     (r"\bcopy\b|\bdraft|write (?:a |an )?(?:reply|message|email)", ["copy_screen", "draft"]),
     (r"voice|louder|softer|quieter|\bmute|speak|volume", ["volume"]),
     (r"\bcall\b|discord|teams|zoom|meeting|\bmic\b", ["not_a_call"]),

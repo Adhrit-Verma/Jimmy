@@ -50,6 +50,27 @@ def priority(low: bool) -> None:
     k32.SetPriorityClass(k32.GetCurrentProcess(), 0x4000 if low else 0x20)   # BELOW_NORMAL / NORMAL
 
 
+def process_usage() -> tuple[float, int]:
+    """D66: this process's CPU time so far (seconds, all threads) and RAM in use (bytes,
+    working set). (0, 0) off Windows."""
+    if os.name != "nt":
+        return 0.0, 0
+
+    class _Mem(ctypes.Structure):
+        _fields_ = [("cb", ctypes.c_uint32), ("faults", ctypes.c_uint32)] + [
+            (n, ctypes.c_size_t) for n in ("peak_ws", "ws", "qpp", "qp", "qnpp", "qnp", "pf", "ppf")]
+    k32 = ctypes.windll.kernel32
+    k32.GetCurrentProcess.restype = ctypes.c_void_p
+    h = k32.GetCurrentProcess()
+    t = [ctypes.c_uint64() for _ in range(4)]           # creation, exit, kernel, user (100 ns)
+    k32.GetProcessTimes.argtypes = [ctypes.c_void_p] + [ctypes.POINTER(ctypes.c_uint64)] * 4
+    k32.GetProcessTimes(h, *[ctypes.byref(x) for x in t])
+    m = _Mem(cb=ctypes.sizeof(_Mem))
+    k32.K32GetProcessMemoryInfo.argtypes = [ctypes.c_void_p, ctypes.POINTER(_Mem), ctypes.c_uint32]
+    k32.K32GetProcessMemoryInfo(h, ctypes.byref(m), m.cb)
+    return (t[2].value + t[3].value) / 1e7, int(m.ws)
+
+
 def on_battery() -> bool:
     if not _WIN:
         return False

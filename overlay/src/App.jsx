@@ -1,10 +1,11 @@
 import { Component, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
-  AppWindow, BarChart3, Bell, Brain, CalendarClock, Check, Clock, Ear, ExternalLink, Eye, EyeOff, Globe, History, Keyboard, Lightbulb, MessageCircle, MonitorSmartphone, MousePointer2, MoveRight, Pause, Play, Power, RotateCcw, ScanFace, ShieldCheck, Target, Timer, Trash2, X,
+  AppWindow, BarChart3, Bell, Brain, Gauge, CalendarClock, Check, Clock, Ear, ExternalLink, Eye, EyeOff, Globe, History, Keyboard, Lightbulb, MessageCircle, MonitorSmartphone, MousePointer2, MoveRight, Pause, Play, Power, RotateCcw, ScanFace, ShieldCheck, Target, Timer, Trash2, X,
 } from "lucide-react";
 import Answer from "./Answer.jsx";
 import { StepsFloat } from "./Templates.jsx";
+import { Dock, Signals, useVitals } from "./Dock.jsx";
 
 const CARD_MS = 12_000;      // a card fades on its own; × is the only real dismissal
 const ANSWER_MS = 30_000;    // D35: an answer fades after 30 s unless hovered (was a minute: clutter)
@@ -121,6 +122,9 @@ function Pill({ state, mood, prompt, typing, setTyping, flash, recent, onAsk, an
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(-1);
   const [armed, setArmed] = useState(false);     // Quit asks twice
+  const [dock, setDock] = useState(false);       // D66: the status dock
+  const vit = useVitals();
+  useEffect(() => bridge?.onEvent((ev) => { if (ev.type === "dock") setDock(!!ev.open); }), []);
   const input = useRef(null);
   const [, tick] = useState(0);
   useEffect(() => {
@@ -193,6 +197,7 @@ function Pill({ state, mood, prompt, typing, setTyping, flash, recent, onAsk, an
             </span>
           )}
         </span>
+        <Signals v={vit.v} u={vit.u} compact={compact} />
         {!compact && <span className="font-medium text-neutral-100">Jimmy</span>}
         {compact ? null : typing ? (
           <form onSubmit={submit} className="flex items-center">
@@ -232,6 +237,9 @@ function Pill({ state, mood, prompt, typing, setTyping, flash, recent, onAsk, an
         <AnimatePresence initial={false}>
           {open && !typing && (
             <motion.div key="menu" className="ml-1 flex items-center gap-1">
+              <PillButton label="What Jimmy is doing: listening, camera, load, updates" onClick={() => setDock((d) => !d)}>
+                <Gauge size={12} /> Status
+              </PillButton>
               <PillButton label="Ask by typing (Ctrl+Alt+Space)" onClick={() => startTyping()}>
                 <MessageCircle size={12} /> Ask
               </PillButton>
@@ -270,6 +278,12 @@ function Pill({ state, mood, prompt, typing, setTyping, flash, recent, onAsk, an
           )}
         </AnimatePresence>
       </motion.div>
+      <AnimatePresence>
+        {dock && !typing && (
+          <Dock key="dock" v={vit.v} u={vit.u} hist={vit.hist} surface={surface} hoverProps={hover}
+            onClose={() => { setDock(false); bridge?.pointerOverUi(false); }} />
+        )}
+      </AnimatePresence>
       <AnimatePresence>
         {typing && items.length > 0 && (
           <motion.div

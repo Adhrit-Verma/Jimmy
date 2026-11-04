@@ -923,6 +923,58 @@ class ContextBus:
                     "owner": bool(self._presence_obj and self._presence_obj.owner.known)}
                    if getattr(self, "_presence_obj", None) or getattr(self, "_manual_curtain", False) else {})}
 
+    def vitals(self, prev: tuple[float, float] | None) -> tuple[dict, tuple[float, float]]:
+        """D66: what the status dock shows, every 2 s: Jimmy's own load, the listening windows,
+        the mic, the camera, capture and the brain. Cheap: counters and attributes, no I/O
+        beyond one registry read when the mic is held."""
+        cpu_s, ram = power.process_usage()
+        now = time.monotonic()
+        cpu = 0.0
+        if prev and now > prev[1]:
+            cpu = 100 * (cpu_s - prev[0]) / ((now - prev[1]) * (os.cpu_count() or 1))
+        a = getattr(self, "_asker", None)
+        p = dict(self._presence or {}) if getattr(self, "_presence_obj", None) else None
+        llm = None
+        try:
+            llm = a._jim().llm if a else None
+        except Exception:
+            pass
+        from .audio import app_label, mic_holders
+        paused = now_ms() < self.paused_until
+        v = {"type": "vitals", "cpu": round(max(0.0, cpu), 1), "ram_mb": round(ram / 1e6),
+             "listen_until": max(getattr(a, "followup_until", 0), getattr(a, "listen_until", 0)) if a else 0,
+             "nav_until": getattr(a, "nav_until", 0) if a else 0,
+             "mic": {"on": self._audio is not None, "paused": paused,
+                     "call": [app_label(k) for k in mic_holders()] if self._audio is not None else []},
+             "camera": ({"on": True, "state": p.get("state"), "why": p.get("why") or "",
+                         "contact": bool(p.get("contact")), "faces": p.get("faces", 0)}
+                        if p is not None else {"on": False, "why": "" if config.PRESENCE else "switched off"}),
+             "capture": {"paused": paused, "curtain": bool(getattr(self, "_curtain", False)),
+                         "frames": self.counters.frames},
+             "brain": {"model": getattr(llm, "model", "") or "", "online": bool(getattr(llm, "key", None))}}
+        return v, (cpu_s, now)
+
+    def _vitals_line(self) -> str:
+        """D66: "how much RAM are you using?", spoken from the same numbers the dock shows."""
+        v, prev = self.vitals(None)
+        time.sleep(0.5)
+        v, _ = self.vitals(prev)
+        cam = v["camera"]
+        return (f"I'm using {v['cpu']:.0f}% of the processor and {v['ram_mb'] / 1000:.1f} gigabytes of memory, "
+                f"plus my window on screen. The camera is "
+                f"{(cam.get('state') or 'starting') if cam['on'] else 'off'}. It's all on screen now.")
+
+    def _vitals_loop(self) -> None:
+        prev = None
+        while self._running:
+            try:
+                v, prev = self.vitals(prev)
+                if self._api:
+                    self._api.publish(v)
+            except Exception as exc:
+                print(f"[vitals] {type(exc).__name__}: {exc}")
+            time.sleep(2)
+
     def _intent_memory(self):
         return getattr(self, "_gate_memory", None) or getattr(self, "_focus_memory", None)
 
@@ -1076,6 +1128,7 @@ class ContextBus:
                                      "volume": lambda word: self.set_volume(word, mem),
                                      "presence": lambda: self._presence if self._presence_obj else None,
                                      "diagnose": lambda: selfcheck.diagnose(self),       # D65
+                                     "vitals": self._vitals_line,                        # D66
                                      "repair": lambda: selfcheck.repair(self),
                                      "enrol": lambda: self._presence_obj.enrol() if self._presence_obj
                                      else "The webcam is switched off in config (PRESENCE).",
@@ -1265,6 +1318,8 @@ class ContextBus:
                 print(f"[overlay] disabled: {type(exc).__name__}: {exc}")
         if config.RETENTION_DAYS or config.STORAGE_CAP_GB:      # D60: the user's limits, at startup too
             threading.Thread(target=self._enforce_storage, daemon=True, name="storage").start()
+        if self._api:                       # D66: the status dock's numbers
+            threading.Thread(target=self._vitals_loop, daemon=True, name="vitals").start()
         if config.INDEX_EVERY_S:            # D60: 0 without local AI (no Ollama to embed with)
             threading.Thread(target=self._index_loop, daemon=True, name="indexer").start()
         if self.demo and self._api:

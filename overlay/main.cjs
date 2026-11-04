@@ -112,6 +112,12 @@ function openUrl(url) {
 }
 
 function send(event) {
+  if (event.type === "vitals") {                     // D66: plus the overlay's own processes
+    const ms = app.getAppMetrics();
+    const cores = require("os").cpus().length || 1;
+    event = { ...event, ui_cpu: Math.round((10 * ms.reduce((a, m) => a + (m.cpu?.percentCPUUsage || 0), 0)) / cores) / 10,
+              ui_ram_mb: Math.round(ms.reduce((a, m) => a + (m.memory?.workingSetSize || 0), 0) / 1024) };
+  }
   if (event.type === "open_view") return openTimeline(event.view, event);   // "Jimmy, open insights"
   if (event.type === "open_url") return openUrl(event.url);                  // "Jimmy, open that page"
   if (event.type === "copy") clipboard.writeText(String(event.text || "").slice(0, 20_000));   // drafts
@@ -218,7 +224,24 @@ const DEMO_SAY = { steps: "", choice: "Which one: “Search (box)”, “Search 
   confirm: "Close Spotify? Careful: that may not be undoable.", table: "Three trains tomorrow; the Deccan Queen is fastest.",
   checklist: "Three steps; tick them off as you go.", chart: "Mostly VS Code this week.", list: "You have two reminders." };
 
+// D66: --demo-ui dock: the status dock open, on invented readings.
+function demoDock() {
+  send({ type: "state", paused: false, paused_until: 0, cards: true, timers: [] });
+  const cpus = [3.1, 4.4, 2.2, 6.8, 12.5, 9.1, 4.2, 3.3, 2.9, 5.5, 18.2, 7.4, 3.8, 2.4, 3.0];
+  let i = 0;
+  const vitals = () => send({ type: "vitals", cpu: cpus[i++ % cpus.length], ram_mb: 1840, listen_until: Date.now() + 31_000,
+    nav_until: Date.now() + 12_000, mic: { on: true, paused: false, call: [] },
+    camera: { on: true, state: "present", why: "", contact: true, faces: 1 },
+    capture: { paused: false, curtain: false, frames: 214 }, brain: { model: "gemini-3.5-flash-lite", online: true } });
+  for (let k = 0; k < 14; k++) vitals();
+  setInterval(vitals, 2000);
+  setTimeout(() => win && !win.isDestroyed() && win.webContents.send("event", { type: "update", phase: "downloading",
+    version: "1.0.2", latest: "1.0.3", progress: 0.62, checked: Date.now() - 60_000 }), 800);
+  send({ type: "dock", open: true });
+}
+
 function demoUi(name) {
+  if (name === "dock") return demoDock();
   send({ type: "state", paused: false, paused_until: 0, cards: true, timers: [] });
   if (name === "steps") { send({ type: "steps", ui: DEMO_CARDS.steps }); return; }
   const id = "demo-ui";
@@ -362,30 +385,52 @@ app.on("before-quit", () => { quitting = true; });
 // D64: updates. The installed overlay checks GitHub Releases 10 minutes after start and every 6 h;
 // a newer setup is downloaded and verified in the background, then one notification: click to
 // update now, otherwise the launcher installs it the next time Jimmy starts.
+// D66: the status dock shows every step (checking, downloading %, ready) and has "Check now" and
+// "Update now"; the first check is 2 minutes after start. A development copy says so.
+const update = { phase: app.isPackaged ? "idle" : "dev", version: app.getVersion(), checked: 0 };
+let pendingUpdate = null;
+function setUpdate(patch) {
+  Object.assign(update, patch, patch.phase && patch.phase !== "downloading" ? { progress: undefined } : {});
+  if (win && !win.isDestroyed()) win.webContents.send("event", { type: "update", ...update });
+}
 if (app.isPackaged && API) {
   const updater = require("./updater.cjs");
   const { Notification } = require("electron");
-  let told = "";
+  let told = "", busy = false;
+  const install = () => {
+    if (!pendingUpdate) return false;
+    setUpdate({ phase: "installing" });
+    updater.apply(pendingUpdate, updater.dataDir(), path.dirname(process.execPath));
+    setTimeout(() => app.exit(0), 1200);           // the dock shows "installing" first
+    return true;
+  };
   const check = () => {
+    if (busy) return;
+    busy = true;
     const data = updater.dataDir();
-    updater.check({ version: app.getVersion(), data, log: (s) => console.log(s) }).then((p) => {
+    updater.check({ version: app.getVersion(), data, log: (s) => console.log(s), state: setUpdate }).then((p) => {
+      setUpdate({ checked: Date.now() });
+      pendingUpdate = p;
       if (!p || told === p.version || !Notification.isSupported()) return;
       told = p.version;
       const n = new Notification({ title: `Jimmy ${p.version} is ready`,
         body: "Click to update now (Jimmy restarts in a minute), or it installs the next time Jimmy starts." });
-      n.on("click", () => {
-        updater.apply(p, data, path.dirname(process.execPath));
-        setTimeout(() => app.exit(0), 300);
-      });
+      n.on("click", install);
       n.show();
-    }).catch((e) => console.log(`[update] check failed: ${e.message}`));
+    }).catch((e) => {
+      console.log(`[update] check failed: ${e.message}`);
+      setUpdate({ phase: "error", error: "couldn't reach GitHub", checked: Date.now() });
+    }).finally(() => { busy = false; });
   };
+  ipcMain.on("update-check", check);
+  ipcMain.on("update-now", install);
   app.whenReady().then(() => {
     app.setAppUserModelId("dev.jimmy.ambient");      // the toast's sender, as the Start menu shortcut names it
-    setTimeout(check, 10 * 60 * 1000);
+    setTimeout(check, 2 * 60 * 1000);
     setInterval(check, 6 * 60 * 60 * 1000);
   });
 }
+ipcMain.handle("update-state", () => ({ type: "update", ...update }));
 
 app.on("will-quit", () => globalShortcut.unregisterAll());
 app.on("window-all-closed", () => app.quit());

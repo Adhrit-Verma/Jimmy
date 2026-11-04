@@ -1801,6 +1801,9 @@ class Asker:
         said = self._crud(tool, args)
         if said is None and tool == "presence":
             said = self._presence_line()
+        elif said is None and tool == "show_status" and "vitals" in self.actions:                 # D66
+            self.publish({"type": "dock", "open": True})
+            said = self.actions["vitals"]()
         elif said is None and tool in ("diagnose", "fix_problem") and "diagnose" in self.actions:   # D65
             said = self.actions["diagnose" if tool == "diagnose" else "repair"]()
         elif said is None and tool == "open" and args.get("view") == "memory":

@@ -107,12 +107,15 @@ jobs:
           Set-Content D:\Apps\Jimmy\marker.txt 'gone if the setup ran'
           Start-Process D:\Apps\Jimmy\Jimmy.exe
           $deadline = (Get-Date).AddSeconds(180)
-          do { Start-Sleep 3 } until (((-not (Test-Path D:\Apps\Jimmy\marker.txt)) -and (Test-Path D:\Apps\Jimmy\Jimmy.exe) -and -not (Test-Path $up)) -or (Get-Date) -gt $deadline)
-          $py = @(Get-Process | Where-Object { $_.Path -like 'D:\JimmyData\runtime\*' }).Count
-          "self-update: setup ran: $(-not (Test-Path D:\Apps\Jimmy\marker.txt)); Jimmy.exe back: $(Test-Path D:\Apps\Jimmy\Jimmy.exe); tried update cleared: $(-not (Test-Path $up)); Jimmy's Python running: $py"
+          # Done when the setup ran and Jimmy's Python runs again (the update folder may still hold
+          # the setup, in use for a moment, and is cleared at a later check).
+          do { Start-Sleep 3; $py = @(Get-Process | Where-Object { $_.Path -like 'D:\JimmyData\runtime\*' }).Count } until (((-not (Test-Path D:\Apps\Jimmy\marker.txt)) -and (Test-Path D:\Apps\Jimmy\Jimmy.exe) -and $py -gt 0) -or (Get-Date) -gt $deadline)
+          $tried = (Test-Path "$up\pending.json") -and ((Get-Content "$up\pending.json" -Raw) -match '"tried":true')
+          "self-update: setup ran: $(-not (Test-Path D:\Apps\Jimmy\marker.txt)); Jimmy.exe back: $(Test-Path D:\Apps\Jimmy\Jimmy.exe); update left: $(Test-Path $up) (tried: $tried); Jimmy's Python running: $py"
           Get-Content D:\Apps\Jimmy\setup.log -Tail 5 -ErrorAction SilentlyContinue
           if (Test-Path D:\Apps\Jimmy\marker.txt) { throw "the update's setup never ran" }
-          if (Test-Path $up) { throw "Jimmy didn't start again after the update (the tried update is still there)" }
+          if ($py -eq 0) { throw "Jimmy didn't start again after the update" }
+          if ((Test-Path "$up\pending.json") -and -not $tried) { throw "the update would be installed again at the next start" }
           Get-Process | Where-Object { $_.Path -like 'D:\Apps\Jimmy\*' -or $_.Path -like 'D:\JimmyData\runtime\*' } | Stop-Process -Force
           Start-Sleep 3
 

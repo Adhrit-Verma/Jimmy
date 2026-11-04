@@ -20,6 +20,10 @@ const POINTER = path.join(process.env.APPDATA || path.join(os.homedir(), "AppDat
 const readJson = (f) => JSON.parse(fs.readFileSync(f, "utf8").replace(/^﻿/, ""));
 const dataDir = () => { try { return readJson(POINTER).data || null; } catch { return null; } };
 const dir = (data) => path.join(data, "cache", "update");
+// Never throws: right after an update the setup that started Jimmy again is still running from
+// this folder, and Windows won't delete it. The 1.0.2 clean-machine test caught the launcher
+// dying on that before it started anything. What's left goes at the next check.
+const clear = (data) => { try { fs.rmSync(dir(data), { recursive: true, force: true }); } catch { /* in use */ } };
 
 // "1.2.10" > "1.2.9"; a leading "v" is fine; anything after "-" is ignored.
 function newer(a, b) {
@@ -91,31 +95,44 @@ function pending(data, version) {
     const p = readJson(path.join(dir(data), "pending.json"));
     if (!p.tried && newer(p.version, version) && fs.existsSync(p.file) && sha256File(p.file) === p.sha256) return p;
   } catch { /* nothing pending */ }
-  fs.rmSync(dir(data), { recursive: true, force: true });
+  clear(data);
   return null;
 }
 
 // Look for a newer release; download and verify it. Resolves to the pending update or null.
-async function check({ version, data, log = () => {} }) {
-  if (!data || !enabled(data)) return null;
+// D66: `state` tells the status dock where it is: checking, up-to-date, downloading (with
+// progress 0-1), ready, off (switched off in Settings), error.
+async function check({ version, data, log = () => {}, state = () => {} }) {
+  if (!data || !enabled(data)) { state({ phase: "off" }); return null; }
   const have = pending(data, version);
+  state({ phase: "checking" });
   const rel = JSON.parse(await text(`https://api.github.com/repos/${REPO}/releases/latest`));
   const latest = String(rel.tag_name || "").replace(/^v/, "");
-  if (!latest || !newer(latest, version)) return null;
-  if (have && have.version === latest) return have;
+  if (!latest || !newer(latest, version)) { state({ phase: "uptodate", latest: latest || version }); return null; }
+  if (have && have.version === latest) { state({ phase: "ready", latest }); return have; }
   const exe = (rel.assets || []).find((a) => /^Jimmy-Setup-[\d.]+\.exe$/.test(a.name));
   const sum = (rel.assets || []).find((a) => exe && a.name === exe.name + ".sha256");
-  if (!exe || !sum) { log(`[update] ${latest}: the release has no setup and .sha256`); return null; }
+  if (!exe || !sum) {
+    log(`[update] ${latest}: the release has no setup and .sha256`);
+    state({ phase: "error", latest, error: "the release has no setup yet" });
+    return null;
+  }
   const sha256 = (await text(sum.browser_download_url)).trim().split(/\s+/)[0].toLowerCase();
   if (!/^[0-9a-f]{64}$/.test(sha256)) { log(`[update] ${latest}: unreadable .sha256`); return null; }
-  fs.rmSync(dir(data), { recursive: true, force: true });
+  clear(data);
   fs.mkdirSync(dir(data), { recursive: true });
   const file = path.join(dir(data), exe.name);
   log(`[update] downloading Jimmy ${latest} (${Math.round(exe.size / 1e6)} MB)`);
-  await download(exe.browser_download_url, file, sha256);
+  let shown = -1;
+  state({ phase: "downloading", latest, progress: 0, size: exe.size });
+  await download(exe.browser_download_url, file, sha256, (done, total) => {
+    const pct = Math.floor((100 * done) / (total || exe.size || 1));
+    if (pct !== shown) { shown = pct; state({ phase: "downloading", latest, progress: pct / 100, size: exe.size }); }
+  });
   const p = { version: latest, file, sha256 };
   fs.writeFileSync(path.join(dir(data), "pending.json"), JSON.stringify(p));
   log(`[update] Jimmy ${latest} is ready`);
+  state({ phase: "ready", latest });
   return p;
 }
 
