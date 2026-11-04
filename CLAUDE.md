@@ -128,6 +128,8 @@ cd overlay; npm install; npm run build   # once, and after any change under over
 .\.venv\Scripts\python.exe tests\test_stage17.py  # 8 checks: D65 camera self-repair, hidden consoles, overlay/startup
 .\.venv\Scripts\python.exe -m ambient.selfcheck   # D65: the camera checks, read-only, on this PC
 .\.venv\Scripts\python.exe tests\test_stage18.py  # 4 checks: D66 the status dock's vitals and wiring
+.\.venv\Scripts\python.exe tests\test_stage19.py  # 6 checks: D67 camera switch order, API fallback, quit, report, MCP
+.\.venv\Scripts\python.exe -m ambient.report --open   # D67: a diagnostic report in data\reports (--claude: Claude Desktop's config)
 .\.venv\Scripts\python.exe installer\build.py     # D61: installer\out\Jimmy-Setup-<v>.exe (+ .sha256); needs Node + internet
 .\.venv\Scripts\python.exe installer\art.py       # D62: the icon and the installer's images from Jimmy's mark
 .\.venv\Scripts\python.exe tests\test_commands.py # the command matrix: 177 utterances, talk, a drill
@@ -233,6 +235,8 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `tests/test_stage17.py` | D65 check: the camera's repairs, the tools the agent finds, hidden consoles, the overlay and launcher changes. |
 | `overlay/src/Dock.jsx` | D66: the status dock (listening, camera, load, update, capture, brain) and the pill's live signals; fed by `vitals` (Python, every 2 s, plus the overlay's own load from main) and `update` (main). |
 | `tests/test_stage18.py` | D66 check: vitals, process usage, "show status" by voice, the dock's wiring. |
+| `ambient/report.py` | D67: the diagnostic report (facts, no captures, user masked), the prefilled GitHub issue, `status.json`, the Claude Desktop config (`--claude`). |
+| `tests/test_stage19.py` | D67 check: the OpenCV switch before cv2 loads, the camera API fallback, Quit, the report, the MCP tool. |
 | `overlay/src/Onboarding.jsx` | D61/D62: the first run, eight steps, in Jimmy's design. |
 | `overlay/src/Logo.jsx` | D62: Jimmy's mark, animated (the pill and its listening bars). |
 | `overlay/src/Settings.jsx` | D60: Settings → storage, limits, profile, clean-up, start with Windows (the timeline window's 4th tab). |
@@ -616,8 +620,11 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   dies with its parent (Node's kill-on-close job). Start GUI programs detached; wait for
   PowerShell (D64's `apply`).
 - **OpenCV's Media Foundation opened this webcam in 16.5 s** (D65): hardware transforms. Keep
-  `OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS=0` (set in `presence.py`) and open cameras only
-  through `presence.open_camera`. A camera check in this tool's sandbox can hang: run it unsandboxed.
+  `OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS=0` set in `jimmy/install.py`: OpenCV reads it once,
+  when it loads (D67: set in `presence.py`, it worked in a dev test and not in an installed copy).
+  Open cameras only through `presence.open_camera`. A camera check in this tool's sandbox can hang.
+- **Test an installed copy's code with its own environment** (D67): `JIMMY_OVERLAY_EXE` set, or the
+  overlay (and with it the camera) never starts and the test proves nothing.
 - **Don't rely on COM being initialised by side effect** (D65): moving the camera's start to a
   timer made the first UI Automation reads fail. `bus.run` initialises it for the capture thread.
 - **Under `pythonw` every console program opens a visible window** (D65): `install.hide_consoles`

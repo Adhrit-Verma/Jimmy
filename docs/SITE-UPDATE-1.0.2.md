@@ -1,4 +1,4 @@
-# Jimmy 1.0.2 — for the website (2026-11-04)
+# Jimmy 1.0.2 and 1.0.3 — for the website (2026-11-04)
 
 Short brief for the site's changelog, download and docs pages. Source records:
 `DECISIONS-AND-WHY.md` D63–D65. Every number below is measured.
@@ -7,6 +7,18 @@ Short brief for the site's changelog, download and docs pages. Source records:
 copies update themselves: they check GitHub Releases 10 min after start and every 6 h, verify the
 SHA-256, and install on a click or at the next start, keeping data and settings. Switch:
 Settings → "Update Jimmy automatically". 1.0.0 users install 1.0.1 or later once, by hand.
+
+**Changelog, 1.0.3** (2026-11-04)
+- **The camera fix now works in installed copies.** In 1.0.2 it only took effect in development.
+  Measured: from 88 s to 16.5 s until Jimmy sees you; the camera opens in about 1.5 s. A camera
+  that stops giving pictures gets the other Windows camera API, instead of switching on and off.
+- **Quit really quits.** Nothing is left running in the background, including Jimmy's local AI.
+- **Diagnostic reports.** "Jimmy, make a diagnostic report" (or Status → Report) writes one file
+  of facts, with no captured screens or speech and your user name hidden. "Send it to the
+  developer" opens a GitHub issue you check and submit yourself. Nothing is sent automatically.
+- **Claude Desktop can help.** Jimmy's MCP server offers the report (read-only).
+  `python -m ambient.report --claude` prints the config to paste into Claude Desktop.
+- **A lighter pill.** It no longer redraws for every status reading.
 
 **Changelog, 1.0.2**
 - **Jimmy repairs itself.** Say "Jimmy, what's wrong with the camera?" and it checks itself and

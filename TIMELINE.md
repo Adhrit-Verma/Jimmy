@@ -214,6 +214,13 @@ call, an unmeasured lip veto, no visible calibration, a flickering eye, a stale
 timeline after a forget, scroll in Claude). Checks: `tests\test_stage9.py` (14),
 matrix (154), eval 41/41.
 
+## Camera, Quit, diagnostic reports, Claude Desktop · **built 2026-11-04 (D67), v1.0.3**
+
+The camera switch now reaches installed copies (here: 88 s → 16.5 s to "present"), a stopping
+camera gets the other Windows API, Quit ends Jimmy and its Ollama, a diagnostic report anyone can
+make and choose to send, and Claude Desktop can read it over MCP. Checks: `tests\test_stage19.py` (6).
+**Open:** the Creo webcam on the owner's other PC.
+
 ## The status dock · **built 2026-11-04 (D66), in v1.0.2**
 
 What Jimmy is doing at a glance: listening windows, camera, its CPU and RAM, the update's progress

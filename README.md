@@ -310,6 +310,17 @@ RAM with a one-minute graph, the update (checking, downloading with %, ready: **
 capture and the AI model. The pill itself shows a ring while you can talk without the name, the
 camera, a call, and a pulsing download badge while an update arrives.
 
+**Something wrong? Make a diagnostic report.** "Jimmy, make a diagnostic report" (or Status →
+**Report**) writes one file of facts, with no captured screens or speech, and your user name
+hidden. "Send it to the developer" opens a GitHub issue for you to check, attach the file and
+submit; nothing is ever sent on its own.
+
+**Let Claude Desktop help.** Run `python -m ambient.report --claude` with Jimmy's own Python
+(installed: `<your data folder>\runtime\venv\Scripts\python.exe`, from `<install folder>\resources\jimmy`)
+and paste what it prints into `%APPDATA%\Claude\claude_desktop_config.json`. Restart Claude
+Desktop, then ask it "what's wrong with Jimmy?": it reads Jimmy's report (read-only) and tells
+you what to change.
+
 **If something's off, ask Jimmy.** "Jimmy, what's wrong with the camera?" makes it check itself
 and say what it found; "you can use the camera, fix it" makes it repair what it can on the spot
 (its own setting, a stuck camera, the right camera) and open Windows' privacy page for what only

@@ -2673,3 +2673,45 @@ update is marked tried. 1.0.2 had not been released, so it ships with the dock.
 
 Checks: `tests/test_stage18.py` (4). `electron . --demo --demo-ui dock --snapshot x.png` renders
 the dock on invented readings.
+
+### D67 — 1.0.2's camera fix didn't reach installed copies; Quit that quits; a diagnostic report
+
+**2026-11-04.** The human, on 1.0.2 with a Creo webcam: Jimmy takes the camera and lets it go,
+and Quit leaves Jimmy running in the background. They asked for a way to make a diagnostic report,
+to send one, and whether Claude Desktop could connect to Jimmy and help.
+
+**Installed here and measured** (the human asked; a test install under `C:\Users\<you>\JimmyTest`,
+this PC's camera is an HP True Vision, not a Creo): 1.0.2's camera reached "present" **88 s**
+after start (planned: 15 s). D65 set `OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS` in `presence.py`,
+but OpenCV reads it once, when it loads, and other modules load it first in a running Jimmy (only
+the dev test imported `presence` first). Measured: set before `import cv2` 1.2 s, after 16.7 s.
+Now `jimmy/install.py` sets it, the first module every entry point imports. In the installed copy
+with the fix: **"present" 16.5 s after start** (15 s delay + 1.5 s open).
+
+**"Takes the camera and lets it go":** a camera that stops giving frames was reopened the same way,
+again and again. Now the other Windows API (DirectShow / Media Foundation) is tried first next
+time (`presence.open_camera(index, first=)` returns the API it used).
+
+**Quit:** Quit ends the capture loop and closes everything, but a thread stuck in a camera or audio
+driver call kept the Python process (and the camera) alive, and the Ollama Jimmy starts (D65) was
+never stopped. Now `ambient run` ends the process with `os._exit(0)` after its close, and
+`close()` terminates its own Ollama. In the installed copy: 0 Jimmy processes left after a run.
+
+**Diagnostic report** (`ambient/report.py`): "Jimmy, make a diagnostic report", the dock's Report
+button, `python -m ambient.report [--open]`, or Claude Desktop. One Markdown file in
+`<data>/reports/`: versions, Windows, settings (keys only as present), live status (the running
+Jimmy saves `logs/status.json` every 20 s, so a report from outside it has it), the camera checks,
+every app Windows marks as using the camera and mic and whether it's actually running, cameras,
+GPU, Jimmy's processes, the end of its log (never captured text, D45). The user name is masked.
+**Sending is the user's act:** "send it to the developer" opens a GitHub issue prefilled with the
+first part; they add a line, attach the file and submit. No automatic upload: Jimmy holds people's
+screens and speech, and a silent report channel is exactly what its privacy rules exist to rule
+out; a server would also need hosting, consent and retention it doesn't have.
+
+**Claude Desktop:** `python -m jimmy mcp` gains a read-only `diagnostic_report` tool. `python -m
+ambient.report --claude` prints the `claude_desktop_config.json` entry with this copy's real paths
+(the venv's python, `PYTHONPATH` = the code folder); run that way from another folder, the server
+answers. Claude can then read Jimmy's state and say what to change; it changes nothing itself.
+
+**Lighter UI:** the pill no longer re-renders every 2 s for the vitals; only `Signals` and the dock
+read them. Released as 1.0.3 (installed 1.0.2 copies show the download on the pill).
