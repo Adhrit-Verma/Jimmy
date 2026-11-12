@@ -165,7 +165,7 @@ export function Dock({ onClose, hoverProps, surface }) {
       ) : (
         <div className="grid grid-cols-3 gap-2">
           <Tile icon={mic.on && !mic.paused ? Mic : MicOff} title="Listening" tone={listening ? "text-sky-300" : "text-neutral-400"}
-            value={mic.paused ? "Paused" : !mic.on ? "Mic off" : mic.call?.length ? "On a call" : listening ? `Just talk · ${left(v.listen_until)}s` : "Say “Jimmy, …”"}
+            value={mic.paused ? "Paused" : mic.starting ? "Voice starting…" : !mic.on ? "Mic off" : mic.call?.length ? "On a call" : listening ? `Just talk · ${left(v.listen_until)}s` : "Say “Jimmy, …”"}
             sub={mic.call?.length ? `${mic.call.join(", ")} has the mic: say “Jimmy” first`
               : nav ? `“next”, “scroll down” work for ${left(v.nav_until)}s` : listening ? "No name needed until the ring runs out" : null}>
             {mic.call?.length > 0 && <Btn onClick={() => ask("I'm not on a call")}>Not a call</Btn>}

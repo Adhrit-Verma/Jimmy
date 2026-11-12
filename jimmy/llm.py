@@ -145,6 +145,7 @@ class LLM:
         self.backup: LLM | None = None
         self._down_until = 0.0
         self._model_down: dict[str, float] = {}   # D54: a model that just failed rests (BACKUP_RETRY_S)
+        self._strikes: dict[str, tuple[int, float]] = {}   # D69: (failures in a row, when its rest ends)
         if default and config.BACKUP_PROVIDER and transport is None:   # a test's client never reaches out
             url, env = config.ENDPOINTS[config.BACKUP_PROVIDER]
             # D58: the backup has limits too. On 2026-11-01 gpt-oss hung while Gemini was down
@@ -308,7 +309,15 @@ class LLM:
     def _failed(self, model: str, exc: LLMError) -> None:
         if self.backup is not None:
             daily = exc.status == 429 and any(w in str(exc).lower() for w in ("perday", "per day", "daily"))
-            self._model_down[model] = time.time() + (_pacific_midnight_in() if daily else config.BACKUP_RETRY_S)
+            # D69: failing again soon after a rest doubles the next one, up to an hour. Measured
+            # 2026-11-12: gemini-3.8-flash failed 5 of 5 again, so with a fixed minute's rest one
+            # request a minute waited out its 6 s deadline before the model that does answer.
+            now = time.time()
+            n, ended = self._strikes.get(model, (0, 0.0))
+            n = n + 1 if now - ended < 600 else 1
+            rest = _pacific_midnight_in() if daily else min(3600.0, config.BACKUP_RETRY_S * 2 ** (n - 1))
+            self._model_down[model] = now + rest
+            self._strikes[model] = (n, now + rest)
             print(f"[jimmy] {model} failed ({str(exc)[:80]!r}); trying the next", file=sys.stderr, flush=True)
 
     def _tries(self) -> int:

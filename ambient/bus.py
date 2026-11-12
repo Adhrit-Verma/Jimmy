@@ -945,6 +945,7 @@ class ContextBus:
              "listen_until": max(getattr(a, "followup_until", 0), getattr(a, "listen_until", 0)) if a else 0,
              "nav_until": getattr(a, "nav_until", 0) if a else 0,
              "mic": {"on": self._audio is not None, "paused": paused,
+                     "starting": bool(getattr(self, "_voice_loading", False)),      # D69
                      "call": [app_label(k) for k in mic_holders()] if self._audio is not None else []},
              "camera": ({"on": True, "state": p.get("state"), "why": p.get("why") or "",
                          "contact": bool(p.get("contact")), "faces": p.get("faces", 0)}
@@ -1354,18 +1355,29 @@ class ContextBus:
             threading.Thread(target=demo.run, args=(self, script), daemon=True, name="demo").start()
 
         if self.want_audio:
-            from .audio import AudioPipeline
-            self._audio = AudioPipeline(self._on_audio, on_start=self._on_speech_start)
-            self._audio.name_only = lambda: now_ms() < self.paused_until     # D50: the wake word's moment
-            try:
-                self._audio.start()
-                if verbose:
-                    t = self._audio.transcriber
-                    print(f"[audio] {t.name} on {t.device}/{t.compute}"
-                          f"{' | ' + '; '.join(self._audio.errors) if self._audio.errors else ''}")
-            except Exception as exc:
-                print(f"[audio] disabled: {type(exc).__name__}: {exc}")
-                self._audio = None
+            # D69: on its own thread. Loading the speech model took 12.7 s here, and screen
+            # capture waited for it (first capture at 14.6 s; now ~2 s). `_audio` is set once
+            # the mic is live, so everything that checks it sees "no voice yet" until then.
+            def _voice() -> None:
+                try:
+                    from .audio import AudioPipeline
+                    audio = AudioPipeline(self._on_audio, on_start=self._on_speech_start)
+                    audio.name_only = lambda: now_ms() < self.paused_until     # D50: the wake word's moment
+                    audio.start()
+                    if not self._running:               # quit while it loaded
+                        audio.stop()
+                        return
+                    self._audio = audio
+                    if verbose:
+                        t = audio.transcriber
+                        print(f"[audio] {t.name} on {t.device}/{t.compute}"
+                              f"{' | ' + '; '.join(audio.errors) if audio.errors else ''}")
+                except Exception as exc:
+                    print(f"[audio] disabled: {type(exc).__name__}: {exc}")
+                finally:
+                    self._voice_loading = False
+            self._voice_loading = True
+            threading.Thread(target=_voice, daemon=True, name="voice-start").start()
 
         def _halt(*_):
             self._running = False

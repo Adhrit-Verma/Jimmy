@@ -101,6 +101,24 @@ def test_a_print_never_kills_its_thread():
     assert "secrets.compare_digest(" in (ROOT / "ambient" / "api.py").read_text(encoding="utf-8")
 
 
+def test_a_model_that_keeps_failing_rests_longer():
+    """D69: a minute, then double each time it fails again soon after, up to an hour."""
+    import time
+
+    from jimmy import config as jc
+    from jimmy import llm as L
+    c = L.LLM(key="k", model="m1")
+    c.backup = object()                                  # the chain only rests models when there's a backup
+    rests = []
+    for _ in range(8):
+        c._failed("m1", L.LLMError("503 overloaded", 503))
+        rests.append(round(c._model_down["m1"] - time.time()))
+    assert rests[:4] == [jc.BACKUP_RETRY_S * k for k in (1, 2, 4, 8)] and rests[-1] == 3600, rests
+    c._strikes["m1"] = (5, time.time() - 601)            # it answered for a while: back to a minute
+    c._failed("m1", L.LLMError("503", 503))
+    assert round(c._model_down["m1"] - time.time()) == jc.BACKUP_RETRY_S
+
+
 if __name__ == "__main__":
     tests = [v for k, v in dict(globals()).items() if k.startswith("test_")]
     for t in tests:
