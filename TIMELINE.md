@@ -214,6 +214,11 @@ call, an unmeasured lip veto, no visible calibration, a flickering eye, a stale
 timeline after a forget, scroll in Claude). Checks: `tests\test_stage9.py` (14),
 matrix (154), eval 41/41.
 
+## Failsafes · **built 2026-11-12 (D68), v1.0.4**
+
+Suites gate releases in CI (`tests\run_all.py`); the overlay reloads a crashed page and restarts a
+dead Jimmy (3 an hour); native crashes go to `crash.log`; prints can't kill a thread.
+
 ## Camera, Quit, diagnostic reports, Claude Desktop · **built 2026-11-04 (D67), v1.0.3**
 
 The camera switch now reaches installed copies (here: 88 s → 16.5 s to "present"), a stopping

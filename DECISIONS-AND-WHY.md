@@ -2715,3 +2715,26 @@ answers. Claude can then read Jimmy's state and say what to change; it changes n
 
 **Lighter UI:** the pill no longer re-renders every 2 s for the vitals; only `Signals` and the dock
 read them. Released as 1.0.3 (installed 1.0.2 copies show the download on the pill).
+
+### D68 — Failsafes a shipped app needs: tests gate releases, Jimmy restarts itself, crashes leave a trace
+
+**2026-11-12.** The human: make Jimmy like world-class indie software (performance, failsafes,
+exception handling, security), as cheaply as possible. An audit by grep, not a rewrite; what was
+already right stayed (the tick loop survives a failing tick; stderr reaches `jimmy.log`).
+
+- **`tests/run_all.py`, and CI runs it before the build**, so a failing suite means no release.
+  Until now CI built and installed but never ran the suites. Its first run here found two things
+  the hand-run loop had missed: a `print` of Hindi text on a piped (cp1252) stdout raised
+  `UnicodeEncodeError` inside the request thread, so the answer never came (the installed app
+  was shielded by the launcher's `PYTHONUTF8`; nothing else was): `jimmy/install.py` now sets
+  `errors="replace"` on stdout and stderr, first thing. And stage 4's no-expression-effects
+  rule had been failing on D66's dock listener (harmless: it returned its unsubscribe).
+- **Jimmy restarts itself.** The overlay reloads its page if it crashes (it stayed blank). If
+  Jimmy's Python dies without closing the overlay (a quit closes it first), the installed overlay
+  starts Jimmy again, at most 3 times an hour (`userdata\restarts.json`), then gives up.
+- **Hard crashes leave a trace:** `faulthandler` writes native faults (camera, speech libraries)
+  to `logs/crash.log`; the diagnostic report includes its tail.
+- **The local API compares its token in constant time** (`secrets.compare_digest`).
+
+Not done, on purpose: code signing (needs a certificate), signed update manifests (the `.sha256`
+shares the release's trust), telemetry. Released as 1.0.4.

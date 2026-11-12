@@ -83,6 +83,7 @@ cd C:\Code\Jimmy
 .\.venv\Scripts\python.exe -m ambient run --seconds 60 --no-audio
 .\.venv\Scripts\python.exe -m ambient search "what was that thing"
 .\.venv\Scripts\python.exe -m ambient stats
+.\.venv\Scripts\python.exe tests\run_all.py           # D68: every offline suite, in parallel; CI gates releases on it
 .\.venv\Scripts\python.exe tests\test_stage1.py       # 15 checks, no framework
 
 .\.venv\Scripts\python.exe -m jimmy doctor           # key, model, endpoint, data
@@ -631,6 +632,8 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   covers Python; a Node `detached` spawn has no console either, so its console children flash.
 - **Never let a file delete in the updater throw** (D66): right after an update the setup is still
   running from `<data>\cache\update`; the launcher died on a refused delete before starting Jimmy.
+- **Run `tests\run_all.py`, not a hand loop** (D68): it reads exit codes and output; CI runs it
+  before every build. A `print` of non-Latin text on a piped stdout used to kill its thread.
 - **A test's `OverlayAPI` must be `.start()`ed and `.stop()`ped**: `server.shutdown()` on one
   that never served waits forever.
 - **Ollama loads qwen3 at its full context** (256k: 37.5 GB asked, D53). A local model for
