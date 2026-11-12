@@ -214,6 +214,12 @@ call, an unmeasured lip veto, no visible calibration, a flickering eye, a stale
 timeline after a forget, scroll in Claude). Checks: `tests\test_stage9.py` (14),
 matrix (154), eval 41/41.
 
+## Speed, measured · **built 2026-11-12 (D69), v1.0.5**
+
+First capture 14.6 s → 2.8 s and mic 15.4 s → 11.1 s (voice loads on its own thread); a model that
+keeps failing rests longer, so requests stop waiting 6 s on it. **Open:** the same measurements
+on the installed copy; the speech model's load itself.
+
 ## Failsafes · **built 2026-11-12 (D68), v1.0.4**
 
 Suites gate releases in CI (`tests\run_all.py`); the overlay reloads a crashed page and restarts a

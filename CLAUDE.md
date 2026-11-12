@@ -406,6 +406,9 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   120/130 real commands, median 1.4 s (terse as a chat voice). `nemotron-3.5-lightning`
   took 45–66 s and wrote garbage (in D17: 159 s). A 404/410 now moves the client to
   the next model (`MODEL_FALLBACKS`) and prints it. Don't switch models without measuring.
+- **Startup, 2026-11-12 (D69):** overlay 1.9 s, first capture 2.8 s, mic 11.1 s (the speech model
+  loads on its own thread: 12.7 s on the main thread before). `gemini-3.8-flash` failed 5 of 5
+  again; 3.5 Flash-Lite 1.5-3.4 s. A failing model's rest doubles, a minute up to an hour.
 - **Gemini free tier, 2026-11-01 (D58):** `gemini-3.8-flash` timed out or said 503 "high
   demand" on 5 of 5 calls (doctor: 107 s to a first word); 3.7-flash 503/429; 3.6-flash
   2.6–4.3 s; **3.5-flash-lite 0.6–3.8 s**; 3.1-flash-lite 1.2–5.1 s. Through Jimmy with the

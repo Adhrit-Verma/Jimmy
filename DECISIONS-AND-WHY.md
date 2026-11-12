@@ -2738,3 +2738,29 @@ already right stayed (the tick loop survives a failing tick; stderr reaches `jim
 
 Not done, on purpose: code signing (needs a certificate), signed update manifests (the `.sha256`
 shares the release's trust), telemetry. Released as 1.0.4.
+
+### D69 — Speed, measured first: a dead first-choice model, and capture that waited for the speech model
+
+**2026-11-12.** The human chose speed. Measured before changing anything.
+
+**What the traces said** (148 requests in `jimmy.db`): commands and navigation are instant; the
+agent route is the slow one (59 requests, median 4.3 s). But nearly every step was from 5 October,
+before D43-D58, so the pipeline was measured again, live.
+
+**Today, live** (`eval_agent.py --only 16`): the rules answer most commands in 0.0 s; a model step
+takes 1.6-3.2 s; one took 6.0 s, exactly `GEMINI_FIRST_WORD_S`. Each model alone, 5 calls:
+`gemini-3.8-flash` **failed 5 of 5** (four timeouts, one 503), as on 2026-11-01;
+`gemini-3.5-flash-lite` 1.5-3.4 s every time. With a fixed minute's rest (`BACKUP_RETRY_S`), one
+request a minute waited out the dead model's 6 s deadline. Now a model that fails again within
+10 minutes of its rest ending rests twice as long, up to an hour (`LLM._strikes`); one that
+answered for a while goes back to a minute. Per client, not shared: tests stay isolated.
+
+**Startup** (a real run, timed from process start): overlay up 1.9 s, but the first screen capture
+at 14.6 s and the mic at 15.4 s, because the main thread waited 12.7 s for the speech model
+(importing `faster_whisper` 3.3 s and `av` 2.6 s, then CUDA). Voice now starts on its own thread:
+**first capture 2.8 s, mic 11.1 s**. `_audio` is set only once the mic is live; the dock says
+"Voice starting…" until then.
+
+Not done: the speech model's own load (inherent); `av`'s import (faster-whisper imports it even
+for arrays); making 3.5 Flash-Lite the first choice (the human chose 3.8; the longer rest gets the
+same speed without overruling that). Released as 1.0.5.
