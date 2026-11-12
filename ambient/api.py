@@ -47,7 +47,7 @@ class OverlayAPI:
                 pass
 
             def _ok(self) -> bool:
-                if self.headers.get("Authorization") != f"Bearer {api.token}":
+                if not secrets.compare_digest(self.headers.get("Authorization") or "", f"Bearer {api.token}"):
                     self.send_error(403)
                     return False
                 return True

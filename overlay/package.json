@@ -1,6 +1,6 @@
 {
   "name": "jimmy-overlay",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Jimmy, the ambient assistant for Windows",
   "main": "main.cjs",
   "scripts": {

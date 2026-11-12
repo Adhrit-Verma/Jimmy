@@ -153,6 +153,24 @@ function send(event) {
   if (win && !win.isDestroyed()) win.webContents.send("event", event);
 }
 
+// D68: Jimmy's Python is gone without closing us (a quit closes the overlay first): it crashed.
+// The installed app starts itself again, at most 3 times an hour, so a crash loop ends.
+function restartJimmy() {
+  if (app.isPackaged) {
+    const f = path.join(app.getPath("userData"), "restarts.json");
+    let times = [];
+    try { times = JSON.parse(fs.readFileSync(f, "utf8")).filter((t) => Date.now() - t < 3600_000); } catch { /* first */ }
+    if (times.length < 3) {
+      try { fs.writeFileSync(f, JSON.stringify([...times, Date.now()])); } catch { /* still restart */ }
+      const env = { ...process.env };
+      delete env.JIMMY_OVERLAY_URL;                 // without these, Jimmy.exe is the launcher
+      delete env.JIMMY_OVERLAY_TOKEN;
+      require("child_process").spawn(process.execPath, [], { detached: true, stdio: "ignore", env }).unref();
+    }
+  }
+  app.quit();
+}
+
 async function call(route, body) {
   if (DEMO || !API) return null;
   const res = await fetch(`${API}/${route}`, {
@@ -196,7 +214,7 @@ async function listen() {
     } catch {
       failures += 1;
     }
-    if (failures > 10) return app.quit();          // ~15 s of nothing: capture has stopped
+    if (failures > 10) return restartJimmy();      // ~15 s of nothing: capture has stopped
     await new Promise((r) => setTimeout(r, 1500));
   }
 }
@@ -300,7 +318,11 @@ app.whenReady().then(() => {
     const message = e.message ?? args[1];
     if (level === "error" || level === "warning" || level >= 2) console.error(`[overlay page] ${message}`);
   });
-  win.webContents.on("render-process-gone", (_e, d) => console.error(`[overlay page] crashed: ${d.reason}`));
+  // D68: a crashed page used to stay blank until Jimmy was restarted by hand.
+  win.webContents.on("render-process-gone", (_e, d) => {
+    console.error(`[overlay page] crashed: ${d.reason}; reloading`);
+    if (d.reason !== "clean-exit" && !win.isDestroyed()) setTimeout(() => !win.isDestroyed() && win.reload(), 1000);
+  });
 
   win.webContents.once("did-finish-load", () => {
     win.showInactive();

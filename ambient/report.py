@@ -142,6 +142,13 @@ def build(bus=None) -> str:
     add("```")
     add(_tail(config.DATA_DIR / "logs" / "jimmy.log", 150))
     add("```")
+    crash = config.DATA_DIR / "logs" / "crash.log"
+    if crash.exists() and crash.stat().st_size:
+        add("")
+        add("## Hard crashes (crash.log)")
+        add("```")
+        add(_tail(crash, 60))
+        add("```")
     if install.INSTALLED:
         add("")
         add("## The launcher's log")

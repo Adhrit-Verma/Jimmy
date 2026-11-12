@@ -273,6 +273,8 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         from . import logs
         print(f"[bus] console kept in {logs.install()} (no captured text)")    # D45
+        import faulthandler                      # D68: a native crash writes its stacks here, not nothing
+        faulthandler.enable(open(config.DATA_DIR / "logs" / "crash.log", "a", encoding="utf-8"))
         from .bus import ContextBus
         bus = ContextBus(db_path=db, monitor=a.monitor,
                          audio=not a.no_audio, thumbs=not a.no_thumbs, cards=not a.no_cards,

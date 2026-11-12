@@ -27,6 +27,12 @@ from pathlib import Path
 # set before any module imports cv2; this module is imported first by every entry point.
 os.environ.setdefault("OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS", "0")
 
+# D68: a print must never kill the thread that made it. Piped on Windows, stdout is cp1252 and a
+# Hindi line raised UnicodeEncodeError inside the request thread: the answer never came.
+for _s in (sys.stdout, sys.stderr):
+    if _s is not None and hasattr(_s, "reconfigure"):
+        _s.reconfigure(errors="replace")
+
 ROOT = Path(__file__).resolve().parents[1]
 MARKER = ROOT / "jimmy-installed.json"
 INSTALLED = MARKER.exists()

@@ -92,6 +92,15 @@ def test_by_voice():
         assert {"make_report", "send_report"} <= names, (q, names)
 
 
+def test_a_print_never_kills_its_thread():
+    """D68: piped on Windows stdout is cp1252; a Hindi line raised inside the request thread."""
+    env = {**os.environ, "PYTHONIOENCODING": "cp1252", "PYTHONUTF8": "0"}
+    p = subprocess.run([PY, "-c", "import jimmy.install; print('पानी ok')"],
+                       capture_output=True, cwd=ROOT, env=env)
+    assert p.returncode == 0 and b"ok" in p.stdout, p.stderr[-300:]
+    assert "secrets.compare_digest(" in (ROOT / "ambient" / "api.py").read_text(encoding="utf-8")
+
+
 if __name__ == "__main__":
     tests = [v for k, v in dict(globals()).items() if k.startswith("test_")]
     for t in tests:

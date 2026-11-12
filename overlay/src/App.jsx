@@ -124,7 +124,9 @@ function Pill({ state, mood, prompt, typing, setTyping, flash, recent, onAsk, an
   const [armed, setArmed] = useState(false);     // Quit asks twice
   const [dock, setDock] = useState(false);       // D66: the status dock (D67: it and the signals
                                                  // read the vitals themselves; the pill doesn't re-render)
-  useEffect(() => bridge?.onEvent((ev) => { if (ev.type === "dock") setDock(!!ev.open); }), []);
+  useEffect(() => {
+    return bridge?.onEvent((ev) => { if (ev.type === "dock") setDock(!!ev.open); });
+  }, []);
   const input = useRef(null);
   const [, tick] = useState(0);
   useEffect(() => {
