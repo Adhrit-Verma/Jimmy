@@ -643,7 +643,7 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
 - **Windows only records an app that got the camera** (D70): to give it away Jimmy reads intent
   (`presence.wanted_elsewhere`: a call on the mic, OBS, the Camera app), not the registry alone.
 - **After changing `overlay/package.json`, run a full `npm install`, then `npm ci --dry-run`** (D70):
-  `--package-lock-only` left the lock out of sync and CI's `npm ci` failed the build.
+  `--package-lock-only` and an older npm (11.6 here, 11.19 in CI) each left the lock out of sync and CI failed twice: regenerate with `npx npm@<CI version> install`.
 - **Never let a file delete in the updater throw** (D66): right after an update the setup is still
   running from `<data>\cache\update`; the launcher died on a refused delete before starting Jimmy.
 - **Run `tests\run_all.py`, not a hand loop** (D68): it reads exit codes and output; CI runs it
