@@ -156,7 +156,15 @@ function send(event) {
 // D68: Jimmy's Python is gone without closing us (a quit closes the overlay first): it crashed.
 // The installed app starts itself again, at most 3 times an hour, so a crash loop ends.
 function restartJimmy() {
-  if (app.isPackaged) {
+  // D70: not while an update is being applied (its pending.json is marked tried): the patcher
+  // stops Jimmy on purpose, and a Jimmy restarted under it held app.asar so the patch never
+  // went in (the clean-machine test caught it). The update starts Jimmy again itself.
+  let updating = false;
+  try {
+    const data = require("./updater.cjs").dataDir();
+    updating = !!JSON.parse(fs.readFileSync(path.join(data, "cache", "update", "pending.json"), "utf8")).tried;
+  } catch { /* no update in flight */ }
+  if (app.isPackaged && !updating) {
     const f = path.join(app.getPath("userData"), "restarts.json");
     let times = [];
     try { times = JSON.parse(fs.readFileSync(f, "utf8")).filter((t) => Date.now() - t < 3600_000); } catch { /* first */ }

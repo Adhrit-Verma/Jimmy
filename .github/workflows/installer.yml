@@ -134,6 +134,9 @@ jobs:
           if ((Test-Path "$up\pending.json") -and -not $tried) { throw "the update would be installed again at the next start" }
           Get-Process | Where-Object { $_.Path -like 'D:\Apps\Jimmy\*' -or $_.Path -like 'D:\JimmyData\runtime\*' } | Stop-Process -Force
           Start-Sleep 3
+          # again: an overlay that was only just starting slips past the first sweep
+          Get-Process | Where-Object { $_.Path -like 'D:\Apps\Jimmy\*' -or $_.Path -like 'D:\JimmyData\runtime\*' } | Stop-Process -Force
+          Start-Sleep 3
 
           # 3d. a patch update (D70): about 1 MB instead of the setup. The build's own patch stands
           # in for a newer one; a line added to Jimmy's code must be gone after it (replaced).
@@ -154,6 +157,9 @@ jobs:
           Get-Content D:\Apps\Jimmy\setup.log -Tail 4 -ErrorAction SilentlyContinue
           if ($stale) { throw "the patch wasn't applied" }
           if ($py -eq 0) { throw "Jimmy didn't start again after the patch" }
+          Get-Process | Where-Object { $_.Path -like 'D:\Apps\Jimmy\*' -or $_.Path -like 'D:\JimmyData\runtime\*' } | Stop-Process -Force
+          Start-Sleep 3
+          # again: an overlay that was only just starting slips past the first sweep
           Get-Process | Where-Object { $_.Path -like 'D:\Apps\Jimmy\*' -or $_.Path -like 'D:\JimmyData\runtime\*' } | Stop-Process -Force
           Start-Sleep 3
 
