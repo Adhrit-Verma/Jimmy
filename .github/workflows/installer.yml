@@ -48,6 +48,8 @@ jobs:
           path: |
             installer/out/Jimmy-Setup-*.exe
             installer/out/Jimmy-Setup-*.exe.sha256
+            installer/out/Jimmy-Patch-*.zip
+            installer/out/Jimmy-Patch-*.zip.sha256
           retention-days: 14
 
   test-clean-machine:
@@ -133,6 +135,28 @@ jobs:
           Get-Process | Where-Object { $_.Path -like 'D:\Apps\Jimmy\*' -or $_.Path -like 'D:\JimmyData\runtime\*' } | Stop-Process -Force
           Start-Sleep 3
 
+          # 3d. a patch update (D70): about 1 MB instead of the setup. The build's own patch stands
+          # in for a newer one; a line added to Jimmy's code must be gone after it (replaced).
+          $patch = (Get-ChildItem setup\Jimmy-Patch-*.zip | Select-Object -First 1).FullName
+          "patch: $([math]::Round((Get-Item $patch).Length/1MB, 2)) MB"
+          New-Item -ItemType Directory -Force $up | Out-Null
+          Copy-Item $patch "$up\patch.zip"
+          $sha = (Get-FileHash "$up\patch.zip" -Algorithm SHA256).Hash.ToLower()
+          @{ version = '999.0.1'; file = "$up\patch.zip"; sha256 = $sha; kind = 'patch' } | ConvertTo-Json | Set-Content -Encoding ascii "$up\pending.json"
+          Add-Content D:\Apps\Jimmy\resources\jimmy\ambient\selfcheck.py '# stale line: a patch replaces this file'
+          Start-Process D:\Apps\Jimmy\Jimmy.exe
+          $deadline = (Get-Date).AddSeconds(120)
+          do { Start-Sleep 3
+               $stale = [bool](Select-String -Path D:\Apps\Jimmy\resources\jimmy\ambient\selfcheck.py -Pattern 'stale line' -Quiet)
+               $py = @(Get-Process | Where-Object { $_.Path -like 'D:\JimmyData\runtime\*' }).Count
+          } until ((-not $stale -and $py -gt 0) -or (Get-Date) -gt $deadline)
+          "patch update: code replaced: $(-not $stale); Jimmy's Python running: $py"
+          Get-Content D:\Apps\Jimmy\setup.log -Tail 4 -ErrorAction SilentlyContinue
+          if ($stale) { throw "the patch wasn't applied" }
+          if ($py -eq 0) { throw "Jimmy didn't start again after the patch" }
+          Get-Process | Where-Object { $_.Path -like 'D:\Apps\Jimmy\*' -or $_.Path -like 'D:\JimmyData\runtime\*' } | Stop-Process -Force
+          Start-Sleep 3
+
           # 4. what landed on C:
           "on C: (APPDATA\Jimmy):"; Get-ChildItem "$env:APPDATA\Jimmy" | ForEach-Object { "  $($_.Name) $($_.Length) B" }
           $c = (Get-ChildItem "$env:APPDATA\Jimmy" -Recurse -File | Measure-Object Length -Sum).Sum
@@ -184,4 +208,4 @@ jobs:
           exe="setup/Jimmy-Setup-$v.exe"
           test -f "$exe" && test -f "$exe.sha256" || { echo "no $exe in the build"; exit 1; }
           (cd setup && sha256sum -c "Jimmy-Setup-$v.exe.sha256")
-          gh release create "v$v" "$exe" "$exe.sha256" --target "$GITHUB_SHA" --title "Jimmy $v" --generate-notes
+          gh release create "v$v" "$exe" "$exe.sha256" setup/Jimmy-Patch-$v-*.zip setup/Jimmy-Patch-$v-*.zip.sha256 --target "$GITHUB_SHA" --title "Jimmy $v" --generate-notes

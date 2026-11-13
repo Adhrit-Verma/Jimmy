@@ -183,6 +183,14 @@ WIKI_EVERY_H = 24            # D42: the model-written wiki pages, recompiled whi
 PRESENCE = True              # False: no webcam at all
 PRESENCE_CAMERA = 0          # OpenCV camera index (D65: settings' camera_index wins)
 PRESENCE_START_DELAY_S = 15  # D65: the camera starts after the voice models, not beside them
+# D70: Jimmy gives the camera away before another app has to fail to open it (many webcams
+# can't be shared, and Windows only records an app that *got* the camera). The signs that
+# something else wants it: another app on the mic (a call: Discord, Meet, Teams, Zoom), one of
+# these programs running, or one of these window titles in front. Back CAMERA_RETAKE_S after.
+CAMERA_YIELD_RUNNING = {"obs64.exe", "obs32.exe", "streamlabs obs.exe", "streamlabs desktop.exe"}
+CAMERA_YIELD_TITLES = {"camera"}          # Windows' Camera app (its exe is a shared frame host)
+CAMERA_RETAKE_S = 10
+CAMERA_RELEASE_MIN = 30                   # "Jimmy, let go of the camera": for this long
 PRESENCE_FPS = 4
 PRESENCE_CAMERA_FPS = 5      # D38: ask the camera for 5 fps, not its 30: we read 4, it decoded 30
 PRESENCE_MIN_FACE = 0.06     # ignore faces narrower than this share of the frame (far away)

@@ -81,8 +81,10 @@ def camera(bus) -> list[dict]:
     info = dict(getattr(bus, "_presence", None) or {})
     running = getattr(bus, "_presence_obj", None) is not None
     state, why = info.get("state"), info.get("why") or ""
-    working = running and state in _WORKING
-    say = (f"The camera is working: {state}." if working else
+    released = running and why.startswith("camera released")      # D70: on purpose, not a fault
+    working = (running and state in _WORKING) or released
+    say = (f"I've let go of the camera ({why.split(': ', 1)[-1]}); I take it back when that ends." if released else
+           f"The camera is working: {state}." if working else
            "My camera thread isn't running." if not running else
            f"The camera isn't giving me pictures{': ' + why if why else ''}.")
     out.append({"check": "camera", "ok": working, "fix": "" if working else "jimmy", "say": say})

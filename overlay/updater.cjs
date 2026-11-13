@@ -100,6 +100,11 @@ function pending(data, version) {
 }
 
 // Look for a newer release; download and verify it. Resolves to the pending update or null.
+// D70: what this installed copy was built on (installer/build.py base_id); "" for older copies.
+function installedBase() {
+  try { return readJson(path.join(process.resourcesPath, "jimmy", "jimmy-installed.json")).base || ""; } catch { return ""; }
+}
+
 // D66: `state` tells the status dock where it is: checking, up-to-date, downloading (with
 // progress 0-1), ready, off (switched off in Settings), error.
 async function check({ version, data, log = () => {}, state = () => {} }) {
@@ -110,7 +115,11 @@ async function check({ version, data, log = () => {}, state = () => {} }) {
   const latest = String(rel.tag_name || "").replace(/^v/, "");
   if (!latest || !newer(latest, version)) { state({ phase: "uptodate", latest: latest || version }); return null; }
   if (have && have.version === latest) { state({ phase: "ready", latest }); return have; }
-  const exe = (rel.assets || []).find((a) => /^Jimmy-Setup-[\d.]+\.exe$/.test(a.name));
+  // D70: a patch (about 1 MB: app.asar + Jimmy's Python) when this copy stands on the same base
+  // as the release; the full setup (170 MB) otherwise, as before.
+  const base = installedBase();
+  const exe = (base && (rel.assets || []).find((a) => a.name === `Jimmy-Patch-${latest}-${base}.zip`))
+    || (rel.assets || []).find((a) => /^Jimmy-Setup-[\d.]+\.exe$/.test(a.name));
   const sum = (rel.assets || []).find((a) => exe && a.name === exe.name + ".sha256");
   if (!exe || !sum) {
     log(`[update] ${latest}: the release has no setup and .sha256`);
@@ -129,7 +138,7 @@ async function check({ version, data, log = () => {}, state = () => {} }) {
     const pct = Math.floor((100 * done) / (total || exe.size || 1));
     if (pct !== shown) { shown = pct; state({ phase: "downloading", latest, progress: pct / 100, size: exe.size }); }
   });
-  const p = { version: latest, file, sha256 };
+  const p = { version: latest, file, sha256, kind: exe.name.endsWith(".zip") ? "patch" : "setup" };
   fs.writeFileSync(path.join(dir(data), "pending.json"), JSON.stringify(p));
   log(`[update] Jimmy ${latest} is ready`);
   state({ phase: "ready", latest });
@@ -146,6 +155,14 @@ function apply(p, data, install) {
   cp.spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command",
     `Get-Process | Where-Object { $_.Path -like '${q(data)}\\runtime\\*' } | Stop-Process -Force; Start-Sleep -Seconds 1`],
     { stdio: "ignore", windowsHide: true, timeout: 30000 });
+  // D70: a patch is applied by Jimmy's own pythonw (jimmy/patch.py: wait for us to quit, swap
+  // app.asar and the Python code, start Jimmy). pythonw is a GUI program, so detached works.
+  if (p.kind === "patch") {
+    const pyw = path.join(data, "runtime", "venv", "Scripts", "pythonw.exe");
+    cp.spawn(pyw, [path.join(install, "resources", "jimmy", "jimmy", "patch.py"), p.file, install],
+             { detached: true, stdio: "ignore", cwd: data }).unref();
+    return;
+  }
   // 2. The setup, detached: Node puts other children in a job that dies with their parent, and
   // the setup outlives us (the caller exits next). It stops any other Jimmy.exe itself.
   // /D= must come last and unquoted (NSIS), hence the verbatim command line.

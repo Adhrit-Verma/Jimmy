@@ -41,7 +41,7 @@ def test_vitals_has_what_the_dock_shows():
     v, _ = Bus.vitals(_bus(), prev)
     assert v["type"] == "vitals" and v["ram_mb"] > 10 and v["cpu"] >= 0
     assert v["listen_until"] > now_ms() and v["nav_until"] > now_ms(), "the listening windows"
-    assert v["camera"] == {"on": True, "state": "present", "why": "", "contact": True, "faces": 1}
+    assert v["camera"] == {"on": True, "state": "present", "why": "", "released": False, "contact": True, "faces": 1}
     assert v["capture"]["frames"] == 7 and v["brain"] == {"model": "m/x", "online": True}
     off, _ = Bus.vitals(_bus(_presence_obj=None, paused_until=now_ms() + 60_000), None)
     assert off["camera"]["on"] is False and off["mic"]["paused"] and off["capture"]["paused"]

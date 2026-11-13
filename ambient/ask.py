@@ -1806,6 +1806,8 @@ class Asker:
         elif said is None and tool == "show_status" and "vitals" in self.actions:                 # D66
             self.publish({"type": "dock", "open": True})
             said = self.actions["vitals"]()
+        elif said is None and tool in ("release_camera", "take_camera") and "camera_release" in self.actions:   # D70
+            said = self.actions["camera_release"](0 if tool == "take_camera" else (args.get("minutes") or None))
         elif said is None and tool in ("diagnose", "fix_problem") and "diagnose" in self.actions:   # D65
             said = self.actions["diagnose" if tool == "diagnose" else "repair"]()
         elif said is None and tool == "open" and args.get("view") == "memory":

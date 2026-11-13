@@ -1,6 +1,6 @@
 {
   "name": "jimmy-overlay",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Jimmy, the ambient assistant for Windows",
   "main": "main.cjs",
   "scripts": {
@@ -19,14 +19,12 @@
     "@vitejs/plugin-react": "^6.1.1",
     "electron": "^44.4.5",
     "electron-builder": "^26.18.0",
-    "tailwindcss": "^4.3.3",
-    "vite": "^8.3.1"
-  },
-  "dependencies": {
     "lucide-react": "^1.48.0",
     "motion": "^13.4.4",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.3.1"
   },
   "build": {
     "appId": "dev.jimmy.ambient",

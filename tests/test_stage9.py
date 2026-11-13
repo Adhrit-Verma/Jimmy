@@ -225,6 +225,7 @@ def test_the_loop_itself_with_a_fake_camera():
 
     states, real_cv, real_busy = [], pres.cv2, ambient.audio.other_app_using
     pres.cv2, ambient.audio.other_app_using = Cv(), lambda c: False
+    real_wanted, pres.wanted_elsewhere = pres.wanted_elsewhere, lambda: ""        # D70
     real_constrained = pres.power.constrained
     pres.power.constrained = lambda: False      # D47 halves the rate on battery; this times the loop itself
     try:
@@ -235,6 +236,7 @@ def test_the_loop_itself_with_a_fake_camera():
         time.sleep(0.5)
     finally:
         pres.cv2, ambient.audio.other_app_using = real_cv, real_busy
+        pres.wanted_elsewhere = real_wanted
         pres.power.constrained = real_constrained
     assert states[:3] == ["present", "away", "present"], states
     print("ok  the presence thread: you, gone (curtain), back (resting mode finds you), no errors")

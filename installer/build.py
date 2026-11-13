@@ -98,7 +98,38 @@ def stage_code() -> None:
         if (ROOT / f).exists():
             shutil.copy2(ROOT / f, dst / f)
     (dst / "jimmy-installed.json").write_text(json.dumps(
-        {"version": VERSION, "python": PYTHON, "uv": UV_VERSION}, indent=1), encoding="utf-8")
+        {"version": VERSION, "python": PYTHON, "uv": UV_VERSION, "base": base_id()}, indent=1), encoding="utf-8")
+
+
+def base_id() -> str:
+    """D70: a fingerprint of everything a patch does NOT carry: Electron, uv, Python's version,
+    the C++ runtime, the face models, the installer script. An installed copy takes a patch
+    (about 1 MB) only if it was built on the same base; otherwise the full setup."""
+    h = hashlib.sha256()
+    electron = json.loads((ROOT / "overlay" / "node_modules" / "electron" / "package.json").read_text(encoding="utf-8"))
+    h.update(f"{electron['version']}|{UV_VERSION}|{PYTHON}|".encode())
+    for m in MODELS:
+        h.update(sha256(ROOT / "models" / m).encode())
+    vcrt = STAGE / "tools" / "vcrt" / "version.txt"
+    h.update(vcrt.read_bytes() if vcrt.exists() else b"")
+    h.update((ROOT / "overlay" / "build" / "installer.nsh").read_bytes())
+    return h.hexdigest()[:12]
+
+
+def make_patch() -> Path | None:
+    """app.asar + Jimmy's Python (no models) as Jimmy-Patch-<version>-<base>.zip, with its .sha256."""
+    res = HERE / "out" / "win-unpacked" / "resources"
+    if not (res / "app.asar").exists():
+        return None
+    out = HERE / "out" / f"Jimmy-Patch-{VERSION}-{base_id()}.zip"
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+        z.write(res / "app.asar", "app.asar")
+        for f in sorted((res / "jimmy").rglob("*")):
+            rel = f.relative_to(res / "jimmy").as_posix()
+            if f.is_file() and not rel.startswith("models/") and "__pycache__" not in rel:
+                z.write(f, f"jimmy/{rel}")
+    out.with_name(out.name + ".sha256").write_text(f"{sha256(out)}  {out.name}\n", encoding="utf-8", newline="\n")
+    return out
 
 
 def stage_vcrt() -> None:
@@ -135,10 +166,10 @@ def main() -> int:
     uv = fetch_uv()
     step("lock files (hashes, Windows x64, Python 3.12)")
     lock(uv)
-    step("Jimmy's code")
-    stage_code()
     step("Visual C++ runtime (app-local)")
     stage_vcrt()
+    step("Jimmy's code")                      # after the runtime: the base fingerprint reads its version
+    stage_code()
     step("icon and installer art")
     subprocess.run([sys.executable, str(HERE / "art.py")], check=True)
     step("overlay" + ("" if skip else " + installer"))
@@ -146,7 +177,11 @@ def main() -> int:
     out = sorted((HERE / "out").glob("Jimmy-Setup-*.exe"))
     for exe in out:
         print(f"\n{exe}  {exe.stat().st_size / 1e6:.0f} MB  sha256 {sha256(exe)}")
-        (exe.with_suffix(".exe.sha256")).write_text(f"{sha256(exe)}  {exe.name}\n", encoding="utf-8")
+        (exe.with_suffix(".exe.sha256")).write_text(f"{sha256(exe)}  {exe.name}\n", encoding="utf-8", newline="\n")
+    if not skip:
+        patch = make_patch()
+        if patch:
+            print(f"{patch}  {patch.stat().st_size / 1e6:.1f} MB  (base {base_id()})")
     return 0
 
 

@@ -146,6 +146,9 @@ JIMMY = [
      " submit: \"send the report to the developer\", \"send feedback\".", {}, []),
     ("diagnose", "Find out why the camera isn't working (the user asks what's wrong, why Jimmy can't see"
      " them, to show the issue): Jimmy checks itself and says what it found.", {}, []),
+    ("release_camera", "Let go of the webcam so another app can use it (a call, OBS, the Camera app):"
+     " \"let go of the camera\", \"I need my camera\". minutes: how long (default 30).", {"minutes": _I}, []),
+    ("take_camera", "Take the webcam back after letting go of it.", {}, []),
     ("fix_problem", "Repair the camera: the user says Jimmy may use the camera, is allowed, or to fix it."
      " Jimmy turns its webcam back on, restarts it, finds the right camera, or opens Windows' privacy page.",
      {}, []),
@@ -222,7 +225,7 @@ GROUPS: list[tuple[re.Pattern, list[str]]] = [(re.compile(rx, re.I), names) for 
      ["remember", "list_memories", "memory_update", "memory_delete"]),
     (r"\b(?:delete|erase|wipe|forget|purge)\b", ["forget_data", "reminder_delete", "goal_delete", "memory_delete"]),
     (r"\bface\b|\beyes?\b|calibrat|\bsee me\b|camera|webcam|looking at", ["remember_face", "forget_face",
-     "calibrate_eyes", "presence", "diagnose", "fix_problem"]),
+     "calibrate_eyes", "presence", "diagnose", "fix_problem", "release_camera", "take_camera"]),
     (r"\bfix\b|repair|wrong|issue|problem|not working|broken|allowed|permission|diagnos", ["diagnose", "fix_problem"]),
     (r"status|\bram\b|memory us|\bcpu\b|processor|updat|version|how (?:much|heavy)|are you (?:listening|on)", ["show_status"]),
     (r"report|diagnos|\blogs?\b|feedback|\bbug\b|developer", ["make_report", "send_report"]),

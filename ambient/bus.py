@@ -482,6 +482,10 @@ class ContextBus:
     def _on_presence(self, info: dict) -> None:
         old = self._presence
         self._presence = info
+        gone, was = (info.get("why") or "").startswith("camera released"), (old.get("why") or "").startswith("camera released")
+        if gone != was and self._api:          # D70: you see why the camera went, and that it's back
+            self._api.publish({"type": "toast", "icon": "presence",
+                               "text": info["why"].capitalize() if gone else "Camera back with me"})
         if old.get("state") != info.get("state"):
             print(f"[presence] {info['state']}{' (' + info['why'] + ')' if info.get('why') else ''}")
             self._refresh_curtain(force=True)
@@ -948,6 +952,7 @@ class ContextBus:
                      "starting": bool(getattr(self, "_voice_loading", False)),      # D69
                      "call": [app_label(k) for k in mic_holders()] if self._audio is not None else []},
              "camera": ({"on": True, "state": p.get("state"), "why": p.get("why") or "",
+                         "released": (p.get("why") or "").startswith("camera released"),
                          "contact": bool(p.get("contact")), "faces": p.get("faces", 0)}
                         if p is not None else {"on": False, "why": "" if config.PRESENCE else "switched off"}),
              "capture": {"paused": paused, "curtain": bool(getattr(self, "_curtain", False)),
@@ -984,6 +989,17 @@ class ContextBus:
             self._api.publish({"type": "open_url", "url": report.issue_url(path)})
         return ("I've opened a GitHub issue with the report's first part. Add a line about what happened, "
                 f"drag in the file {path.name}, and submit it if you're happy with what's in it.")
+
+    def _camera_release(self, minutes: float | None = None) -> str:
+        """D70: "let go of the camera" / "take the camera back" (minutes=0)."""
+        p = getattr(self, "_presence_obj", None)
+        if not p:
+            return "I'm not using the camera."
+        p.release(minutes)
+        if minutes == 0:
+            return "Taking the camera back."
+        return (f"I've let go of the camera for {int(minutes or config.CAMERA_RELEASE_MIN)} minutes. "
+                "Say \u201ctake the camera back\u201d when you're done.")
 
     def _vitals_loop(self) -> None:
         from . import report
@@ -1157,6 +1173,7 @@ class ContextBus:
                                      "report": self._make_report,                        # D67
                                      "send_report": self._send_report,
                                      "repair": lambda: selfcheck.repair(self),
+                                     "camera_release": self._camera_release,              # D70
                                      "enrol": lambda: self._presence_obj.enrol() if self._presence_obj
                                      else "The webcam is switched off in config (PRESENCE).",
                                      "unenrol": lambda: self._presence_obj.forget() if self._presence_obj

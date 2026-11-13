@@ -175,10 +175,13 @@ export function Dock({ onClose, hoverProps, surface }) {
           </Tile>
           <Tile icon={cam.on ? (cam.contact ? Eye : Camera) : CameraOff} title="Camera"
             tone={cam.on && cam.state === "present" ? "text-emerald-300" : cam.on ? "text-neutral-400" : "text-amber-300"}
-            value={cam.on ? (cam.contact ? "Looking at you" : CAMERA[cam.state] || "Starting…") : "Not in use"}
+            value={cam.released ? "Released" : cam.on ? (cam.contact ? "Looking at you" : CAMERA[cam.state] || "Starting…") : "Not in use"}
             sub={cam.on ? (cam.why || (cam.faces > 1 ? `${cam.faces} faces` : null)) : cam.why || "Ask me what's wrong"}>
+{cam.on && (cam.released
+              ? <Btn strong onClick={() => ask("take the camera back")}>Take it back</Btn>
+              : <Btn onClick={() => ask("let go of the camera")}>Let go 30 min</Btn>)}
             <Btn onClick={() => ask("what's wrong with the camera")}>Why?</Btn>
-            {(!cam.on || cam.why) && <Btn strong onClick={() => ask("fix the camera")}><Wrench size={11} /> Fix it</Btn>}
+            {(!cam.on || (cam.why && !cam.released)) && <Btn strong onClick={() => ask("fix the camera")}><Wrench size={11} /> Fix it</Btn>}
           </Tile>
           <Tile icon={Cpu} title="Jimmy's load" tone={cpu >= busyCpu ? "text-amber-300" : "text-neutral-400"}
             value={<span className="tabular-nums">{cpu}% CPU · {ram >= 1000 ? `${(ram / 1000).toFixed(1)} GB` : `${ram} MB`}</span>}
@@ -186,7 +189,7 @@ export function Dock({ onClose, hoverProps, surface }) {
             <div className="w-full"><Spark data={hist} /></div>
           </Tile>
           <Tile icon={Download} title="Update" tone={ph === "ready" ? "text-emerald-300" : ph === "error" ? "text-amber-300" : "text-neutral-400"}
-            value={ph === "downloading" ? `Jimmy ${u.latest} · ${Math.round((u.progress || 0) * 100)}%`
+            value={ph === "downloading" ? `Jimmy ${u.latest} · ${Math.round((u.progress || 0) * 100)}%${u.size ? ` of ${u.size >= 1e7 ? Math.round(u.size / 1e6) : (u.size / 1e6).toFixed(1)} MB` : ""}`
               : ph === "ready" || ph === "installing" ? `Jimmy ${u.latest}: ${UPDATE[ph].toLowerCase()}` : UPDATE[ph] || ph}
             sub={<>You have {u?.version || "?"}{u?.checked ? ` · checked ${new Date(u.checked).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""}{u?.error ? ` · ${u.error}` : ""}</>}>
             {ph === "downloading" && (

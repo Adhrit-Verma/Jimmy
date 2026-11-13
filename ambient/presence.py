@@ -46,6 +46,22 @@ import numpy as np  # noqa: E402
 from . import config, power  # noqa: E402
 
 
+def wanted_elsewhere() -> str:
+    """D70: why the camera should be someone else's right now ("" = it's Jimmy's)."""
+    from .audio import _running_images, app_label, mic_holders
+    from .screen import active_window
+    calls = mic_holders()
+    if calls:
+        return f"{app_label(calls[0])} is on the mic"
+    aw = active_window()
+    if aw.title.strip().lower() in config.CAMERA_YIELD_TITLES:
+        return f"{aw.title.strip()} is open"
+    running = {Path(p).name for p in _running_images()} & config.CAMERA_YIELD_RUNNING
+    if running:
+        return f"{sorted(running)[0].rsplit('.', 1)[0]} is running"
+    return ""
+
+
 def open_camera(index: int, first: int | None = None):
     """(the webcam opened, the Windows API that opened it): Media Foundation, else DirectShow
     (D65); `first` is tried first (D67). (None, None) if neither opens."""
@@ -522,6 +538,7 @@ class Presence:
         self.camera = config.PRESENCE_CAMERA if camera is None else camera
         self.owner = owner or OwnerFace()
         self.info = {"state": "starting", "faces": 0, "facing": False, "contact": False, "why": ""}
+        self.released_until = 0.0            # D70: "let go of the camera"
         self.track: Follow | None = None
         self.last_match = 1.0
         self.gaze = Gaze(cal=cal)          # D40: your saved eye calibration, if any
@@ -552,6 +569,11 @@ class Presence:
         self._thread = threading.Thread(target=self._run, daemon=True, name="presence")
         self._thread.start()
         return self
+
+    def release(self, minutes: float | None = None) -> None:
+        """D70: "let go of the camera" (minutes=0: take it back now)."""
+        m = config.CAMERA_RELEASE_MIN if minutes is None else minutes
+        self.released_until = time.time() + 60 * m if m else 0.0
 
     def stop(self, wait: bool = False) -> None:
         """wait: until the thread has let go of the camera (D65: a repair reopens it next)."""
@@ -770,18 +792,26 @@ class Presence:
                                         config.PRESENCE_KEEP_SCORE, config.FACE_NMS_THRESHOLD, 10)
         rec = None                                   # SFace: loaded only for your remembered face
         tracker, cap, busy, check_at = Tracker(), None, False, 0.0
+        why, free_at = "", 0.0
         probe, looked = None, -1e9                   # D39: away, a cheap motion check between looks
         try:
             while not self._stop.is_set():
                 t0 = time.monotonic()
-                if t0 >= check_at:          # a call wants the camera: let go of it
-                    check_at, busy = t0 + 5, other_app_using("webcam")
+                if t0 >= check_at:          # someone else wants the camera: let go of it
+                    check_at = t0 + 2
+                    why = ("you asked me to let go of it" if time.time() < self.released_until
+                           else "another app is using the camera" if other_app_using("webcam")
+                           else wanted_elsewhere())                     # D70
+                    if why:
+                        free_at = t0 + config.CAMERA_RETAKE_S           # and a moment after it ends
+                    busy = bool(why) or t0 < free_at
                     if busy and cap is not None:
                         cap.release()
                         cap = None
                 if busy:
                     self.track = None
-                    self._set(state="off", faces=0, facing=False, contact=False, why="another app is using the camera")
+                    self._set(state="off", faces=0, facing=False, contact=False,
+                              why=f"camera released: {why}" if why else self.info.get("why") or "")
                     if self.enrolling:
                         self.cancel_enrol()
                     self._stop.wait(1)
