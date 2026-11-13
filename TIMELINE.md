@@ -214,6 +214,12 @@ call, an unmeasured lip veto, no visible calibration, a flickering eye, a stale
 timeline after a forget, scroll in Claude). Checks: `tests\test_stage9.py` (14),
 matrix (154), eval 41/41.
 
+## The camera given away; half-megabyte updates · **built 2026-11-13 (D70), v1.0.6**
+
+Jimmy lets go of the webcam for calls, OBS, the Camera app or on request, and takes it back.
+Updates are a 0.49 MB patch when only Jimmy's code changed (the setup: 172 → 161 MB).
+**Open:** the first real patch update in the field (1.0.6 → the next).
+
 ## Speed, measured · **built 2026-11-12 (D69), v1.0.5**
 
 First capture 14.6 s → 2.8 s and mic 15.4 s → 11.1 s (voice loads on its own thread); a model that

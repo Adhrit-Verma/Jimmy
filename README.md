@@ -310,6 +310,10 @@ RAM with a one-minute graph, the update (checking, downloading with %, ready: **
 capture and the AI model. The pill itself shows a ring while you can talk without the name, the
 camera, a call, and a pulsing download badge while an update arrives.
 
+**Your camera stays yours.** When a call starts (another app takes the mic), OBS runs or you open
+Windows' Camera app, Jimmy lets go of the webcam and takes it back ten seconds after. Or say
+"Jimmy, let go of the camera" (30 minutes) and "take the camera back"; Status has the buttons.
+
 **Something wrong? Make a diagnostic report.** "Jimmy, make a diagnostic report" (or Status →
 **Report**) writes one file of facts, with no captured screens or speech, and your user name
 hidden. "Send it to the developer" opens a GitHub issue for you to check, attach the file and

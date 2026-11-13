@@ -130,6 +130,7 @@ cd overlay; npm install; npm run build   # once, and after any change under over
 .\.venv\Scripts\python.exe -m ambient.selfcheck   # D65: the camera checks, read-only, on this PC
 .\.venv\Scripts\python.exe tests\test_stage18.py  # 4 checks: D66 the status dock's vitals and wiring
 .\.venv\Scripts\python.exe tests\test_stage19.py  # 6 checks: D67 camera switch order, API fallback, quit, report, MCP
+.\.venv\Scripts\python.exe tests\test_stage20.py  # 4 checks: D70 the camera given away, patch updates
 .\.venv\Scripts\python.exe -m ambient.report --open   # D67: a diagnostic report in data\reports (--claude: Claude Desktop's config)
 .\.venv\Scripts\python.exe installer\build.py     # D61: installer\out\Jimmy-Setup-<v>.exe (+ .sha256); needs Node + internet
 .\.venv\Scripts\python.exe installer\art.py       # D62: the icon and the installer's images from Jimmy's mark
@@ -238,6 +239,8 @@ harmless noise from OpenCV 5's new DNN graph engine; filter it, don't chase it.
 | `tests/test_stage18.py` | D66 check: vitals, process usage, "show status" by voice, the dock's wiring. |
 | `ambient/report.py` | D67: the diagnostic report (facts, no captures, user masked), the prefilled GitHub issue, `status.json`, the Claude Desktop config (`--claude`). |
 | `tests/test_stage19.py` | D67 check: the OpenCV switch before cv2 loads, the camera API fallback, Quit, the report, the MCP tool. |
+| `jimmy/patch.py` | D70: applies a patch update (app.asar + Jimmy's Python, ~0.5 MB) to an installed copy; stdlib only, never imports Jimmy. |
+| `tests/test_stage20.py` | D70 check: who gets the camera, let go / take back, the patch applier (and a hostile zip), what ships. |
 | `overlay/src/Onboarding.jsx` | D61/D62: the first run, eight steps, in Jimmy's design. |
 | `overlay/src/Logo.jsx` | D62: Jimmy's mark, animated (the pill and its listening bars). |
 | `overlay/src/Settings.jsx` | D60: Settings → storage, limits, profile, clean-up, start with Windows (the timeline window's 4th tab). |
@@ -633,6 +636,12 @@ Measured on this machine. Trust these numbers; re-measure only if hardware chang
   timer made the first UI Automation reads fail. `bus.run` initialises it for the capture thread.
 - **Under `pythonw` every console program opens a visible window** (D65): `install.hide_consoles`
   covers Python; a Node `detached` spawn has no console either, so its console children flash.
+- **Overlay packages stay `devDependencies`** (D70): vite bundles them; as `dependencies`
+  electron-builder packs them again (app.asar was 43 MB, now 0.63). A patch update carries
+  only app.asar and `resources/jimmy`: anything else that changes (Electron, uv, models,
+  `installer.nsh`) changes `build.base_id`, and installed copies take the full setup instead.
+- **Windows only records an app that got the camera** (D70): to give it away Jimmy reads intent
+  (`presence.wanted_elsewhere`: a call on the mic, OBS, the Camera app), not the registry alone.
 - **Never let a file delete in the updater throw** (D66): right after an update the setup is still
   running from `<data>\cache\update`; the launcher died on a refused delete before starting Jimmy.
 - **Run `tests\run_all.py`, not a hand loop** (D68): it reads exit codes and output; CI runs it

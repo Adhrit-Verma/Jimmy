@@ -2764,3 +2764,34 @@ at 14.6 s and the mic at 15.4 s, because the main thread waited 12.7 s for the s
 Not done: the speech model's own load (inherent); `av`'s import (faster-whisper imports it even
 for arrays); making 3.5 Flash-Lite the first choice (the human chose 3.8; the longer rest gets the
 same speed without overruling that). Released as 1.0.5.
+
+### D70 — Jimmy gives the camera away; updates of half a megabyte
+
+**2026-11-13.** The human: with Jimmy running, no other app can have the camera (Discord, OBS, the
+Camera app, a meeting); and downloading an update takes too long.
+
+**The camera.** D34 let go of it when Windows' registry showed another app using it. But Windows
+only records an app that *got* the camera, and many webcams can't be shared: the other app just
+fails, so Jimmy never saw it. Jimmy now gives the camera away on the signs that something else
+wants it (`presence.wanted_elsewhere`, checked every 2 s): another app on the mic (a call; the
+apps the user said aren't calls don't count), OBS or Streamlabs running, Windows' Camera app in
+front; or the user says so ("let go of the camera", the dock's button: 30 minutes, "take the
+camera back"). It takes it back `CAMERA_RETAKE_S` (10 s) after the reason ends. The pill says
+why it went and when it's back; the dock's tile reads "Released". On the real camera here:
+released 0.9 s after asking, "present" again 16 s later (6 s release + 10 s).
+Not a rule: Discord or Teams merely in front. They are open all day; their calls take the mic.
+
+**Updates.** Two findings. `app.asar` was 43 MB for a 557 KB page: React, Motion and Lucide were
+`dependencies`, so electron-builder packed their 5,400 files beside the bundle vite had already
+made of them. As `devDependencies`: 0.63 MB (the setup: 172 → 161 MB). And most releases change
+only Jimmy's own code, so the build now also makes **a patch**: `app.asar` + the Python in
+`resources/jimmy` (no models), **0.49 MB**, named with a fingerprint of everything it does not
+carry (`build.base_id`: Electron, uv, Python's version, the C++ runtime, the face models, the
+installer script; also in `jimmy-installed.json`). The updater takes the patch when the installed
+copy has that base, the full setup otherwise (so 1.0.5 and older take the setup once more).
+`jimmy/patch.py` applies it (stdlib; run detached by Jimmy's own pythonw): waits for Jimmy.exe
+to release `app.asar`, writes only `app.asar` and `jimmy/...` (a zip naming anything else is
+refused whole), puts the old `app.asar` back if a write fails, starts Jimmy. Verified on the
+real build: the packaged overlay renders without the libraries in its package, and the real
+patch replaced a stale file in a copy of the unpacked app and left the models alone. The
+clean-machine test now does a patch update too. Released as 1.0.6.

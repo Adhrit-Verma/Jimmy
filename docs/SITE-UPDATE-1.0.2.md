@@ -8,6 +8,20 @@ copies update themselves: they check GitHub Releases 10 min after start and ever
 SHA-256, and install on a click or at the next start, keeping data and settings. Switch:
 Settings → "Update Jimmy automatically". 1.0.0 users install 1.0.1 or later once, by hand.
 
+**Changelog, 1.0.4 to 1.0.6** (2026-11-12 and 13)
+- **Your camera stays yours (1.0.6).** Jimmy lets go of the webcam when a call starts, OBS runs or
+  you open the Camera app, and takes it back ten seconds after. Or say "Jimmy, let go of the
+  camera".
+- **Updates are tiny (1.0.6).** About 0.5 MB instead of 170 MB when only Jimmy's own code changed.
+  This applies from 1.0.6 on; older copies download the full setup once more.
+- **Faster start (1.0.5).** Screen capture begins 2.8 s after start (was 14.6 s) and the mic is
+  ready at 11.1 s (was 15.4 s).
+- **Fewer slow answers (1.0.5).** An AI model that keeps failing now waits longer before Jimmy
+  tries it again, so requests stop waiting on it.
+- **Jimmy restarts itself (1.0.4).** It reloads a crashed overlay and restarts after a crash, at
+  most 3 times an hour. Crashes are written to a log.
+- **Releases are gated by tests (1.0.4).** All test suites must pass in CI before a build.
+
 **Changelog, 1.0.3** (2026-11-04)
 - **The camera fix now works in installed copies.** In 1.0.2 it only took effect in development.
   Measured: from 88 s to 16.5 s until Jimmy sees you; the camera opens in about 1.5 s. A camera
