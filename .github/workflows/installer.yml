@@ -67,7 +67,7 @@ jobs:
           $env:PATH = "C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0;C:\Program Files\PowerShell\7"
           foreach ($v in 'CUDA_PATH','PYTHONHOME','PYTHONPATH','VIRTUAL_ENV','pythonLocation','NODE_PATH') { Remove-Item "Env:$v" -ErrorAction SilentlyContinue }
           $setup = (Get-ChildItem setup\Jimmy-Setup-*.exe | Select-Object -First 1).FullName
-          $want = (Get-Content (Get-ChildItem setup\*.sha256 | Select-Object -First 1)).Split(' ')[0]
+          $want = (Get-Content (Get-ChildItem setup\Jimmy-Setup-*.exe.sha256 | Select-Object -First 1)).Split(' ')[0]
           $got = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLower()
           if ($got -ne $want) { throw "setup.exe doesn't match its SHA-256" }
           "setup: $setup ($([math]::Round((Get-Item $setup).Length/1MB)) MB), sha256 ok"
