@@ -541,7 +541,7 @@ h1 i,h2 i,h1 em.glow{font-family:var(--serif);font-style:italic;font-weight:400;
 /* mono strip, numbered by CSS counters: 02 ── THE IDEA */
 main{counter-reset:sec 1}
 .sec-head>.label,.split .label,.manifesto .label{counter-increment:sec;display:flex;align-items:center;gap:.85rem}
-.sec-head>.label::before,.split .label::before,.manifesto .label::before{content:counter(sec,decimal-leading-zero);color:var(--sky-300)}
+.sec-head>.label::before,.split .label::before,.manifesto .label::before{content:attr(data-n);color:var(--sky-300)}
 .sec-head>.label::after,.split .label::after,.manifesto .label::after{content:"";width:2.75rem;height:1px;background:linear-gradient(90deg,var(--ring),transparent)}
 .strip{display:flex;align-items:center;justify-content:center;gap:.9rem;font:500 .72rem/1 var(--mono);letter-spacing:.22em;text-transform:uppercase;color:var(--faint);flex-wrap:wrap}
 .strip>i{width:2.5rem;height:1px;background:linear-gradient(90deg,transparent,var(--ring-soft) 30%,var(--ring-soft) 70%,transparent)}
@@ -677,3 +677,37 @@ th{font-family:var(--mono);letter-spacing:.12em;font-size:.68rem}
 @media (hover:none){.spot::after{display:none}}
 
 .hero h1 span{color:inherit}
+
+
+/* purpose: the problem, then remember / answer / act */
+.moments,.verbs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}
+.moment{padding:1.5rem 1.5rem 1.6rem;display:grid;gap:1.1rem;align-content:space-between}
+.moment .q{font:400 clamp(1.5rem,2.2vw,1.95rem)/1.12 var(--serif);font-style:italic;letter-spacing:-.01em;color:var(--ink)}
+.moment .a{color:var(--muted);font-size:.9375rem}
+.moment .a b{color:var(--sky-300);font-weight:550}
+.verb{padding:1.6rem;display:grid;gap:.7rem;align-content:start}
+.vn{font:500 .72rem/1 var(--mono);letter-spacing:.22em;color:var(--sky-300)}
+.verb h3{font:400 clamp(2.2rem,3.6vw,3rem)/1 var(--serif);font-style:italic;letter-spacing:-.02em;color:var(--ink)}
+.verb p{color:var(--muted);font-size:.9875rem}
+.closer{margin-top:2.25rem;font:500 clamp(1.4rem,2.6vw,2.1rem)/1.2 var(--display);letter-spacing:-.035em;color:var(--ink-2)}
+.closer em{font-family:var(--serif);font-weight:400;color:var(--sky-300)}
+@media (max-width:860px){.moments,.verbs{grid-template-columns:minmax(0,1fr)}}
+
+/* smoothness: what a weaker GPU feels is blur, big gradients that repaint, and layout reads on pointer move.
+   Backdrop blur only where something scrolls under it (the pill); the aurora is plain gradients that only move
+   by transform; nothing animates a gradient on text; sections off screen aren't laid out or painted. */
+.pill,.surface,.jcard,.tile,.stat,.answers div,.rule-n,.says li,details,.chapters,.ask-box,.toc,.panel,.shot,.curtain,.ledger>div,.callout,.film-btn,.term,.plan{-webkit-backdrop-filter:none;backdrop-filter:none}
+.pill{-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.aurora{contain:paint;-webkit-mask-image:none;mask-image:none}
+.aurora i{filter:none;opacity:1}
+.aurora i:nth-child(3){display:none}
+h1 i,h2 i{filter:none}
+body::before{-webkit-mask-image:none;mask-image:none}
+.words .w{transition:none}
+.sec{content-visibility:auto;contain-intrinsic-size:auto 820px}
+.hero h1 em.glow,.hero h1 em.glow.blur-w{animation:none}
+@media (prefers-reduced-motion:no-preference){
+  .hero h1 em.glow.blur-w{animation:blurin .75s var(--ease) forwards;animation-delay:calc(var(--i)*70ms + 120ms)}
+  .aurora i:nth-child(1){animation:drift1 30s ease-in-out infinite alternate}
+  .aurora i:nth-child(2){animation:drift2 36s ease-in-out infinite alternate}
+}
