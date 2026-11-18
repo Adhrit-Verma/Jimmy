@@ -5,7 +5,7 @@
 <meta name="theme-color" content="#0a0a0a">
 <link rel="icon" href="/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="/site.css">
 </head><body>
 <a class="skip" href="#main">Skip to content</a>
@@ -22,7 +22,7 @@
 <div class="page-head media"><div class="wrap">
   <div>
   <p class="eyebrow">Benchmark</p>
-  <h1>What we measured, and how</h1>
+  <h1>What we <i>measured</i>, and how</h1>
   <p class="lede">Every number here was measured on the development laptop and written down in the project's decision records (D1, D2, …) with the method behind it. Your results will vary with your hardware, your screen and your network.</p>
   </div>
   <figure style="margin:0"><div class="clip"><video data-loop data-src="/video/numbers.mp4" poster="/video/numbers.jpg" preload="none" muted playsinline aria-label="A clip from the trailer: Jimmy's measured numbers"></video></div><figcaption class="clip-cap"><span class="dot" aria-hidden="true"></span>From the trailer</figcaption></figure>
@@ -98,6 +98,9 @@
   <div class="tscroll"><table class="dtable stack"><thead><tr><th>What</th><th class="num">Measured</th><th>How</th></tr></thead><tbody>
     <tr><td>Install</td><td class="num">20 s</td><td>The 172 MB setup, per user, no admin.</td></tr>
     <tr><td>First start, Lite profile</td><td class="num">71–436 s</td><td>On the processor; the range depends on how much was already downloaded.</td></tr>
+    <tr><td>Capture starts after launch</td><td class="num">2.8 s</td><td>Was 14.6 s: it waited for the speech model, which now loads on its own thread (D69). The mic is ready at 11.1 s, was 15.4 s.</td></tr>
+    <tr><td>Camera, until Jimmy sees you</td><td class="num">16.5 s</td><td>In an installed copy, down from 88 s; the camera itself opens in about 1.5 s (D67). OpenCV's Media Foundation hardware transforms cost 16.5 s on this webcam; switching them off gives 0.5 s.</td></tr>
+    <tr><td>An update, when only Jimmy's code changed</td><td class="num">0.5 MB</td><td>Instead of the 170 MB setup (D70). Anything else that changes, such as Electron or the models, still takes the full setup.</td></tr>
     <tr><td>Left on C:</td><td class="num">67 bytes</td><td>The 55-byte pointer to your data and a 12-byte path file, besides shortcuts and the uninstall entry.</td></tr>
   </tbody></table></div>
   <p>The same steps run on fresh GitHub Windows machines for every change: install to D:, setup, self-test, update, what's left on C:, and uninstall.</p>
@@ -139,7 +142,8 @@
     <nav aria-label="Footer"><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a></nav>
   </div>
   <p>Jimmy · an always-on assistant for Windows that stays quiet until you ask · MIT licensed</p>
-</div></footer>
+</div>
+<div class="mega" aria-hidden="true">Jimmy</div></footer>
 
 <script src="/site.js" defer></script>
 </body></html>

@@ -5,7 +5,7 @@
 <meta name="theme-color" content="#0a0a0a">
 <link rel="icon" href="/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="/site.css">
 </head><body>
 <a class="skip" href="#main">Skip to content</a>
@@ -22,7 +22,7 @@
 <div class="page-head media"><div class="wrap">
   <div>
   <p class="eyebrow">Security</p>
-  <h1>What Jimmy keeps, and what it never does</h1>
+  <h1>What Jimmy keeps, and what it <i>never</i> does</h1>
   <p class="lede">Software that watches your screen and listens to your room is a real decision. Here is exactly what it stores, what leaves your PC, how it decides what it may do, and what is not done yet.</p>
   </div>
   <figure style="margin:0"><div class="clip"><video data-loop data-src="/video/private.mp4" poster="/video/private.jpg" preload="none" muted playsinline aria-label="A clip from the trailer: banking and passwords skipped, face template and keys encrypted"></video></div><figcaption class="clip-cap"><span class="dot" aria-hidden="true"></span>From the trailer</figcaption></figure>
@@ -84,7 +84,7 @@
     <li><strong>The names of the window's buttons and boxes</strong> while Jimmy works out what you asked it to do.</li>
     <li><strong>Once a day, what it needs to keep your wiki</strong> (what Jimmy knows about you): your lists, your questions to it, and window titles.</li>
   </ul>
-  <p>Without a key, none of this is sent. If you connect the <a href="/docs/#mcp">MCP server</a>, what its recall tool returns goes to that assistant. During setup, packages and models download from their usual sources (Python packages, npm, Ollama's library and Hugging Face for Whisper). The installed app (from 1.0.1) also asks GitHub every six hours whether a newer release exists, and downloads it if so; Settings turns that off. Jimmy has no telemetry and no account, and its author receives nothing.</p>
+  <p>Without a key, none of this is sent. If you connect the <a href="/docs/#mcp">MCP server</a>, what its recall tool returns goes to that assistant. During setup, packages and models download from their usual sources (Python packages, npm, Ollama's library and Hugging Face for Whisper). The installed app (from 1.0.1) also asks GitHub every six hours whether a newer release exists, and downloads it if so; Settings turns that off. A diagnostic report is a file on your disk that you can read; sending it is a step you take yourself, and it holds no captured screens or speech. Jimmy has no telemetry and no account, and its author receives nothing.</p>
   <div class="callout"><p>On Google's free tier, Google may let human reviewers read what is sent. That is why screenshots stay with NVIDIA unless you choose otherwise.</p></div>
 </section>
 
@@ -134,6 +134,7 @@
     <nav aria-label="Footer"><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a></nav>
   </div>
   <p>Jimmy · an always-on assistant for Windows that stays quiet until you ask · MIT licensed</p>
-</div></footer>
+</div>
+<div class="mega" aria-hidden="true">Jimmy</div></footer>
 <script src="/site.js" defer></script>
 </body></html>

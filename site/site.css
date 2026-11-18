@@ -192,7 +192,7 @@ svg.i{width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:2;stroke-l
 .jcard .hd time{margin-left:auto;letter-spacing:0;font-weight:500;color:var(--faint);font-variant-numeric:tabular-nums}
 .jcard p{margin-top:.55rem;font-size:1rem;font-weight:600;line-height:1.35;color:var(--ink)}
 .jcard small{display:block;margin-top:.3rem;color:var(--faint);font-size:.8125rem}
-.jcard::after{content:"";position:absolute;left:0;bottom:0;height:2px;width:var(--left,60%);background:rgba(255,255,255,.22)}
+.jcard{background-image:linear-gradient(rgba(255,255,255,.22),rgba(255,255,255,.22));background-size:var(--left,60%) 2px;background-repeat:no-repeat;background-position:0 100%}
 .t-sky{background:rgba(56,189,248,.15);color:#bae6fd}.t-white{background:var(--wash-2);color:#d4d4d4}
 .t-violet{background:var(--violet-bg);color:var(--violet)}.t-emerald{background:var(--emerald-bg);color:var(--emerald)}
 .t-amber{background:var(--amber-bg);color:var(--amber)}.t-rose{background:var(--rose-bg);color:var(--rose)}
@@ -246,7 +246,7 @@ svg.i{width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:2;stroke-l
 
 /* ---------- privacy: the curtain and the ledger ---------- */
 .curtain{position:relative;display:grid;place-items:center;text-align:center;min-height:22rem;border-radius:var(--r);background:#0a0a0a;box-shadow:inset 0 0 0 1px var(--ring);overflow:hidden}
-.curtain::before{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(56,189,248,.07),transparent 60%)}
+.curtain{background-image:radial-gradient(ellipse at center,rgba(56,189,248,.08),transparent 62%)}
 .curtain div{position:relative;display:grid;justify-items:center;gap:.4rem}
 .curtain svg{width:2rem;height:2rem;color:#737373;margin-bottom:.4rem}
 .curtain b{color:var(--ink-2);font-weight:600;font-size:1.0625rem}
@@ -496,3 +496,184 @@ td.num,th.num{text-align:right;white-space:nowrap;color:var(--ink-2)}
   .log>li>div{padding-left:0}
   .film-btn{font-size:.875rem}
 }
+
+
+/* =====================================================================================
+   v2 (2026-11-18): the best-design-sources pass.
+   MotionSites: mono section strips, one glowing gradient word, liquid-glass hairlines,
+     hairline guides at the thirds, a scroll-lit paragraph.
+   React Bits (ported to vanilla): pointer spotlight with an edge that catches the light,
+     ShinyText sheen, BlurText reveal, Magnet buttons, DecryptedText.
+   Unsloth Studio: borderless soft washes via color-mix, pill buttons, a derived ring,
+     100/150/200 ms and ease-out-quart.
+   ===================================================================================== */
+@property --glow{syntax:"<number>";inherits:true;initial-value:0}
+.spot{transition:--glow var(--t3) var(--ease)}
+:root{
+  --font:"Geist","Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,sans-serif;
+  --display:"Geist","Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;
+  --serif:"Instrument Serif","Iowan Old Style",Georgia,serif;
+  --r:20px;
+  --ease:cubic-bezier(.165,.84,.44,1); --ease-2:cubic-bezier(.215,.61,.355,1);
+  --t1:100ms; --t2:150ms; --t3:200ms;
+  --wash:color-mix(in srgb,#fff 4%,transparent); --wash-2:color-mix(in srgb,#fff 8%,transparent);
+  --ring-soft:color-mix(in srgb,#fff 6%,transparent);
+  --sky-grad:linear-gradient(180deg,#e0f2fe 0%,#7dd3fc 42%,#0ea5e9 100%);
+}
+body{font-family:var(--font);font-feature-settings:"ss01","cv11";overflow-x:hidden}
+main,.foot{position:relative;z-index:1}
+/* hairline guides at the thirds of the page */
+body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:linear-gradient(90deg,transparent calc(33.333% - .5px),rgba(255,255,255,.032) calc(33.333% - .5px) calc(33.333% + .5px),transparent calc(33.333% + .5px) calc(66.666% - .5px),rgba(255,255,255,.032) calc(66.666% - .5px) calc(66.666% + .5px),transparent calc(66.666% + .5px));
+  -webkit-mask-image:linear-gradient(#000,transparent 85%);mask-image:linear-gradient(#000,transparent 85%)}
+.guides{display:none}
+
+/* type */
+h1,h2{font-weight:500;letter-spacing:-.045em;line-height:1.04}
+h2{font-size:clamp(2.05rem,4.4vw,3.6rem)}
+h3{font-weight:550;letter-spacing:-.015em}
+h1 i,h2 i,h1 em.glow{font-family:var(--serif);font-style:italic;font-weight:400;letter-spacing:-.025em;font-size:1.12em;line-height:.9;
+  background:var(--sky-grad);-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 0 22px rgba(56,189,248,.32));padding-right:.04em}
+.lede{font-size:clamp(1.0625rem,1.5vw,1.25rem);line-height:1.55;color:color-mix(in srgb,#fff 62%,transparent);font-weight:350}
+.label,.eyebrow{font-family:var(--mono);font-size:.72rem;font-weight:500;letter-spacing:.22em;text-transform:uppercase;color:var(--faint)}
+
+/* mono strip, numbered by CSS counters: 02 ── THE IDEA */
+main{counter-reset:sec 1}
+.sec-head>.label,.split .label,.manifesto .label{counter-increment:sec;display:flex;align-items:center;gap:.85rem}
+.sec-head>.label::before,.split .label::before,.manifesto .label::before{content:counter(sec,decimal-leading-zero);color:var(--sky-300)}
+.sec-head>.label::after,.split .label::after,.manifesto .label::after{content:"";width:2.75rem;height:1px;background:linear-gradient(90deg,var(--ring),transparent)}
+.strip{display:flex;align-items:center;justify-content:center;gap:.9rem;font:500 .72rem/1 var(--mono);letter-spacing:.22em;text-transform:uppercase;color:var(--faint);flex-wrap:wrap}
+.strip>i{width:2.5rem;height:1px;background:linear-gradient(90deg,transparent,var(--ring-soft) 30%,var(--ring-soft) 70%,transparent)}
+.strip>span:first-child{color:var(--sky-300)}
+.strip .eq{margin-right:.4rem}
+
+/* liquid glass + spotlight: one surface language */
+.pill,.surface,.jcard,.tile,.stat,.answers div,.rule-n,.says li,details,.chapters,.ask-box,.toc,.panel,.shot,.curtain,.ledger>div,.callout,.film-btn,.term,.plan{
+  position:relative;background-color:rgba(255,255,255,.022);
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.09),0 28px 56px -34px rgba(0,0,0,.85);-webkit-backdrop-filter:blur(10px) saturate(1.15);backdrop-filter:blur(10px) saturate(1.15)}
+.pill::before,.surface::before,.jcard::before,.tile::before,.stat::before,.answers div::before,.rule-n::before,.says li::before,details::before,.chapters::before,.ask-box::before,.toc::before,.panel::before,.shot::before,.curtain::after,.ledger>div::before,.callout::before,.term::before,.plan::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;padding:1.2px;pointer-events:none;z-index:2;
+  background:radial-gradient(170px circle at var(--mx,50%) var(--my,50%),rgba(125,211,252,calc(var(--glow)*.95)),transparent 70%),
+    linear-gradient(180deg,rgba(255,255,255,.34) 0%,rgba(255,255,255,.1) 22%,transparent 44%,transparent 62%,rgba(255,255,255,.1) 82%,rgba(255,255,255,.28) 100%);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+.spot::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:1;opacity:0;transition:opacity .3s var(--ease);
+  background:radial-gradient(260px circle at var(--mx,50%) var(--my,50%),rgba(125,211,252,.12),transparent 66%)}
+.spot.lit::after{opacity:1}
+.surface,.answers div,.tile,.stat,.rule-n,.says li,.shot,.panel,.callout,details{border-radius:var(--r)}
+.callout{border-left:0}
+.callout.warn{background-color:rgba(251,113,133,.07)}
+.shot{overflow:hidden}
+.shot img{position:relative;z-index:0}
+
+/* the pill is liquid glass; it is also Jimmy's own */
+.pill{height:2.6rem;background-color:rgba(10,10,10,.6)}
+.pill-links a{transition:background var(--t2) var(--ease),color var(--t2) var(--ease)}
+
+/* Unsloth-style buttons: pills, borderless washes, brand colour only on the primary */
+.btn{border-radius:999px;height:2.85rem;padding:0 1.3rem;transition:background var(--t2) var(--ease),transform var(--t3) var(--ease),box-shadow var(--t3) var(--ease)}
+.btn-quiet{background:color-mix(in srgb,#fff 7%,transparent);box-shadow:none;color:var(--ink)}
+.btn-quiet:hover{background:color-mix(in srgb,#fff 12%,transparent)}
+.btn-sky{background:linear-gradient(180deg,#7dd3fc,#38bdf8 55%,#0ea5e9);color:#04202f;box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 10px 34px -10px rgba(56,189,248,.65)}
+.btn-sky:hover{box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 14px 44px -8px rgba(56,189,248,.85)}
+[data-magnet]{will-change:transform}
+.pill-cta{background:linear-gradient(180deg,#7dd3fc,#38bdf8);box-shadow:inset 0 1px 0 rgba(255,255,255,.5)}
+
+/* sections breathe more */
+.sec{padding-block:clamp(4.5rem,10vw,8.5rem)}
+.sec-head{gap:1.1rem;margin-bottom:clamp(2.25rem,4.5vw,3.75rem);max-width:48rem}
+
+/* hero: aurora, a big wordmark-weight headline, the desk below */
+.hero{padding-top:clamp(2.75rem,7vw,5.5rem)}
+.hero::before{display:none}
+.aurora{position:absolute;inset:-6rem 0 auto;height:52rem;overflow:hidden;pointer-events:none;
+  -webkit-mask-image:linear-gradient(#000 35%,transparent);mask-image:linear-gradient(#000 35%,transparent)}
+.aurora i{position:absolute;border-radius:50%;filter:blur(70px);opacity:.9;will-change:transform}
+.aurora i:nth-child(1){width:46rem;height:30rem;left:-10%;top:2rem;background:radial-gradient(closest-side,rgba(14,165,233,.30),transparent)}
+.aurora i:nth-child(2){width:38rem;height:26rem;right:-8%;top:5rem;background:radial-gradient(closest-side,rgba(124,58,237,.20),transparent)}
+.aurora i:nth-child(3){width:30rem;height:22rem;left:34%;top:-2rem;background:radial-gradient(closest-side,rgba(45,212,191,.14),transparent)}
+.hero-head{gap:1.6rem}
+.hero h1{font-size:clamp(2.7rem,7.4vw,6rem);letter-spacing:-.055em;line-height:1;max-width:14ch;font-weight:500}
+.hero h1 em.glow{display:inline-block;font-size:1.1em;
+  background:linear-gradient(100deg,#7dd3fc 0%,#7dd3fc 36%,#ffffff 50%,#7dd3fc 64%,#38bdf8 100%) 0 0/260% 100%;-webkit-background-clip:text;background-clip:text}
+.hero .kicker{display:none}
+.hero .lede{max-width:40rem}
+.facts{color:color-mix(in srgb,#fff 50%,transparent)}
+.desk{box-shadow:0 0 0 1px rgba(255,255,255,.1),0 50px 140px -40px rgba(56,189,248,.28),0 30px 80px -24px rgba(0,0,0,.85)}
+
+/* the thesis: a paragraph that lights up as you scroll */
+.manifesto{padding-block:clamp(4rem,9vw,8rem)}
+.manifesto .label{margin-bottom:1.6rem}
+.words{font:500 clamp(1.7rem,3.9vw,3.25rem)/1.2 var(--display);letter-spacing:-.04em;max-width:62rem;color:color-mix(in srgb,#fff 88%,transparent)}
+.words b{font-weight:500}
+.words .w{opacity:var(--o,.16);transition:opacity var(--t3) linear}
+.words b .w{color:var(--sky-300)}
+
+/* section details */
+.day{padding:clamp(1.25rem,3vw,2rem)}
+.big,.stat b,.rule-n b{font-family:var(--display);font-weight:500;letter-spacing:-.04em}
+.jcard p{font-family:var(--display);font-weight:500;letter-spacing:-.02em}
+.bar.now i{background:linear-gradient(90deg,#0ea5e9,#7dd3fc)}
+.says li{background-color:rgba(255,255,255,.02)}
+.tabs{border-radius:999px;padding:.3rem;background:color-mix(in srgb,#fff 5%,transparent);box-shadow:none}
+.tabs button{border-radius:999px;transition:background var(--t2) var(--ease),color var(--t2) var(--ease)}
+.tabs button[aria-selected="true"]{background:color-mix(in srgb,#fff 12%,transparent);box-shadow:none}
+.chapters button{border-radius:14px}
+.chapters [aria-selected="true"]{background:color-mix(in srgb,#fff 8%,transparent);box-shadow:none}
+.chapters [aria-selected="true"]::before{content:"";position:absolute;left:0;top:.7rem;bottom:.7rem;width:2px;border-radius:2px;background:var(--sky)}
+.ch-bar{background:linear-gradient(90deg,#0ea5e9,#7dd3fc)}
+.film-btn{background-color:rgba(10,10,10,.7)}
+.film-btn svg{background:var(--sky-grad)}
+summary{font-family:var(--display);font-weight:550;letter-spacing:-.015em}
+th{font-family:var(--mono);letter-spacing:.12em;font-size:.68rem}
+.term{border-radius:var(--r);overflow:hidden}
+.term-top{font-family:var(--mono);letter-spacing:.04em}
+.curtain b{font-family:var(--display);font-weight:500;font-size:1.25rem;letter-spacing:-.02em}
+
+/* a big wordmark at the very end */
+.foot{padding-bottom:0;overflow:hidden}
+.mega{font:600 clamp(7rem,27vw,24rem)/.76 var(--display);letter-spacing:-.075em;text-align:center;user-select:none;pointer-events:none;
+  height:.52em;margin-top:2.5rem;overflow:hidden;
+  background:linear-gradient(180deg,rgba(125,211,252,.30) 0%,rgba(125,211,252,.06) 55%,transparent 80%);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* inner pages */
+.page-head{padding-block:clamp(3rem,7vw,5.5rem) 2.25rem}
+.page-head .eyebrow{display:flex;align-items:center;gap:.85rem;color:var(--sky-300)}
+.page-head .eyebrow::after{content:"";width:3rem;height:1px;background:linear-gradient(90deg,var(--ring),transparent)}
+.page-head h1{font-size:clamp(2.5rem,6.4vw,5rem);letter-spacing:-.055em;line-height:1;margin:.9rem 0 1.1rem;max-width:16ch}
+.page-head::before{background:radial-gradient(ellipse at 25% 40%,rgba(56,189,248,.13),transparent 60%),radial-gradient(ellipse at 85% 20%,rgba(124,58,237,.09),transparent 55%)}
+.toc{border-radius:18px}
+.toc a{border-radius:10px}
+.prose h2{font-size:clamp(1.6rem,2.6vw,2.1rem);letter-spacing:-.04em}
+.prose h2 i{font-size:1.1em}
+.code pre{background:rgba(0,0,0,.45);box-shadow:inset 0 1px 1px rgba(255,255,255,.06),inset 0 0 0 1px var(--ring-soft)}
+.panel{padding:1.2rem 1.25rem .35rem}
+.stat{padding:1.15rem 1.2rem}
+.stat b{font-size:clamp(1.9rem,3vw,2.5rem)}
+.tag{font-family:var(--mono);letter-spacing:.14em;font-size:.68rem;border-radius:999px;padding:.28rem .7rem}
+.log time{font-family:var(--mono);letter-spacing:.04em}
+.log h3{font-family:var(--display);font-size:1.25rem;letter-spacing:-.03em}
+
+/* motion: all of it decorative; reduced motion keeps the final frame */
+@media (prefers-reduced-motion:no-preference){
+  .aurora i:nth-child(1){animation:drift1 22s ease-in-out infinite alternate}
+  .aurora i:nth-child(2){animation:drift2 26s ease-in-out infinite alternate}
+  .aurora i:nth-child(3){animation:drift1 30s ease-in-out infinite alternate-reverse}
+  .hero h1 em.glow.blur-w{animation:blurin .75s var(--ease) forwards,sheen 7s linear infinite;animation-delay:calc(var(--i)*70ms + 120ms),0s}
+  .hero h1 em.glow:not(.blur-w){animation:sheen 7s linear infinite}
+  .blur-w{display:inline-block;opacity:0;filter:blur(12px);transform:translateY(.25em);animation:blurin .75s var(--ease) forwards;animation-delay:calc(var(--i)*70ms + 120ms)}
+  .btn:active{transform:scale(.97)}
+}
+@keyframes drift1{from{transform:translate3d(-4%,0,0) scale(1)}to{transform:translate3d(6%,8%,0) scale(1.15)}}
+@keyframes drift2{from{transform:translate3d(5%,4%,0) scale(1.05)}to{transform:translate3d(-7%,-6%,0) scale(.95)}}
+@keyframes sheen{from{background-position:160% 0}to{background-position:-60% 0}}
+@keyframes blurin{to{opacity:1;filter:blur(0);transform:none}}
+@media (max-width:640px){
+  .hero h1{font-size:clamp(2.4rem,11vw,3.4rem);max-width:11ch}
+  .words{font-size:clamp(1.5rem,6.4vw,2rem)}
+  .mega{font-size:34vw}
+  body::before{background:linear-gradient(90deg,transparent calc(50% - .5px),rgba(255,255,255,.03) calc(50% - .5px) calc(50% + .5px),transparent calc(50% + .5px))}
+}
+@media (hover:none){.spot::after{display:none}}
+
+.hero h1 span{color:inherit}

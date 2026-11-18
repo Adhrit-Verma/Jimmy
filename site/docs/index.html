@@ -5,7 +5,7 @@
 <meta name="theme-color" content="#0a0a0a">
 <link rel="icon" href="/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="/site.css">
 </head><body>
 <a class="skip" href="#main">Skip to content</a>
@@ -22,7 +22,7 @@
 <div class="page-head media"><div class="wrap">
   <div>
   <p class="eyebrow">Documentation</p>
-  <h1>Set up Jimmy</h1>
+  <h1>Set up <i>Jimmy</i></h1>
   <p class="lede">Install Jimmy with its setup file on Windows 10 or 11, or build it from source. Choose a model provider or run offline, and start talking to it.</p>
   </div>
   <figure style="margin:0"><div class="clip"><video data-loop data-src="/video/install.mp4" poster="/video/install.jpg" preload="none" muted playsinline aria-label="A clip from the trailer: Jimmy installs itself, then updates itself"></video></div><figcaption class="clip-cap"><span class="dot" aria-hidden="true"></span>From the trailer</figcaption></figure>
@@ -61,7 +61,7 @@
       <div class="code"><pre>(Get-FileHash .\Jimmy-Setup-&lt;version&gt;.exe).Hash</pre></div></li>
     <li><strong>Run it.</strong> The setup isn't code-signed yet, so Windows shows <em>"Windows protected your PC"</em>: choose <strong>More info</strong>, then <strong>Run anyway</strong>. Pick a folder on any drive. It installs for your Windows account only.</li>
   </ol>
-  <div class="callout"><p><strong>Updates install themselves</strong> from version 1.0.1: 10 minutes after it starts and every six hours after that, Jimmy checks for a newer release, downloads it to your data drive, checks its SHA-256, then offers to update now or installs it at the next start. Your data and settings are kept. In Settings, <strong>Update Jimmy automatically</strong> turns this off. If you have 1.0.0, install 1.0.1 or later once by hand.</p></div>
+  <div class="callout"><p><strong>Updates install themselves</strong> from version 1.0.1: 10 minutes after it starts and every six hours after that, Jimmy checks for a newer release, downloads it to your data drive, checks its SHA-256, then offers to update now or installs it at the next start. When only Jimmy's own code changed, an update is a patch of about 0.5 MB instead of the full 170 MB (from version 1.0.6). Your data and settings are kept. In Settings, <strong>Update Jimmy automatically</strong> turns this off. If you have 1.0.0, install 1.0.1 or later once by hand.</p></div>
 </section>
 
 <section id="first-start">
@@ -227,6 +227,7 @@ url:internal\.example\.com</pre></div>
   }
 }</pre></div>
   <div class="callout"><p>Whatever <code>recall</code> returns goes to that assistant, and from there to its own cloud model.</p></div>
+  <p>The same server can hand a Claude Desktop session your diagnostic report, read-only, so it can help you fix a problem. <code>.\.venv\Scripts\python.exe -m ambient.report --claude</code> prints the config to paste into Claude Desktop.</p>
 </section>
 
 <section id="extras">
@@ -244,6 +245,8 @@ url:internal\.example\.com</pre></div>
   <h2>If something's off</h2>
   <p>To see what Jimmy is doing right now, press the pill's <strong>Status</strong> button or say <em>"Jimmy, show status"</em>. The Status dock shows whether it is listening (and for how many seconds you can talk without the name), the camera, Jimmy's own CPU and memory with a one-minute graph, any update with its download progress and an <strong>Update now</strong> button, and capture and the AI model.</p>
   <p>Ask Jimmy. <em>"Jimmy, what's wrong with the camera?"</em> makes it check itself and tell you what it found: its own setting, Windows' camera privacy, another app holding the camera, and whether the camera gives pictures. <em>"You can use the camera, fix it"</em> repairs what is Jimmy's own on the spot, without a restart. Jimmy never changes Windows' own privacy settings itself: for those it opens the right Settings page and says which switch to turn on.</p>
+  <p><strong>The camera is shared.</strong> Jimmy lets go of the webcam when a call starts, OBS runs or you open the Camera app, and takes it back ten seconds after. Say <em>"Jimmy, let go of the camera"</em> to hand it over by hand.</p>
+  <p><strong>A diagnostic report.</strong> Say <em>"Jimmy, make a diagnostic report"</em> (or press Status, then Report). It writes one file of facts about your install, with no captured screens or speech and your user name hidden. <em>"Send it to the developer"</em> opens a GitHub issue you read and submit yourself; nothing is sent automatically.</p>
 </section>
 
 <section id="troubleshooting">
@@ -280,7 +283,8 @@ url:internal\.example\.com</pre></div>
     <nav aria-label="Footer"><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a></nav>
   </div>
   <p>Jimmy · an always-on assistant for Windows that stays quiet until you ask · MIT licensed</p>
-</div></footer>
+</div>
+<div class="mega" aria-hidden="true">Jimmy</div></footer>
 
 <script src="/site.js" defer></script>
 </body></html>

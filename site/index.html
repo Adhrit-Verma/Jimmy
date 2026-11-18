@@ -6,7 +6,7 @@
 <link rel="icon" href="/icon.png">
 <meta property="og:title" content="Jimmy"><meta property="og:description" content="Remembers what you saw and heard. Answers out loud when you ask. Otherwise, quiet."><meta property="og:image" content="/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="/site.css">
 </head><body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
@@ -43,12 +43,14 @@
 
 <main id="main">
 <section class="hero">
+  <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+  <div class="guides" aria-hidden="true"></div>
   <div class="wrap hero-head">
-    <p class="kicker"><span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>An always-on assistant for Windows</p>
-    <h1>Remembers what you saw. <span>Speaks only when asked.</span></h1>
+    <p class="strip"><span>01</span><i></i><span>// Jimmy</span><i></i><span><span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span> For Windows</span></p>
+    <h1 data-blur>Remembers what you saw. <em class="glow">Speaks only when asked.</em></h1>
     <p class="lede">Jimmy turns your screen's text and the speech near your mic into one searchable history, kept on your own PC. Say <em>"Jimmy, …"</em> and it answers out loud, beside the moments it found. The rest of the time, it stays quiet.</p>
     <div class="cta">
-      <a class="btn btn-sky" href="/docs/#install">Get started</a>
+      <a class="btn btn-sky" data-magnet href="/docs/#install">Get started</a>
       <a class="btn btn-quiet" href="#trailer"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M4 2.8v10.4a.6.6 0 0 0 .9.5l8.2-5.2a.6.6 0 0 0 0-1L4.9 2.3a.6.6 0 0 0-.9.5Z"/></svg>Watch the trailer</a>
       <a class="btn btn-quiet" href="https://github.com/Adhrit-Verma/Jimmy" target="_blank" rel="noopener"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.71 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.22 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.66 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg>View on GitHub</a>
     </div>
@@ -107,7 +109,7 @@
   <div class="wrap">
     <div class="sec-head center" style="justify-items:center;text-align:center">
       <p class="label">The trailer</p>
-      <h2 id="trailer-h">Jimmy, in under two minutes</h2>
+      <h2 id="trailer-h">Jimmy, in under <i>two minutes</i></h2>
       <p class="lede">What it remembers, how it answers, what it does on screen, and what it never keeps. Turn the sound on.</p>
     </div>
     <div class="film">
@@ -119,12 +121,19 @@
   </div>
 </section>
 
+<section class="sec manifesto" aria-labelledby="mani-h">
+  <div class="wrap">
+    <p class="label" id="mani-h">The thesis</p>
+    <p class="words" data-words>Capturing everything is easy. What matters is <b>the gate that decides to stay quiet</b>. Jimmy is built for six good interruptions an evening, not for throughput: every card is a few words, written by code from your own data, and <b>silence is the default</b>.</p>
+  </div>
+</section>
+
 <section class="sec" id="quiet" aria-labelledby="quiet-h">
   <div class="wrap">
     <div class="sec-head">
       <p class="label">The idea</p>
-      <h2 id="quiet-h">Capturing everything is easy. Staying quiet is the product.</h2>
-      <p class="lede">Jimmy is built for six good interruptions an evening, not a stream of notifications. A model never writes a card: code writes every line from words in your own data, with real times.</p>
+      <h2 id="quiet-h">Six good interruptions <i>an evening</i></h2>
+      <p class="lede">A model never writes a card: code writes every line from words in your own data, with real times. These three limits are hard caps in code.</p>
     </div>
     <div class="rules">
       <div class="rule-n surface"><b>4<small>cards an hour, at most</small></b><span>A hard cap in code, over a rolling hour.</span></div>
@@ -156,7 +165,7 @@
   <div class="wrap split">
     <div>
       <p class="label">Ask</p>
-      <h2 id="ask-h" style="margin:.8rem 0 1rem">Say it the way you remember it</h2>
+      <h2 id="ask-h" style="margin:.8rem 0 1rem">Say it the way you <i>remember</i> it</h2>
       <p class="lede">No keywords and no app to open. Jimmy searches by meaning inside the time you name, shows the moments it used, and answers out loud in about a second. After it answers, keep talking for ten seconds without the name.</p>
       <ul class="says">
         <li><span class="ic t-white"><svg class="i"><use href="#i-history"/></svg></span><div><q>what was that fellowship application I saw on Tuesday?</q><span>Searches Tuesday by keywords and meaning; evidence on the left, answer on the right.</span></div></li>
@@ -188,7 +197,7 @@
   <div class="wrap split">
     <div style="order:2">
       <p class="label">Hands</p>
-      <h2 id="hands-h" style="margin:.8rem 0 1rem">Its own cursor, never yours</h2>
+      <h2 id="hands-h" style="margin:.8rem 0 1rem">Its own cursor, <i>never yours</i></h2>
       <p class="lede">Ask it to do something on screen and Jimmy makes a short plan, plays it back live, and presses and types through Windows' accessibility interface. Every action is checked before the next. A policy in code decides what it may do, whatever model proposed it:</p>
       <ul class="policy">
         <li><span class="tag t-rose">Refuse</span><span>Typing into a password box, or words you didn't say.</span></li>
@@ -224,7 +233,7 @@
   <div class="wrap">
     <div class="sec-head">
       <p class="label">In motion</p>
-      <h2 id="motion-h">Nine things, a few seconds each</h2>
+      <h2 id="motion-h">Nine things, <i>a few seconds</i> each</h2>
       <p class="lede">Clips from the trailer. Pick one, or let them play through.</p>
     </div>
     <div class="reel">
@@ -250,13 +259,13 @@
   <div class="wrap split">
     <div>
       <p class="label">Private by construction</p>
-      <h2 id="privacy-h" style="margin:.8rem 0 1rem">Absent code paths, not settings left off</h2>
+      <h2 id="privacy-h" style="margin:.8rem 0 1rem">Absent code paths, <i>not settings</i> left off</h2>
       <p class="lede">Walk away and the webcam notices: the curtain comes down and Jimmy stops capturing and listening. Faces are blurred before a screenshot is written, and a test re-runs the face detector on the saved file to prove it finds none. <a href="/security/">What leaves your PC, and what's not done yet</a></p>
     </div>
     <div>
       <div class="curtain" role="img" aria-label="The privacy curtain: an opaque dark screen reading 'Privacy curtain. You stepped away.'">
         <span class="mini" aria-hidden="true"><span class="dot"></span>Curtain down</span>
-        <div aria-hidden="true"><svg class="i"><use href="#i-eyeoff"/></svg><b>Privacy curtain</b><span>You stepped away · nothing is captured</span></div>
+        <div aria-hidden="true"><svg class="i"><use href="#i-eyeoff"/></svg><b data-decrypt>Privacy curtain</b><span>You stepped away · nothing is captured</span></div>
       </div>
       <p class="fine">Looking down at your phone doesn't count; leaving the camera's view for a moment and a half does. Ctrl + Alt + L draws it by hand.</p>
     </div>
@@ -281,7 +290,7 @@
   <div class="wrap">
     <div class="sec-head">
       <p class="label">Measured, not promised</p>
-      <h2 id="measured-h">Numbers from the laptop it was built on</h2>
+      <h2 id="measured-h">Numbers from the laptop <i>it was built on</i></h2>
       <p class="lede">Each one is written down in the repository with how it was taken.</p>
     </div>
     <div class="tiles">
@@ -315,7 +324,7 @@
   <div class="wrap">
     <div class="sec-head">
       <p class="label">The real thing</p>
-      <h2 id="screens-h">What it looks like on a screen</h2>
+      <h2 id="screens-h">What it looks like <i>on a screen</i></h2>
       <p class="lede">Screenshots of the actual overlay, showing invented pages and data, so no personal data appears.</p>
     </div>
     <div>
@@ -339,7 +348,7 @@
   <div class="wrap split">
     <div>
       <p class="label">Get started</p>
-      <h2 id="start-h" style="margin:.8rem 0 1rem">One setup file, then Jimmy sets itself up</h2>
+      <h2 id="start-h" style="margin:.8rem 0 1rem">One setup file, then Jimmy <i>sets itself up</i></h2>
       <p class="lede">Download the latest <code>Jimmy-Setup</code> (about 170 MB) from the project's Releases page on GitHub. It installs for you alone, on any drive, with no Python, Node or admin rights needed. On first start Jimmy checks your PC, asks where to keep your data and how much of the PC it may use, then fetches its own Python and speech model. From 1.0.1 on, new versions install themselves.</p>
       <ul class="needs"><li>Windows 10 (22H2) or 11, 64-bit</li><li>Lite ~2.5 GB</li><li>Balanced ~4.5 GB</li><li>Full ~11 GB, with local AI</li></ul>
       <p class="fine">The setup isn't code-signed yet, so Windows shows "Windows protected your PC": choose More info, then Run anyway. NVIDIA GPUs get fast GPU speech; other PCs use the processor.</p>
@@ -365,7 +374,7 @@
 
 <section class="sec" aria-labelledby="faq-h" style="padding-top:0">
   <div class="wrap">
-    <div class="sec-head"><p class="label">Questions</p><h2 id="faq-h">Before you install it</h2></div>
+    <div class="sec-head"><p class="label">Questions</p><h2 id="faq-h">Before you <i>install</i> it</h2></div>
     <div class="faq">
       <details><summary>Does Jimmy send my screen to the cloud?</summary><p>Not continuously. Captures are stored on your PC. When you ask a question, the evidence shown with the answer (at most 6,000 characters) goes to the model provider you chose. A question about your screen also sends that window's latest picture, with faces already blurred. Without a key, nothing is sent. <a href="/security/#leaves">The full list</a>.</p></details>
       <details><summary>Does it work without an API key?</summary><p>Yes. Capture, search, the timeline, insights and cards all run locally. Without a key, each answer shows what search found (exactly what would have been sent to the model) instead of a spoken reply.</p></details>
@@ -374,7 +383,7 @@
       <details><summary>Can it click and type on its own?</summary><p>Only when you asked, it is sure which control you meant, and the action can be undone. It shows its cursor first and gives you a moment to say "stop". Anything that can't be undone, or a site you didn't name, waits for your "yes". It never types into a password box or acts in banking or password-manager windows.</p></details>
       <details><summary>Will it run on my PC?</summary><p>Windows 10 (22H2) or 11, 64-bit. An NVIDIA GPU makes speech recognition fast, but it isn't required: other PCs use the processor. Jimmy was built and measured on a laptop with a 6 GB RTX 4050.</p></details>
       <details><summary>Which languages does it understand?</summary><p>English and Hindi. Hindi works through one model call that also returns the English; its real-world accuracy has not been measured yet.</p></details>
-      <details><summary>Does it update itself?</summary><p>Yes, from version 1.0.1. Ten minutes after it starts and every six hours after that, the installed app checks the project's latest release, downloads a newer setup to your data drive, checks it against the published SHA-256, then asks you to update now or installs it at the next start. One switch in Settings turns this off.</p></details>
+      <details><summary>Does it update itself?</summary><p>Yes, from version 1.0.1. Ten minutes after it starts and every six hours after that, the installed app checks the project's latest release, downloads a newer setup to your data drive, checks it against the published SHA-256, then asks you to update now or installs it at the next start. When only Jimmy's own code changed, an update is about 0.5 MB instead of 170 MB (from version 1.0.6). One switch in Settings turns this off.</p></details>
       <details><summary>Is it open source?</summary><p>Yes, MIT licensed. The code, every design decision and the evidence behind it are public (View on GitHub, at the top of this page).</p></details>
     </div>
   </div>
@@ -387,7 +396,8 @@
     <nav aria-label="Footer"><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a></nav>
   </div>
   <p>Jimmy · an always-on assistant for Windows that stays quiet until you ask · MIT licensed</p>
-</div></footer>
+</div>
+<div class="mega" aria-hidden="true">Jimmy</div></footer>
 
 <script>
 (function(){

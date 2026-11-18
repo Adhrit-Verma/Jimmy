@@ -5,7 +5,7 @@
 <meta name="theme-color" content="#0a0a0a">
 <link rel="icon" href="/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="/site.css">
 </head><body>
 <a class="skip" href="#main">Skip to content</a>
@@ -22,8 +22,8 @@
 <div class="page-head media"><div class="wrap">
   <div>
   <p class="eyebrow">Changelog</p>
-  <h1>What changed, and when</h1>
-  <p class="lede">Newest first. The labels in brackets (D58 and so on) are the project's decision records, where each change is written up with the evidence behind it.</p>
+  <h1>What changed, and <i>when</i></h1>
+  <p class="lede">Newest first, version 1.0.6 down to the first capture loop. The labels in brackets (D58 and so on) are the project's decision records, where each change is written up with the evidence behind it.</p>
   </div>
   <figure style="margin:0"><div class="clip"><video data-loop data-src="/video/bursts.mp4" poster="/video/bursts.jpg" preload="none" muted playsinline aria-label="A clip from the trailer: reminders, Hindi, windows, drafts, calendar and focus"></video></div><figcaption class="clip-cap"><span class="dot" aria-hidden="true"></span>From the trailer</figcaption></figure>
 </div></div>
@@ -31,6 +31,33 @@
 <div class="wrap doc-layout single">
 <div class="prose" style="max-width:52rem">
 <ol class="log">
+  <li><time datetime="2026-11-13">2026-11-13</time><div>
+    <h3>Your camera stays yours, and updates get tiny (D70)<span class="ver">1.0.6</span></h3>
+    <ul>
+      <li><strong>Your camera stays yours.</strong> Jimmy lets go of the webcam when a call starts, OBS runs or you open the Camera app, and takes it back ten seconds after. Or say "Jimmy, let go of the camera".</li>
+      <li><strong>Updates are tiny.</strong> About 0.5 MB instead of 170 MB when only Jimmy's own code changed. This applies from 1.0.6 on; older copies download the full setup once more.</li>
+    </ul></div></li>
+  <li><time datetime="2026-11-12">2026-11-12</time><div>
+    <h3>A faster start, fewer slow answers (D69)<span class="ver">1.0.5</span></h3>
+    <ul>
+      <li><strong>Faster start.</strong> Screen capture begins 2.8 s after start (was 14.6 s) and the mic is ready at 11.1 s (was 15.4 s).</li>
+      <li><strong>Fewer slow answers.</strong> An AI model that keeps failing now waits longer before Jimmy tries it again, so requests stop waiting on it.</li>
+    </ul></div></li>
+  <li><time datetime="2026-11-12">2026-11-12</time><div>
+    <h3>Jimmy restarts itself (D68)<span class="ver">1.0.4</span></h3>
+    <ul>
+      <li><strong>It restarts itself.</strong> It reloads a crashed overlay and restarts after a crash, at most 3 times an hour. Crashes are written to a log.</li>
+      <li><strong>Releases are gated by tests.</strong> All test suites must pass in CI before a build.</li>
+    </ul></div></li>
+  <li><time datetime="2026-11-04">2026-11-04</time><div>
+    <h3>The camera fix reaches installed copies (D67)<span class="ver">1.0.3</span></h3>
+    <ul>
+      <li><strong>The camera fix now works in installed copies.</strong> In 1.0.2 it only took effect in development. Measured: from 88 s to 16.5 s until Jimmy sees you; the camera opens in about 1.5 s. A camera that stops giving pictures gets the other Windows camera API, instead of switching on and off.</li>
+      <li><strong>Quit really quits.</strong> Nothing is left running in the background, including Jimmy's local AI.</li>
+      <li><strong>Diagnostic reports.</strong> "Jimmy, make a diagnostic report" (or Status → Report) writes one file of facts, with no captured screens or speech and your user name hidden. "Send it to the developer" opens a GitHub issue you check and submit yourself. Nothing is sent automatically.</li>
+      <li><strong>Claude Desktop can help.</strong> Jimmy's MCP server offers the report (read-only). <code>python -m ambient.report --claude</code> prints the config to paste into Claude Desktop.</li>
+      <li><strong>A lighter pill.</strong> It no longer redraws for every status reading.</li>
+    </ul></div></li>
   <li><time datetime="2026-11-04">2026-11-04</time><div>
     <h3>Jimmy repairs itself, and the camera works (D65)<span class="ver">1.0.2</span></h3>
     <ul>
@@ -140,6 +167,7 @@
     <nav aria-label="Footer"><a href="/docs/">Docs</a><a href="/security/">Security</a><a href="/benchmark/">Benchmark</a><a href="/changelog/">Changelog</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a></nav>
   </div>
   <p>Jimmy · an always-on assistant for Windows that stays quiet until you ask · MIT licensed</p>
-</div></footer>
+</div>
+<div class="mega" aria-hidden="true">Jimmy</div></footer>
 <script src="/site.js" defer></script>
 </body></html>
